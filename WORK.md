@@ -16,6 +16,12 @@
 - Risk assessment: low—pure data module, no runtime side effects. Primary risk is missing frozen checks; mitigated by asserting `.freeze` behaviour.
 - Outcome: Added `tests/core_constants.test.js`, extended AppState/EventBus suites with guard-rail cases; `npm run test` (node --test) now runs 18 passing specs in ~0.18s. Residual risk: low—tests only cover pure modules, monolithic `main.js` still untested.
 
+## 2025-11-04 – /work Iteration Setup
+- Immediate focus: TODO Phase 0 task “Route shared objects (scene, cameras, renderer, history, listeners) through `appState`.”
+- Supporting goal: expose lean helper(s) so AppState keys stay synchronised and can be unit-tested without touching DOM-heavy `main.js`.
+- Test-first reminder: add failing node-test validating helper behaviour before touching implementation.
+- Risk snapshot: medium—`main.js` is tightly coupled; need to ensure helper usage doesn’t break runtime initialisation. Mitigate via incremental swaps + regression tests.
+
 ## Current Focus (2025-11-04)
 - Establish foundation for modular refactor by wiring `core/constants`, `AppState`, and `EventBus` across `main.js`.
 - Design and implement new three-column layout (left slides strip, centred studio, right Tweakpane) with retina-aware sizing.

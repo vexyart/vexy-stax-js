@@ -32,6 +32,7 @@ import {
     createDefaultParams
 } from './core/constants.js';
 import { appState } from './core/AppState.js';
+import { storeSharedRef, SHARED_STATE_KEYS } from './core/sharedState.js';
 
 // Scene, Camera, Renderer
 let scene, camera, orthoCamera, renderer, controls;
@@ -72,11 +73,11 @@ const params = createDefaultParams();
 cameraMode = params.cameraMode;
 
 // Persist core state through AppState for upcoming modularisation
-appState.set('params', params);
-appState.set('imageStack', imageStack);
-appState.set('eventListeners', eventListeners);
-appState.set('historyStack', historyStack);
-appState.set('historyIndex', historyIndex);
+storeSharedRef(SHARED_STATE_KEYS.params, params);
+storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
+storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
+storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
+storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
 appState.set('cameraMode', cameraMode);
 appState.set('fpsState', { fpsCounter, fpsDisplay, showFPSEnabled, frameCount, lastFrameTime, fpsValues });
 appState.set('memoryState', { lastMemoryWarning });
@@ -157,11 +158,13 @@ function init() {
 
     // Create scene
     scene = new THREE.Scene();
+    storeSharedRef(SHARED_STATE_KEYS.scene, scene);
     scene.background = new THREE.Color(params.bgColor);
 
     // Create perspective camera
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(params.cameraFOV, aspect, 0.1, 5000);
+    storeSharedRef(SHARED_STATE_KEYS.camera, camera);
     camera.position.set(0, 0, 800);  // Default distance
     camera.lookAt(0, 0, 0);
     camera.zoom = params.cameraZoom;
@@ -176,6 +179,7 @@ function init() {
         0.1,
         5000
     );
+    storeSharedRef(SHARED_STATE_KEYS.orthoCamera, orthoCamera);
     orthoCamera.position.set(0, 0, 800);
     orthoCamera.lookAt(0, 0, 0);
     orthoCamera.zoom = params.cameraZoom;
@@ -188,6 +192,7 @@ function init() {
         preserveDrawingBuffer: true,  // Needed for export
         powerPreference: "high-performance"  // Use dedicated GPU if available
     });
+    storeSharedRef(SHARED_STATE_KEYS.renderer, renderer);
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
 
@@ -218,6 +223,7 @@ function init() {
 
     // Add orbit controls (use current active camera)
     controls = new OrbitControls(camera, renderer.domElement);
+    storeSharedRef(SHARED_STATE_KEYS.controls, controls);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
     controls.minDistance = 100;
@@ -225,6 +231,7 @@ function init() {
 
     // Initialize camera animator
     cameraAnimator = new CameraAnimator(camera, controls);
+    storeSharedRef(SHARED_STATE_KEYS.cameraAnimator, cameraAnimator);
 
     // Setup file input handler
     setupFileInput();
@@ -597,7 +604,7 @@ function toggleAmbience(enabled) {
 function addTrackedEventListener(target, event, handler, options = {}) {
     target.addEventListener(event, handler, options);
     eventListeners.push({ target, event, handler, options });
-    appState.set('eventListeners', eventListeners);
+    storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
 }
 
 function setupKeyboardShortcuts() {
@@ -1041,7 +1048,7 @@ function setupCleanup() {
 
             // Clear image stack
             imageStack = [];
-            appState.set('imageStack', imageStack);
+            storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
             // Dispose controls
             if (controls) {
@@ -1070,7 +1077,7 @@ function setupCleanup() {
                 target.removeEventListener(event, handler, options);
             });
             eventListeners = [];
-            appState.set('eventListeners', eventListeners);
+            storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
             console.log('[Cleanup] Removed all event listeners');
 
             console.log('[Cleanup] All resources disposed successfully');
@@ -1351,7 +1358,7 @@ function checkMemoryUsage(isAdding = false) {
 function saveHistory() {
     // Remove any redo states (history after current index)
     historyStack = historyStack.slice(0, historyIndex + 1);
-    appState.set('historyStack', historyStack);
+    storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
 
     // Create deep copy of current state
     const state = {
@@ -1368,15 +1375,15 @@ function saveHistory() {
 
     historyStack.push(state);
     historyIndex++;
-    appState.set('historyStack', historyStack);
-    appState.set('historyIndex', historyIndex);
+    storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
+    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
 
     // Limit history size
     if (historyStack.length > MAX_HISTORY) {
         historyStack.shift();
         historyIndex--;
-        appState.set('historyStack', historyStack);
-        appState.set('historyIndex', historyIndex);
+        storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
+        storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
     }
 
     console.log(`[History] Saved state (${historyIndex + 1}/${historyStack.length})`);
@@ -1394,7 +1401,7 @@ function undo() {
     }
 
     historyIndex--;
-    appState.set('historyIndex', historyIndex);
+    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
     const state = historyStack[historyIndex];
 
     // Clear current stack
@@ -1408,8 +1415,7 @@ function undo() {
         }
     });
     imageStack = [];
-    appState.set('imageStack', imageStack);
-    appState.set('imageStack', imageStack);
+    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
     // Restore previous state
     state.images.forEach(img => {
@@ -1441,7 +1447,7 @@ function redo() {
     }
 
     historyIndex++;
-    appState.set('historyIndex', historyIndex);
+    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
     const state = historyStack[historyIndex];
 
     // Clear current stack
@@ -1455,6 +1461,7 @@ function redo() {
         }
     });
     imageStack = [];
+    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
     // Restore next state
     state.images.forEach(img => {
@@ -2304,7 +2311,7 @@ function clearAll() {
 
     // Clear array
     imageStack = [];
-    appState.set('imageStack', imageStack);
+    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
     // Update UI
     updateImageList();
