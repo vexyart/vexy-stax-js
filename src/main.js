@@ -10,6 +10,10 @@ let canvas;
 let cameraMode = 'perspective'; // 'perspective', 'orthographic', 'isometric'
 let cameraAnimator; // Camera animation system
 
+// Lighting and environment
+let ambientLight, mainLight, fillLight;
+let floor = null;  // Floor plane for ambience mode
+
 // Image stack management
 let imageStack = [];
 
@@ -41,6 +45,7 @@ const params = {
     cameraFOV: 75,
     cameraZoom: 1.0,  // Unified zoom parameter (1.0 = default)
     transparentBg: false,
+    ambience: false,  // Realistic floor with reflections and shadows
     // Material properties
     materialRoughness: 0.7,
     materialMetalness: 0.1,
@@ -210,13 +215,57 @@ function init() {
     console.log('Vexy Stax initialized');
 }
 
+/**
+ * Calculate relative luminance of a color (0-1 range)
+ * Uses formula from WCAG 2.0
+ * @param {string} hexColor - Hex color string (e.g. '#ffffff')
+ * @returns {number} Luminance value between 0 (black) and 1 (white)
+ */
+function calculateLuminance(hexColor) {
+    // Parse hex color to RGB
+    const color = new THREE.Color(hexColor);
+    const r = color.r;
+    const g = color.g;
+    const b = color.b;
+
+    // Apply gamma correction
+    const rsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+    const gsRGB = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+    const bsRGB = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+
+    // Calculate luminance
+    return 0.2126 * rsRGB + 0.7152 * gsRGB + 0.0722 * bsRGB;
+}
+
+/**
+ * Get adaptive ambient light intensity based on background luminance
+ * Dark backgrounds need more light, bright backgrounds need less
+ * @param {number} luminance - Background luminance (0-1)
+ * @returns {number} Ambient light intensity
+ */
+function getAdaptiveAmbientIntensity(luminance) {
+    // Base intensity is 1.5 for full brightness
+    // For dark backgrounds (luminance < 0.5), increase light
+    // For bright backgrounds (luminance > 0.5), decrease light slightly
+    // Range: 1.2 (bright bg) to 1.8 (dark bg) - noticeable but not huge
+    const minIntensity = 1.2;
+    const maxIntensity = 1.8;
+
+    // Inverse relationship: darker background = more light
+    return maxIntensity - (luminance * (maxIntensity - minIntensity));
+}
+
 function setupLighting() {
-    // Ambient light for overall scene illumination
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+    // Calculate adaptive ambient light intensity based on background
+    const bgLuminance = calculateLuminance(params.bgColor);
+    const ambientIntensity = getAdaptiveAmbientIntensity(bgLuminance);
+
+    // Ambient light with adaptive intensity
+    ambientLight = new THREE.AmbientLight(0xffffff, ambientIntensity);
     scene.add(ambientLight);
 
     // Main directional light (sun-like) with shadows
-    const mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
     mainLight.position.set(5, 10, 7);
     mainLight.castShadow = true;
 
@@ -233,11 +282,25 @@ function setupLighting() {
     scene.add(mainLight);
 
     // Fill light from opposite side for softer shadows
-    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
     fillLight.position.set(-5, 5, -5);
     scene.add(fillLight);
 
-    console.log('Lighting setup complete');
+    console.log(`Lighting setup complete (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${ambientIntensity.toFixed(2)})`);
+}
+
+/**
+ * Update lighting based on current background color
+ * Called when background color changes
+ */
+function updateLighting() {
+    if (!ambientLight) return;
+
+    const bgLuminance = calculateLuminance(params.bgColor);
+    const newIntensity = getAdaptiveAmbientIntensity(bgLuminance);
+
+    ambientLight.intensity = newIntensity;
+    console.log(`Lighting updated (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${newIntensity.toFixed(2)})`);
 }
 
 function setupKeyboardShortcuts() {
@@ -2066,13 +2129,12 @@ function addImageToStack(texture, filename) {
         geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
     }
 
-    // Use MeshStandardMaterial with current material settings
-    const material = new THREE.MeshStandardMaterial({
+    // Use MeshBasicMaterial to show true colors without lighting effects
+    // This ensures images appear at their actual brightness
+    const material = new THREE.MeshBasicMaterial({
         map: texture,
         side: THREE.DoubleSide,
-        transparent: true,
-        roughness: params.materialRoughness,
-        metalness: params.materialMetalness
+        transparent: true
     });
 
     // Create main mesh
@@ -2611,12 +2673,10 @@ function pasteJSON() {
                         imageConfig.height
                     );
 
-                    const material = new THREE.MeshStandardMaterial({
+                    const material = new THREE.MeshBasicMaterial({
                         map: texture,
                         side: THREE.DoubleSide,
-                        transparent: true,
-                        roughness: 0.7,
-                        metalness: 0.1
+                        transparent: true
                     });
 
                     const mesh = new THREE.Mesh(geometry, material);
