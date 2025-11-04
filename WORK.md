@@ -2,6 +2,8 @@
 <!-- this_file: WORK.md -->
 
 ## 2025-11-04 – Verification Log
+- `/test` sequence rerun today: `uvx hatch test` (expected exit 5 – zero Python suites) followed by `npm run test` (node --test, 21/21 specs, 1.02s). No regressions detected; recorded in CHANGELOG verification notes.
+- Sanity walk-through: re-read `src/core/sharedState.js` and `tests/core_shared_state.test.js` to confirm guard coverage and descriptive assertion messages remain accurate; residual risk low because helpers only wrap `AppState`.
 - Ran `/test` command sequence (`fd … uvx hatch test`); hatch env spun up but zero Python tests exist, pytest exited 5 (“no tests ran”). Recorded as expected gap—repository is JS-only today.
 - Follow-up safety net: `npm run test` (node --test) passes 18/18 assertions in 0.17s; confirms JS core modules remain green.
 - Earlier iteration log (pre-constant tests): `npm run test` twice (node --test) maintained 10/10 AppState/EventBus assertions in ~0.13s; retaining note for provenance.
@@ -21,6 +23,21 @@
 - Supporting goal: expose lean helper(s) so AppState keys stay synchronised and can be unit-tested without touching DOM-heavy `main.js`.
 - Test-first reminder: add failing node-test validating helper behaviour before touching implementation.
 - Risk snapshot: medium—`main.js` is tightly coupled; need to ensure helper usage doesn’t break runtime initialisation. Mitigate via incremental swaps + regression tests.
+
+## 2025-11-04 – /work Iteration Setup (Current)
+- Targeting TODO Phase 0 task “Replace inline literals in `main.js` with imports from `core/constants.js`.”
+- Plan: Capture lighting/frustum/floor literals (ambient/emissive ranges, orthographic frustum size, light intensities, shadow config, floor material tuning) into `core/constants.js`.
+- Tests-first: extend `tests/core_constants.test.js` with assertions covering new constants immutability/value ranges before touching implementation.
+- Risk: medium—`main.js` relies on numeric tuning; extract constants without altering behaviour by preserving default values and referencing them directly.
+- Follow-up in same cycle: TODO Phase 0 task “Integrate EventBus placeholders for background, stack, and camera events” once constants extraction lands.
+
+## 2025-11-04 – /work Iteration Progress
+- Wrote failing `tests/core_shared_state.test.js` exercising planned helper API; initial `npm run test` failed (ERR_MODULE_NOT_FOUND) as expected.
+- Implemented `src/core/sharedState.js` with guarded key registry plus `storeSharedRef`/`getSharedRef`; patched `src/main.js` to sync scene/camera/renderer/controls/cameraAnimator/history/imageStack/eventListeners/params through helper.
+- Regression: updated tracked listener helper and history/clear flows to call `storeSharedRef`, eliminating direct string literals for shared AppState keys.
+- `npm run test` now passes 21/21 specs (~0.55s). Residual risk: modules still mutate shared arrays directly; follow-up audit should confirm downstream consumers rely on references instead of copies.
+- `/test` command re-run post-changes: hatch again reports 0 Python tests (exit 5). Immediately reran `npm run test`; 21/21 specs pass (~0.47s), confirming JS suite stability.
+- New iteration: added failing tests capturing lighting/floor constants, then centralised the corresponding literals into `src/core/constants.js`; updated `main.js` to consume the imports. `npm run test` now reports 23/23 specs (~0.61s) with new coverage on configuration immutability. Residual risk: other subsystems in `main.js` still hold bespoke literals (camera easing, toast palette) that need future passes.
 
 ## Current Focus (2025-11-04)
 - Establish foundation for modular refactor by wiring `core/constants`, `AppState`, and `EventBus` across `main.js`.

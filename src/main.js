@@ -20,6 +20,7 @@ import {
     REFLECTION_OPACITY,
     REFLECTION_BLUR_RADIUS,
     REFLECTION_FADE_STRENGTH,
+    ORTHO_FRUSTUM_SIZE,
     FILE_SIZE_WARN_MB,
     FILE_SIZE_REJECT_MB,
     MAX_DIMENSION_PX,
@@ -29,9 +30,18 @@ import {
     MATERIAL_PRESETS,
     VIEWPOINT_PRESETS,
     SoftReflectorShader,
+    AMBIENT_INTENSITY_RANGE,
+    EMISSIVE_INTENSITY_RANGE,
+    MAIN_LIGHT_SETTINGS,
+    FILL_LIGHT_SETTINGS,
+    HEMISPHERE_LIGHT_SETTINGS,
+    FLOOR_BASE_MATERIAL,
+    FLOOR_REFLECTOR_OFFSET,
+    EVENTS,
     createDefaultParams
 } from './core/constants.js';
 import { appState } from './core/AppState.js';
+import { eventBus } from './core/EventBus.js';
 import { storeSharedRef, SHARED_STATE_KEYS } from './core/sharedState.js';
 
 // Scene, Camera, Renderer
@@ -170,7 +180,7 @@ function init() {
     camera.zoom = params.cameraZoom;
 
     // Create orthographic camera (for isometric/ortho modes)
-    const frustumSize = 600;  // Base frustum size
+    const frustumSize = ORTHO_FRUSTUM_SIZE;  // Base frustum size
     orthoCamera = new THREE.OrthographicCamera(
         frustumSize * aspect / -2,
         frustumSize * aspect / 2,
@@ -296,11 +306,10 @@ function calculateLuminance(hexColor) {
 function getAdaptiveAmbientIntensity(luminance) {
     // Reduced intensity range to prevent overexposure
     // Range: 0.5 (bright bg) to 0.8 (dark bg)
-    const minIntensity = 0.5;
-    const maxIntensity = 0.8;
+    const { min, max } = AMBIENT_INTENSITY_RANGE;
 
     // Inverse relationship: darker background = more light
-    return maxIntensity - (luminance * (maxIntensity - minIntensity));
+    return max - (luminance * (max - min));
 }
 
 /**
@@ -313,11 +322,10 @@ function getAdaptiveEmissiveIntensity(luminance) {
     // For dark backgrounds, add subtle emissive glow
     // For bright backgrounds, reduce emissive to near zero
     // Range: 0.05 (bright bg) to 0.25 (dark bg)
-    const minEmissive = 0.05;
-    const maxEmissive = 0.25;
+    const { min, max } = EMISSIVE_INTENSITY_RANGE;
 
     // Inverse relationship: darker background = more emissive
-    return maxEmissive - (luminance * (maxEmissive - minEmissive));
+    return max - (luminance * (max - min));
 }
 
 function setupLighting() {
@@ -331,36 +339,44 @@ function setupLighting() {
 
     // Main directional light (sun-like) with high-quality shadows
     // Reduced intensity to prevent overexposure
-    mainLight = new THREE.DirectionalLight(0xffffff, Math.PI * 0.4);
-    mainLight.position.set(5, 10, 7);
+    mainLight = new THREE.DirectionalLight(0xffffff, MAIN_LIGHT_SETTINGS.intensity);
+    mainLight.position.set(
+        MAIN_LIGHT_SETTINGS.position.x,
+        MAIN_LIGHT_SETTINGS.position.y,
+        MAIN_LIGHT_SETTINGS.position.z
+    );
     mainLight.castShadow = true;
 
     // Configure high-quality shadow properties for photorealism
-    mainLight.shadow.mapSize.width = 4096;  // High-res shadows
-    mainLight.shadow.mapSize.height = 4096;
-    mainLight.shadow.camera.near = 0.5;
-    mainLight.shadow.camera.far = 500;
-    mainLight.shadow.camera.left = -500;
-    mainLight.shadow.camera.right = 500;
-    mainLight.shadow.camera.top = 500;
-    mainLight.shadow.camera.bottom = -500;
-    mainLight.shadow.bias = -0.0001;       // Adjusted to prevent flickering
-    mainLight.shadow.normalBias = 0.05;    // Increased to prevent shadow acne and flickering
-    mainLight.shadow.radius = 6;            // Softer shadow edges
-    mainLight.shadow.blurSamples = 16;      // VSM-specific softness control
+    mainLight.shadow.mapSize.width = MAIN_LIGHT_SETTINGS.shadow.mapSize;  // High-res shadows
+    mainLight.shadow.mapSize.height = MAIN_LIGHT_SETTINGS.shadow.mapSize;
+    mainLight.shadow.camera.near = MAIN_LIGHT_SETTINGS.shadow.camera.near;
+    mainLight.shadow.camera.far = MAIN_LIGHT_SETTINGS.shadow.camera.far;
+    mainLight.shadow.camera.left = MAIN_LIGHT_SETTINGS.shadow.camera.left;
+    mainLight.shadow.camera.right = MAIN_LIGHT_SETTINGS.shadow.camera.right;
+    mainLight.shadow.camera.top = MAIN_LIGHT_SETTINGS.shadow.camera.top;
+    mainLight.shadow.camera.bottom = MAIN_LIGHT_SETTINGS.shadow.camera.bottom;
+    mainLight.shadow.bias = MAIN_LIGHT_SETTINGS.shadow.bias;       // Adjusted to prevent flickering
+    mainLight.shadow.normalBias = MAIN_LIGHT_SETTINGS.shadow.normalBias;    // Increased to prevent shadow acne and flickering
+    mainLight.shadow.radius = MAIN_LIGHT_SETTINGS.shadow.radius;            // Softer shadow edges
+    mainLight.shadow.blurSamples = MAIN_LIGHT_SETTINGS.shadow.blurSamples;      // VSM-specific softness control
 
     scene.add(mainLight);
 
     // Fill light from opposite side for softer shadows and ambient feel
-    fillLight = new THREE.DirectionalLight(0xffffff, Math.PI * 0.15);
-    fillLight.position.set(-5, 5, -5);
+    fillLight = new THREE.DirectionalLight(0xffffff, FILL_LIGHT_SETTINGS.intensity);
+    fillLight.position.set(
+        FILL_LIGHT_SETTINGS.position.x,
+        FILL_LIGHT_SETTINGS.position.y,
+        FILL_LIGHT_SETTINGS.position.z
+    );
     scene.add(fillLight);
 
     // Add hemisphere light for realistic sky/ground ambient lighting
     const hemisphereLight = new THREE.HemisphereLight(
-        0xffffff,  // Sky color
-        0x444444,  // Ground color
-        0.3        // Reduced intensity
+        HEMISPHERE_LIGHT_SETTINGS.skyColor,  // Sky color
+        HEMISPHERE_LIGHT_SETTINGS.groundColor,  // Ground color
+        HEMISPHERE_LIGHT_SETTINGS.intensity        // Reduced intensity
     );
     scene.add(hemisphereLight);
 
@@ -434,9 +450,9 @@ function createFloor() {
     const floorColor = getAdaptiveFloorColor(params.bgColor);
     const baseMaterial = new THREE.MeshStandardMaterial({
         color: floorColor,
-        roughness: 0.45,
-        metalness: 0.08,
-        envMapIntensity: 0.35,
+        roughness: FLOOR_BASE_MATERIAL.roughness,
+        metalness: FLOOR_BASE_MATERIAL.metalness,
+        envMapIntensity: FLOOR_BASE_MATERIAL.envMapIntensity,
         side: THREE.DoubleSide
     });
 
@@ -453,7 +469,7 @@ function createFloor() {
         multisample: Math.max(2, Math.round(pixelRatio * 2))
     });
     floorReflector.rotation.x = -Math.PI / 2;
-    floorReflector.position.y = FLOOR_Y + 0.1; // Prevent z-fighting with more separation
+    floorReflector.position.y = FLOOR_Y + FLOOR_REFLECTOR_OFFSET; // Prevent z-fighting with more separation
     floorReflector.material.transparent = true;
     floorReflector.material.depthWrite = false;
     floorReflector.material.uniforms.color.value.copy(floorColor);

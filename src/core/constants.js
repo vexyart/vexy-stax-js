@@ -16,6 +16,7 @@ export const REFLECTION_MIN_RESOLUTION = 512;
 export const REFLECTION_OPACITY = 0.32;
 export const REFLECTION_BLUR_RADIUS = 0.003;
 export const REFLECTION_FADE_STRENGTH = 2.7;
+export const ORTHO_FRUSTUM_SIZE = 600;
 
 export const FILE_SIZE_WARN_MB = 10;
 export const FILE_SIZE_REJECT_MB = 50;
@@ -24,6 +25,61 @@ export const MAX_LOAD_RETRIES = 3;
 export const RETRY_DELAYS_MS = Object.freeze([500, 1500, 3000]);
 
 export const DEBOUNCE_DELAY_MS = 150;
+
+export const AMBIENT_INTENSITY_RANGE = Object.freeze({
+    min: 0.5,
+    max: 0.8
+});
+
+export const EMISSIVE_INTENSITY_RANGE = Object.freeze({
+    min: 0.05,
+    max: 0.25
+});
+
+export const MAIN_LIGHT_SETTINGS = Object.freeze({
+    intensity: Math.PI * 0.4,
+    position: Object.freeze({ x: 5, y: 10, z: 7 }),
+    shadow: Object.freeze({
+        mapSize: 4096,
+        camera: Object.freeze({
+            near: 0.5,
+            far: 500,
+            left: -500,
+            right: 500,
+            top: 500,
+            bottom: -500
+        }),
+        bias: -0.0001,
+        normalBias: 0.05,
+        radius: 6,
+        blurSamples: 16
+    })
+});
+
+export const FILL_LIGHT_SETTINGS = Object.freeze({
+    intensity: Math.PI * 0.15,
+    position: Object.freeze({ x: -5, y: 5, z: -5 })
+});
+
+export const HEMISPHERE_LIGHT_SETTINGS = Object.freeze({
+    skyColor: 0xffffff,
+    groundColor: 0x444444,
+    intensity: 0.3
+});
+
+export const FLOOR_BASE_MATERIAL = Object.freeze({
+    roughness: 0.45,
+    metalness: 0.08,
+    envMapIntensity: 0.35
+});
+
+export const FLOOR_REFLECTOR_OFFSET = 0.1;
+
+export const EVENTS = Object.freeze({
+    backgroundChanged: 'background:changed',
+    stackUpdated: 'stack:updated',
+    cameraUpdated: 'camera:updated'
+});
 
 export const MATERIAL_PRESETS = Object.freeze({
     'flat-matte': { roughness: 1.0, metalness: 0, thickness: 1, borderWidth: 0 },

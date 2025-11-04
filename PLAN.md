@@ -8,9 +8,8 @@ Maintainable Three.js studio for stacking 2D artwork, animating cameras, and exp
 
 ### Workstream A – Modular Refactor of `src/main.js`
 - **Goal**: Replace the monolith with cohesive ES modules while keeping feature parity and enabling targeted testing.
-- **Phase 0 – Foundation (remaining)**:
-  - Finalise use of `src/core/constants.js` everywhere; delete duplicate literals in `main.js`.
-  - Replace ad-hoc globals with `appState` accessors and persist shared objects (scene, cameras, renderer, history) through the singleton.
+- **Phase 0 – Foundation (in progress)**:
+  - Finalise use of `src/core/constants.js` everywhere; delete duplicate literals in `main.js` (lighting and ambience floor constants moved 2025-11-04, continue sweeping remaining sections).
   - Introduce `EventBus` wiring points for inter-module communication (background updates, image stack changes, camera events).
   - Deliverable: `npm test`, `npm run build`, documentation updates (`WORK.md`, `CHANGELOG.md`).
 - **Phase 1 – Scene & Loop**:

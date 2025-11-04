@@ -51,9 +51,20 @@
 
 ### Verification - 2025-11-04
 - `/test` workflow (`fd` + `uvx hatch test`): hatch spins up Python env but finds 0 tests; pytest exits 5 (“no tests ran”)—expected until Python modules exist.
-- `npm run test` (node --test): 18/18 specs pass in ~0.18s; confirms AppState/EventBus/constants suites still green.
+- `npm run test` (node --test): 21/21 specs pass in ~0.55s; confirms AppState/EventBus/constants/sharedState suites still green.
 - Historical note: earlier (pre-constants suite) run of `npm run test` (node --test) recorded 10/10 passing cases for AppState/EventBus, confirming baseline stability.
 - Added `tests/core_constants.test.js` and extra guard-rail assertions for `AppState`/`EventBus` to lock current behaviour before refactor work.
+- Re-run (2025-11-04 evening): `uvx hatch test` again reports 0 Python suites (exit 5) and `npm run test` completes 21/21 specs in ~1.0s, no behavioural deltas observed.
+
+### Added - Lighting & Floor Constants (2025-11-04)
+- Centralised ambient/emissive intensity ranges, orthographic frustum size, and lighting/floor material tuning into `src/core/constants.js`.
+- Updated `src/main.js` to consume the new imports for directional/hemisphere lights and ambience floor setup.
+- Extended `tests/core_constants.test.js` with coverage for the new constants to guarantee immutability and legacy value preservation (node --test now runs 23 specs).
+
+#### Added - Shared AppState Registry
+- Introduced `src/core/sharedState.js` with a curated key registry and helpers to synchronise runtime singletons (scene, cameras, renderer, controls, history, listeners) via `AppState`.
+- Updated `src/main.js` to rely on the helper instead of direct string writes, keeping shared references consistent during cleanup/history operations.
+- Added `tests/core_shared_state.test.js`, raising Node test coverage to 21 specs.
 
 ---
 
