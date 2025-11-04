@@ -1945,16 +1945,16 @@ function loadImage(file) {
     const maxSizeReject = 50 * 1024 * 1024; // 50MB rejection threshold
 
     if (file.size > maxSizeReject) {
-        console.error(`File ${file.name} is too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum size is 50MB.`);
-        alert(`File "${file.name}" is too large (${(file.size / 1024 / 1024).toFixed(1)}MB).\nMaximum supported size is 50MB.\nPlease use a smaller image.`);
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        console.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is 50MB.`);
+        showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: 50MB`, 'error', 5000);
         return;
     }
 
     if (file.size > maxSizeWarn) {
-        console.warn(`Warning: File ${file.name} is large (${(file.size / 1024 / 1024).toFixed(1)}MB). This may affect performance.`);
-        if (!confirm(`File "${file.name}" is ${(file.size / 1024 / 1024).toFixed(1)}MB.\nLarge files may slow down the application.\nContinue loading?`)) {
-            return;
-        }
+        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
+        console.warn(`Warning: File ${file.name} is large (${sizeMB}MB). This may affect performance.`);
+        showToast(`⚠️ Large file: ${file.name} (${sizeMB}MB). May affect performance`, 'warning', 4000);
     }
 
     const reader = new FileReader();
@@ -1987,7 +1987,7 @@ function loadImage(file) {
 
                 if (img.width > maxDimension || img.height > maxDimension) {
                     console.warn(`Warning: Image ${filename} has large dimensions (${img.width}x${img.height}). Max recommended: ${maxDimension}px.`);
-                    alert(`Warning: Image "${filename}" is ${img.width}x${img.height}px.\nImages larger than ${maxDimension}px may cause performance issues.\nThe image will be loaded but may render slowly.`);
+                    showToast(`⚠️ Large dimensions: ${filename} (${img.width}x${img.height}px). May render slowly`, 'warning', 4000);
                 }
 
                 if (attempt > 0) {
@@ -2009,7 +2009,7 @@ function loadImage(file) {
                 } else {
                     // All retries exhausted
                     console.error(`[Retry] Failed to load ${filename} after ${MAX_RETRIES + 1} attempts:`, error);
-                    alert(`Failed to load image "${filename}" after ${MAX_RETRIES + 1} attempts.\nPlease check the file is a valid image or try again.`);
+                    showToast(`❌ Failed to load: ${filename}. Check file is valid`, 'error', 5000);
                 }
             }
         );
@@ -2017,7 +2017,7 @@ function loadImage(file) {
 
     reader.onerror = function(error) {
         console.error(`Failed to read file ${file.name}:`, error);
-        alert(`Failed to read file "${file.name}".\n${error.message || 'Unknown error'}`);
+        showToast(`❌ Failed to read file: ${file.name}`, 'error', 5000);
     };
 
     reader.readAsDataURL(file);
