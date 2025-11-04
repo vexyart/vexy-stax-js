@@ -1015,3 +1015,132 @@ Per CLAUDE.md, we do NOT add during refactoring:
 **Complexity**: High (3,321 lines → 25 modules)
 **Risk**: Medium (with phase-by-phase approach)
 **Expected Outcome**: Maintainable, modular codebase that preserves all functionality
+# <!-- this_file: REFACTOR_PLAN.md -->
+# Vexy Stax JS – Refactor Plan
+
+## Current Snapshot
+
+- `src/main.js` is ~3,300 lines (≈113 KB) with 37 top-level functions detected via `rg '^function '`.
+- Responsibilities intermingle: capability detection, Three.js scene setup, lighting, floor reflections, camera control, history, file IO, materials, UI wiring, exporters, diagnostics, and the public debug API.
+- Only other source file is `src/camera/animation.js`; all remaining behaviour lives inside the monolith.
+- Global mutable state (`scene`, `camera`, `historyStack`, `params`, etc.) is shared implicitly, which obscures data flow and complicates reuse or packaging.
+- Browser APIs (DOM, `window`) and Three.js classes are accessed directly inside core logic, making isolation and testing hard.
+
+## Constraints & Non-Negotiables
+
+- Preserve current runtime behaviour, UI affordances, and `window.vexyStax` public API.
+- Keep existing dependencies; prefer Node’s built-in test runner over adding new packages unless strictly required.
+- Maintain Vite entry point semantics (`src/main.js` is imported by `index.html`).
+- Prevent circular dependencies; modules must communicate through explicit interfaces or an event bus.
+- Enforce `this_file` metadata comment in every new source artefact.
+- Regression safety requires automated checks (`npm test` using `node --test`) plus `npm run build`.
+
+## Solution Options Considered
+
+1. **Rewrite with a framework (React/Vue/Svelte).** Rejected—large scope shift, duplicates working UI, increases bundle size.
+2. **Keep single file but reorganise sections.** Rejected—still violates maintainability and SRP, little packaging benefit.
+3. **Modularise into ES modules with focused manager classes.** Selected—incremental, testable, keeps current UI and rendering pipeline intact while shrinking entry point.
+
+## Target Architecture Overview
+
+```
+src/
+├── main.js                 # <200 lines orchestration
+├── core/
+│   ├── constants.js        # All immutable config + shader defs
+│   ├── AppState.js         # Singleton for shared references
+│   └── EventBus.js         # Publish/subscribe between modules
+├── scene/
+│   ├── SceneManager.js     # Renderer, scene, loop, resize
+│   ├── LightingManager.js  # Ambient, key, fill lights
+│   └── FloorManager.js     # Reflective floor + ambience toggles
+├── camera/
+│   ├── CameraManager.js    # Perspective/ortho/isometric handling
+│   ├── ViewpointService.js # Pure maths for preset positions
+│   └── ControlsManager.js  # OrbitControls wrapper + zoom sync
+├── images/
+│   ├── ImageLoader.js      # File validation, retrying texture load
+│   └── ImageStack.js       # Stack state, z-spacing, clearing
+├── materials/
+│   ├── presets.js          # Material presets definition
+│   └── MaterialManager.js  # Roughness/metalness/border/thickness
+├── ui/
+│   ├── TweakpaneManager.js # Pane wiring, binds to AppState
+│   ├── ImageListView.js    # DOM list, drag/drop, keyboard actions
+│   └── Toast.js            # Notifications with lifecycle mgmt
+├── export/
+│   ├── PNGExporter.js      # High-res render export
+│   └── JSONExporter.js     # Config round-trip, clipboard helpers
+├── utils/
+│   ├── HistoryManager.js   # Undo/redo with disposal
+│   ├── Monitoring.js       # FPS + memory alarms
+│   └── dom.js              # Tracked event listeners helper
+└── api/
+    └── DebugAPI.js         # window.vexyStax binding + docs
+```
+
+Modules expose small public surfaces (classes or factory functions) so `main.js` simply instantiates and wires them.
+
+## Phase Breakdown
+
+### Phase 0 – Foundation & Safety Nets
+- Create directory scaffold and move shader/constant definitions into `core/constants.js`.
+- Introduce `core/AppState.js` (object with setters/getters) and `core/EventBus.js`.
+- Configure `npm test` to run `node --test`; add unit tests for AppState and EventBus.
+- Update README/PLAN/TODO to describe new architecture (complete).
+
+### Phase 1 – Scene and Loop Separation
+- Extract renderer/scene bootstrap, resize handling, animation loop into `scene/SceneManager.js`.
+- Move lighting logic to `scene/LightingManager.js` and floor/ambience toggles to `scene/FloorManager.js`.
+- Replace direct globals with AppState fields; emit events on ambience/background change.
+- Tests: cover pure helpers (luminance/ambient intensity) via node tests.
+
+### Phase 2 – Camera System
+- Create `camera/CameraManager.js`, `camera/ViewpointService.js`, `camera/ControlsManager.js`.
+- Migrate camera switching, zoom, fit-to-frame maths, hero-shot hooks.
+- Provide tests for `ViewpointService` computations (pure maths).
+
+### Phase 3 – Assets & Materials
+- `images/ImageLoader.js` handles validation + retry (dependency-injected TextureLoader for testability).
+- `images/ImageStack.js` manages meshes, z-spacing, history integration.
+- `materials/presets.js` exports preset map; `materials/MaterialManager.js` applies materials/borders.
+- Unit-tests for preset retrieval and stack ordering (without WebGL by mocking).
+
+### Phase 4 – UI & Interaction
+- Split Tweakpane setup, toast system, and image list DOM controls into dedicated modules.
+- Centralise tracked event bindings in `utils/dom.js`; ensure cleanup via AppState teardown.
+- Provide DOM-lite tests where possible (e.g., list sorting via JSDOM or simple data-driven functions).
+
+### Phase 5 – Exporters, History, Monitoring, Debug API
+- Extract undo/redo, history snapshotting into `utils/HistoryManager.js`.
+- Move FPS/memory monitoring into `utils/Monitoring.js`.
+- Lift JSON/PNG export and clipboard helpers into `export/*`.
+- Rebuild `window.vexyStax` binding using modules; ensure automation hooks remain unchanged.
+- Write tests for history manager and JSON exporter (pure data).
+
+### Phase 6 – Entry Point Cleanup & Regression
+- Reduce `main.js` to: detect capabilities, instantiate managers, wire events, expose debug API, kick off loop.
+- Run `npm test`, `npm run build`, verify bundle size and absence of runtime errors.
+- Update documentation (README, CHANGELOG, WORK) and ensure TODO items closed.
+
+## Testing & Validation Strategy
+
+- **Automated:** `npm test` (Node test runner) for isolated logic; extend coverage as modules appear. `npm run build` to validate bundler and tree-shaking.
+- **Manual smoke checks:** Load app locally, exercise image loading, materials, export, undo/redo, animation toggles.
+- **Performance guardrails:** Monitor FPS warning thresholds manually after refactor to ensure no regressions.
+
+## Risks & Mitigations
+
+- **Circular imports:** Keep modules dependency-light; rely on AppState and EventBus for cross-communication.
+- **Three.js resource leaks:** Ensure managers dispose textures/materials on teardown; write regression tests for HistoryManager to enforce disposal.
+- **DOM coupling:** Encapsulate document queries inside UI modules; mockable selectors for tests.
+- **Timeline pressure:** Deliver changes per phase with working builds; avoid touching unrelated features.
+
+## Deliverables per Phase
+
+- Updated source modules with `this_file` markers.
+- Passing automated tests + recorded results in `WORK.md`.
+- CHANGELOG entry summarising refactor steps.
+- TODO/PLAN adjusted to reflect completed and next actions.
+
+This roadmap keeps functionality stable while slicing responsibilities into cohesive, testable ES modules tailored for future packaging and automation.

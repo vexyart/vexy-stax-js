@@ -7,6 +7,31 @@ import { Pane } from 'tweakpane';
 import * as EssentialsPlugin from '@kitschpatrol/tweakpane-plugin-essentials';
 import * as ColorPlusPlugin from 'tweakpane-plugin-color-plus';
 import { CameraAnimator } from './camera/animation.js';
+import {
+    MAX_HISTORY,
+    FPS_WARNING_THRESHOLD,
+    MEMORY_WARNING_THRESHOLD_MB,
+    MEMORY_CRITICAL_THRESHOLD_MB,
+    MEMORY_WARNING_COOLDOWN,
+    FLOOR_Y,
+    FLOOR_SIZE,
+    REFLECTION_TEXTURE_BASE,
+    REFLECTION_MIN_RESOLUTION,
+    REFLECTION_OPACITY,
+    REFLECTION_BLUR_RADIUS,
+    REFLECTION_FADE_STRENGTH,
+    FILE_SIZE_WARN_MB,
+    FILE_SIZE_REJECT_MB,
+    MAX_DIMENSION_PX,
+    MAX_LOAD_RETRIES,
+    RETRY_DELAYS_MS,
+    DEBOUNCE_DELAY_MS,
+    MATERIAL_PRESETS,
+    VIEWPOINT_PRESETS,
+    SoftReflectorShader,
+    createDefaultParams
+} from './core/constants.js';
+import { appState } from './core/AppState.js';
 
 // Scene, Camera, Renderer
 let scene, camera, orthoCamera, renderer, controls;
@@ -30,7 +55,6 @@ let eventListeners = [];
 // History management for undo/redo
 let historyStack = [];
 let historyIndex = -1;
-const MAX_HISTORY = 10;
 
 // FPS monitoring
 let fpsCounter = null;
@@ -39,150 +63,23 @@ let showFPSEnabled = false;
 let frameCount = 0;
 let lastFrameTime = performance.now();
 let fpsValues = [];
-const FPS_WARNING_THRESHOLD = 30;
 
 // Memory usage tracking
-const MEMORY_WARNING_THRESHOLD_MB = 500;
-const MEMORY_CRITICAL_THRESHOLD_MB = 1000;
 let lastMemoryWarning = 0;
-const MEMORY_WARNING_COOLDOWN = 30000; // 30 seconds between warnings
-
-// Ambience constants
-const FLOOR_Y = -250;
-const FLOOR_SIZE = 2000;
-const REFLECTION_TEXTURE_BASE = 0.65; // Fraction of screen resolution
-const REFLECTION_MIN_RESOLUTION = 512;
-const REFLECTION_OPACITY = 0.32;
-const REFLECTION_BLUR_RADIUS = 0.003;
-const REFLECTION_FADE_STRENGTH = 2.7;
-
-// Image loading constants
-const FILE_SIZE_WARN_MB = 10; // 10MB warning threshold
-const FILE_SIZE_REJECT_MB = 50; // 50MB rejection threshold
-const MAX_DIMENSION_PX = 4096; // Maximum recommended image dimension
-const MAX_LOAD_RETRIES = 3; // Number of retry attempts for failed texture loads
-const RETRY_DELAYS_MS = [500, 1500, 3000]; // Exponential backoff delays in ms
-
-const SoftReflectorShader = {
-    name: 'SoftReflectorShader',
-    uniforms: {
-        color: { value: new THREE.Color(0xffffff) },
-        tDiffuse: { value: null },
-        textureMatrix: { value: null },
-        opacity: { value: REFLECTION_OPACITY },
-        blurRadius: { value: REFLECTION_BLUR_RADIUS },
-        fadeStrength: { value: REFLECTION_FADE_STRENGTH },
-        floorSize: { value: FLOOR_SIZE }
-    },
-    vertexShader: /* glsl */`
-        uniform mat4 textureMatrix;
-        varying vec4 vUv;
-        varying vec3 vWorldPosition;
-
-        #include <common>
-        #include <logdepthbuf_pars_vertex>
-
-        void main() {
-            vUv = textureMatrix * vec4( position, 1.0 );
-            vWorldPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-            #include <logdepthbuf_vertex>
-        }
-    `,
-    fragmentShader: /* glsl */`
-        uniform vec3 color;
-        uniform sampler2D tDiffuse;
-        uniform float opacity;
-        uniform float blurRadius;
-        uniform float fadeStrength;
-        uniform float floorSize;
-
-        varying vec4 vUv;
-        varying vec3 vWorldPosition;
-
-        #include <logdepthbuf_pars_fragment>
-
-        vec4 sampleReflection( vec2 offset ) {
-            vec4 offsetUv = vUv;
-            offsetUv.xy += offset * vUv.w;
-            return texture2DProj( tDiffuse, offsetUv );
-        }
-
-        void main() {
-            #include <logdepthbuf_fragment>
-
-            vec4 reflection = sampleReflection( vec2( 0.0 ) );
-            reflection += sampleReflection( vec2(  blurRadius, 0.0 ) );
-            reflection += sampleReflection( vec2( -blurRadius, 0.0 ) );
-            reflection += sampleReflection( vec2( 0.0,  blurRadius ) );
-            reflection += sampleReflection( vec2( 0.0, -blurRadius ) );
-            reflection += sampleReflection( vec2(  blurRadius,  blurRadius ) );
-            reflection += sampleReflection( vec2( -blurRadius,  blurRadius ) );
-            reflection += sampleReflection( vec2(  blurRadius, -blurRadius ) );
-            reflection += sampleReflection( vec2( -blurRadius, -blurRadius ) );
-            reflection /= 9.0;
-
-            float radialDistance = length( vWorldPosition.xz ) / max( floorSize * 0.5, 0.0001 );
-            float falloff = clamp( exp( -radialDistance * fadeStrength ), 0.0, 1.0 );
-
-            vec3 tinted = mix( color, reflection.rgb, 0.6 * falloff );
-            gl_FragColor = vec4( tinted, opacity * falloff );
-
-            #include <tonemapping_fragment>
-            #include <colorspace_fragment>
-        }
-    `
-};
 
 // Parameters
-const params = {
-    // Studio settings
-    canvasSize: { x: 1920, y: 1080 },  // Canvas size (render area)
-    bgColor: '#000000',
-    transparentBg: false,
-    ambience: false,  // Realistic floor with reflections and shadows
-    cameraMode: 'perspective',
-    cameraFOV: 75,
-    cameraZoom: 1.0,  // Unified zoom parameter (1.0 = default)
-    // Slides settings
-    zSpacing: 100,
-    materialPreset: 'metallic-card',  // Current material preset
-    materialRoughness: 0.2,
-    materialMetalness: 0.8,
-    materialThickness: 2.0,  // Depth multiplier (1.0 = thin plane)
-    materialBorderWidth: 0,  // Border width in pixels
-    materialBorderColor: '#ffffff',
-    // Viewpoint preset
-    viewpointPreset: 'front',  // Current viewpoint preset
-    // Animation properties
-    animDuration: 1.5,  // Tween duration in seconds
-    animEasing: 'power2.inOut'  // GSAP easing function
-};
+const params = createDefaultParams();
+cameraMode = params.cameraMode;
 
-// Material presets
-const MATERIAL_PRESETS = {
-    'flat-matte': { roughness: 1.0, metalness: 0, thickness: 1, borderWidth: 0 },
-    'glossy-photo': { roughness: 0.1, metalness: 0, thickness: 1, borderWidth: 0 },
-    'plastic-card': { roughness: 0.4, metalness: 0.1, thickness: 2, borderWidth: 0 },
-    'thick-board': { roughness: 0.9, metalness: 0, thickness: 8, borderWidth: 0 },
-    'metal-sheet': { roughness: 0.2, metalness: 0.8, thickness: 1, borderWidth: 0 },
-    'metallic-card': { roughness: 0.2, metalness: 0.8, thickness: 2, borderWidth: 0 },  // New default
-    'glass-slide': { roughness: 0.05, metalness: 0, thickness: 1, borderWidth: 0 },
-    'matte-print': { roughness: 0.7, metalness: 0, thickness: 1, borderWidth: 0 },
-    'bordered': { roughness: 0.2, metalness: 0, thickness: 1, borderWidth: 20 },
-    '3d-box': { roughness: 0.6, metalness: 0, thickness: 15, borderWidth: 0 }
-};
-
-// Viewpoint presets
-const VIEWPOINT_PRESETS = {
-    'center': null,  // Special case - calls centerViewOnContent
-    'front': 'fitToFrame',  // Special case - calculates distance to fit frontmost slide
-    'beauty': { x: 600, y: 400, z: 700 },  // Angled dramatic view
-    'top': { x: 0, y: 800, z: 100 },
-    'isometric': { x: 500, y: 500, z: 500 },
-    '3d-stack': { x: 400, y: 300, z: 600 },
-    'side': { x: 800, y: 0, z: 0 }
-};
+// Persist core state through AppState for upcoming modularisation
+appState.set('params', params);
+appState.set('imageStack', imageStack);
+appState.set('eventListeners', eventListeners);
+appState.set('historyStack', historyStack);
+appState.set('historyIndex', historyIndex);
+appState.set('cameraMode', cameraMode);
+appState.set('fpsState', { fpsCounter, fpsDisplay, showFPSEnabled, frameCount, lastFrameTime, fpsValues });
+appState.set('memoryState', { lastMemoryWarning });
 
 // UI
 let pane;
@@ -700,6 +597,7 @@ function toggleAmbience(enabled) {
 function addTrackedEventListener(target, event, handler, options = {}) {
     target.addEventListener(event, handler, options);
     eventListeners.push({ target, event, handler, options });
+    appState.set('eventListeners', eventListeners);
 }
 
 function setupKeyboardShortcuts() {
@@ -1143,6 +1041,7 @@ function setupCleanup() {
 
             // Clear image stack
             imageStack = [];
+            appState.set('imageStack', imageStack);
 
             // Dispose controls
             if (controls) {
@@ -1171,6 +1070,7 @@ function setupCleanup() {
                 target.removeEventListener(event, handler, options);
             });
             eventListeners = [];
+            appState.set('eventListeners', eventListeners);
             console.log('[Cleanup] Removed all event listeners');
 
             console.log('[Cleanup] All resources disposed successfully');
@@ -1187,7 +1087,7 @@ function setupCleanup() {
  */
 function setupDebouncedResize() {
     let resizeTimeout = null;
-    const DEBOUNCE_DELAY = 150; // ms - balance between responsiveness and performance
+    const DEBOUNCE_DELAY = DEBOUNCE_DELAY_MS; // ms - balance between responsiveness and performance
 
     const debouncedResize = () => {
         // Clear any pending resize
@@ -1451,6 +1351,7 @@ function checkMemoryUsage(isAdding = false) {
 function saveHistory() {
     // Remove any redo states (history after current index)
     historyStack = historyStack.slice(0, historyIndex + 1);
+    appState.set('historyStack', historyStack);
 
     // Create deep copy of current state
     const state = {
@@ -1467,11 +1368,15 @@ function saveHistory() {
 
     historyStack.push(state);
     historyIndex++;
+    appState.set('historyStack', historyStack);
+    appState.set('historyIndex', historyIndex);
 
     // Limit history size
     if (historyStack.length > MAX_HISTORY) {
         historyStack.shift();
         historyIndex--;
+        appState.set('historyStack', historyStack);
+        appState.set('historyIndex', historyIndex);
     }
 
     console.log(`[History] Saved state (${historyIndex + 1}/${historyStack.length})`);
@@ -1489,6 +1394,7 @@ function undo() {
     }
 
     historyIndex--;
+    appState.set('historyIndex', historyIndex);
     const state = historyStack[historyIndex];
 
     // Clear current stack
@@ -1502,6 +1408,8 @@ function undo() {
         }
     });
     imageStack = [];
+    appState.set('imageStack', imageStack);
+    appState.set('imageStack', imageStack);
 
     // Restore previous state
     state.images.forEach(img => {
@@ -1533,6 +1441,7 @@ function redo() {
     }
 
     historyIndex++;
+    appState.set('historyIndex', historyIndex);
     const state = historyStack[historyIndex];
 
     // Clear current stack
@@ -2395,6 +2304,7 @@ function clearAll() {
 
     // Clear array
     imageStack = [];
+    appState.set('imageStack', imageStack);
 
     // Update UI
     updateImageList();

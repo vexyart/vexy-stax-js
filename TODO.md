@@ -309,3 +309,46 @@
 - [x] Reduce envMapIntensity from 0.55 to 0.15
 - [x] Test slides show full saturation
 **Result**: Slides now show true colors without washing out
+# <!-- this_file: TODO.md -->
+# Vexy Stax JS – TODO
+
+## Phase 0 – Foundation & Safety Nets
+- [ ] Phase 0: scaffold `src/core`, `src/scene`, `src/camera`, `src/images`, `src/materials`, `src/ui`, `src/export`, `src/utils`, `src/api`
+- [ ] Phase 0: extract constants and shader data into `src/core/constants.js`
+- [ ] Phase 0: implement `src/core/AppState.js` singleton with unit tests
+- [ ] Phase 0: implement `src/core/EventBus.js` with unit tests
+- [ ] Phase 0: add `npm test` script using `node --test` and create baseline tests
+- [ ] Phase 0: update `src/main.js` to consume constants/app state/event bus
+- [ ] Phase 0: document progress in `WORK.md` and `CHANGELOG.md`
+
+## Phase 1 – Scene & Loop
+- [ ] Phase 1: migrate renderer/scene bootstrap into `scene/SceneManager.js`
+- [ ] Phase 1: split lighting logic into `scene/LightingManager.js`
+- [ ] Phase 1: encapsulate floor/ambience in `scene/FloorManager.js`
+- [ ] Phase 1: add tests for luminance/ambient helpers
+
+## Phase 2 – Camera
+- [ ] Phase 2: create `camera/CameraManager.js`, `ControlsManager.js`, `ViewpointService.js`
+- [ ] Phase 2: port zoom and fit-to-frame calculations, add unit tests
+
+## Phase 3 – Images & Materials
+- [ ] Phase 3: implement `images/ImageLoader.js` with retry handling
+- [ ] Phase 3: implement `images/ImageStack.js` for mesh lifecycle
+- [ ] Phase 3: split material presets/manager and cover with tests
+
+## Phase 4 – UI & Interaction
+- [ ] Phase 4: extract Tweakpane wiring into `ui/TweakpaneManager.js`
+- [ ] Phase 4: extract image list DOM handling into `ui/ImageListView.js`
+- [ ] Phase 4: extract toast system into `ui/Toast.js`
+- [ ] Phase 4: centralise tracked event helpers in `utils/dom.js`
+
+## Phase 5 – Export, History, Monitoring, API
+- [ ] Phase 5: move undo/redo logic into `utils/HistoryManager.js`
+- [ ] Phase 5: move FPS/memory tracking into `utils/Monitoring.js`
+- [ ] Phase 5: split PNG/JSON exporters into `export` modules with tests
+- [ ] Phase 5: rebuild `api/DebugAPI.js` to wrap public interface
+
+## Phase 6 – Entry Point & Regression
+- [ ] Phase 6: shrink `src/main.js` to orchestration only
+- [ ] Phase 6: run `npm test` and `npm run build`, capture results
+- [ ] Phase 6: update docs (`README.md`, `CHANGELOG.md`, `WORK.md`) and close TODO items

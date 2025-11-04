@@ -578,3 +578,59 @@ This is a production tool. For bug reports or feature requests, please open an i
 ---
 
 **Made with Three.js and excessive attention to detail.**
+# <!-- this_file: README.md -->
+# Vexy Stax JS
+
+Browser-based 3D image stacking studio built with Three.js, Tweakpane, and GSAP. Load layered artwork, position slides in depth, tweak materials, animate cameras, and export PNG/JSON artefacts ready for handoff to the Python automation toolchain.
+
+## What It Does Today
+
+- Imports PNG/JPG/WebP images via file picker or drag-and-drop and arranges them along the Z-axis with adjustable spacing.
+- Renders in real time with adaptive lighting, reflective floor ambience, and OrbitControls camera navigation.
+- Offers presets for materials, borders, camera viewpoints, and hero-shot animation (GSAP-based).
+- Provides PNG export at 1×–4× scale and full-scene JSON round-trip (including embedded textures).
+- Exposes the runtime through `window.vexyStax` for automation (used by `vexy-stax-py`).
+
+## Current Architecture Snapshot
+
+- `src/main.js` (~3,300 lines) owns bootstrapping, scene management, UI wiring, loaders, history, exporters, diagnostics, and the global debug API.
+- `src/camera/animation.js` houses the `CameraAnimator`; every other concern is still inside the monolith.
+- HTML shell lives in `index.html`; CSS in `styles/`. Vite handles dev/build (`npm run dev`, `npm run build`).
+
+## Refactor Roadmap (Phase 7)
+
+We are migrating to a modular ES module architecture described in `REFACTOR_PLAN.md`. The high-level milestones:
+
+1. Foundation: create `core/` modules (`constants`, `AppState`, `EventBus`) plus baseline tests.
+2. Scene & Camera: move renderer, lighting, floor, and camera control into dedicated managers.
+3. Assets & Materials: extract image loading/stacking and material presets/managers.
+4. UI & Interaction: isolate Tweakpane configuration, image list DOM logic, and toast notifications.
+5. Export & Diagnostics: split JSON/PNG exporters, history manager, monitoring, and debug API.
+6. Entry cleanup: reduce `main.js` to orchestration, run tests/builds, and update documentation.
+
+Each milestone concludes with recorded results in `WORK.md`, TODO/PLAN updates, and a CHANGELOG entry.
+
+## Quick Start
+
+```bash
+npm install
+npm run dev          # http://localhost:5173
+npm run build        # Outputs static site to docs/
+```
+
+## Testing & Quality Gates
+
+- `npm test` (to be introduced in Phase 0) will run Node’s test runner over pure modules.
+- `npm run build` stays the integration safety net after every refactor increment.
+- Manual smoke checklist: load sample stack, tweak materials, toggle ambience, play hero shot, export PNG/JSON, exercise undo/redo, paste/load JSON.
+
+## Contributing Notes
+
+- Keep files under 200 lines where practical and ensure each new module starts with a `this_file` comment.
+- Prefer incremental refactors with passing tests/builds per phase; avoid bundling unrelated enhancements.
+- Documentation touchpoints: `PLAN.md` (high-level), `REFACTOR_PLAN.md` (detailed design), `TODO.md` (actionable checklist), `WORK.md` (progress log), and `CHANGELOG.md` (shipped changes).
+
+## Licensing & Credits
+
+- Licensed under Apache-2.0.
+- Includes Three.js (MIT), GSAP (WhatWG-friendly), and Tweakpane (MIT) along with Colour Plus and Essentials plugins.

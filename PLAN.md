@@ -296,3 +296,58 @@ Per CLAUDE.md guidelines, we **DO NOT** add:
 - Deploy to GitHub Pages
 - Create demo videos
 - User documentation
+# <!-- this_file: PLAN.md -->
+# Vexy Stax JS – Implementation Plan
+
+## Scope
+
+Single-page Three.js studio for stacking 2D imagery in 3D, animating the camera, and exporting PNG/JSON artefacts. Refactor is focused on maintainability, packaging, and testability without altering feature scope.
+
+## Current Architecture Snapshot (2025-11-04)
+
+- Entry point `src/main.js` (≈3,300 lines) orchestrates everything: capability checks, Three.js setup, materials, history, exporters, Tweakpane UI, drag-and-drop, debug API.
+- `src/camera/animation.js` already hosts `CameraAnimator`; all other behaviour is inside `main.js`.
+- DOM templates live in `index.html`/`styles/`; Vite handles bundling.
+- Build verified with `npm run build`; no automated unit tests yet.
+
+## Objectives for Phase 7 – Modular Refactor
+
+1. **Separation of Concerns:** Introduce ES modules per responsibility (core, scene, camera, images, materials, ui, export, utils, api).
+2. **Explicit State Flow:** Replace implicit globals with `AppState` singleton and event bus.
+3. **Testability:** Add Node-driven unit tests for pure logic; keep modules below 200 lines when feasible.
+4. **Packaging Friendliness:** Ensure modules expose clean interfaces so downstream tools (e.g., vexy-stax-py) can import targeted functionality.
+5. **Performance Parity:** Preserve FPS/memory monitoring, resource disposal, and exporter quality.
+
+## Phase Breakdown & Status
+
+| Phase | Focus | Key Deliverables | Status |
+|-------|-------|------------------|--------|
+| 0 | Foundation & Safety Nets | Directory scaffold, `core/constants.js`, `core/AppState.js`, `core/EventBus.js`, `npm test` setup, baseline unit tests | 🔄 In progress |
+| 1 | Scene & Loop | `SceneManager`, `LightingManager`, `FloorManager`, ambient/floor events, associated tests | ⏳ |
+| 2 | Camera | `CameraManager`, `ControlsManager`, `ViewpointService`, camera fit maths tests | ⏳ |
+| 3 | Images & Materials | `ImageLoader`, `ImageStack`, `MaterialManager`, preset map + tests | ⏳ |
+| 4 | UI & Interaction | `TweakpaneManager`, `ImageListView`, `Toast`, tracked listeners helper | ⏳ |
+| 5 | Export, History, Monitoring, API | Exporter modules, history/monitoring utils, rebuilt `DebugAPI` | ⏳ |
+| 6 | Entry Cleanup & Regression | Slim `main.js`, integration verification, documentation + changelog updates | ⏳ |
+
+Progression is strictly linear; each phase requires passing tests/builds and documented outcomes before moving forward.
+
+## Testing & Tooling Strategy
+
+- `npm test` (Node test runner) for module-level validation.
+- `npm run build` for integration assurance after each phase.
+- Manual smoke checks: load demo, verify image loading, materials, undo/redo, PNG/JSON export, animation.
+- Update `WORK.md` with tasks, results, and residual risks per phase.
+
+## Documentation & Tracking
+
+- `REFACTOR_PLAN.md` hosts detailed design decisions and risks (kept current per phase).
+- `TODO.md` tracks actionable checklist items derived from the table above.
+- `CHANGELOG.md` records shipped increments.
+- `README.md` summarises the system and refactor roadmap for contributors.
+
+## Future Enhancements (Post-Refactor Backlog)
+
+- Phase 8 video export via `MediaRecorder`.
+- Additional automated tests for exporters and UI glue once modules exist.
+- Potential CLI packaging improvements once modularisation is complete.
