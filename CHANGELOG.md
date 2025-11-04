@@ -1,3 +1,46 @@
+## [1.2.1] - 2025-11-04 (Front Viewpoint Fix)
+
+### Fixed - Camera Positioning
+- **Front Viewpoint Bug**: Fixed camera distance calculation to use studio canvas size
+  - Problem: Camera positioned based on slide dimensions (e.g., 400x300px)
+  - Solution: Now uses studio canvas dimensions (e.g., 1920x1080px)
+  - Impact: Front viewpoint now correctly fits the entire studio frame in view
+  - Example: With 1920x1080 canvas and 400x300 slides, camera now shows full 1920x1080 frame
+  - Function: `setViewpointFitToFrame()` at src/main.js:2310-2350
+
+### Technical
+- Improved aspect ratio handling for canvas width calculation
+- Reduced padding from 10% to 5% for tighter frame fit
+- Added clearer console logging with canvas dimensions
+
+## [1.2.0] - 2025-11-04 (UI Refactoring)
+
+### Changed - UI Organization
+- **Reorganized Tweakpane UI** per 103.md specification for improved workflow
+  - Split Studio folder into separate Studio and Camera sections
+  - Studio: Size, Color, Transparent, Ambience
+  - Camera: Viewpoint, Mode, Zoom, FOV
+  - Slides: Material, Distance (unchanged)
+- **Replaced folders with tabs** for better organization
+  - File tab: JSON operations (Open/Paste/Save/Copy) + Tools (Defaults/Clear)
+  - Image tab: PNG export (1x/2x/4x)
+  - Video tab: Animation controls (Play Hero Shot, Duration, Easing)
+- **Improved label clarity**
+  - "Background" → "Color" for background color
+  - "Transparent BG" → "Transparent" for brevity
+  - "3D Stack View" → "3D Stack" for consistency
+
+### Improved - User Experience
+- **Better workflow separation** between file operations, image export, and video
+- **Clearer hierarchy** distinguishing studio settings from camera controls
+- **Reduced visual clutter** with tabbed interface instead of multiple folders
+- **Logical grouping** of related controls for easier access
+
+### Technical
+- Uses native Tweakpane tabs API (addTab with pages array)
+- Maintains all existing functionality with zero breaking changes
+- Build successful: 1,146 kB bundle (292 kB gzipped)
+
 ## [1.1.1] - 2025-11-04 (Critical Fixes & UI Improvements)
 
 ### Fixed - Export Rendering
@@ -99,6 +142,12 @@
 All notable changes to Vexy Stax will be documented in this file.
 
 ## [Unreleased]
+
+### Added - Ambience Rendering Upgrade (2025-11-04)
+- **Soft reflections**: Ambience floor now uses a grouped base mesh plus custom blurred Reflector shader for subtle mirror falloff.
+- **Global environment light**: PMREM-generated `RoomEnvironment` assigned to the scene so PBR materials read consistent reflections.
+- **Softer shadows**: Renderer switches to VSM shadow maps and increases directional light blur samples for diffused contact shadows.
+- **Resilient cleanup**: Reflection render target resizes with the viewport and environment/floor resources dispose cleanly on teardown.
 
 ### Version 1.0.0 - MVP Complete (2025-11-04)
 

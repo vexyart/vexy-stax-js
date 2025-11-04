@@ -1,5 +1,136 @@
 # Vexy Stax JS - Work Progress
 
+## Front Viewpoint Bug Fix (2025-11-04)
+
+### Issue Identified
+**Problem**: Front viewpoint was not fitting studio canvas correctly
+- User set Studio size to 1920x1080px
+- Loaded 3 slides of 400x300px
+- Expected: Camera positions to show entire 1920x1080 frame
+- Actual: Camera positioned based on slide size (400x300), showing wrong scale
+
+### Root Cause
+`setViewpointFitToFrame()` function calculated camera distance based on **slide dimensions** instead of **studio canvas dimensions**.
+
+```javascript
+// WRONG (before)
+const slideHeight = frontSlide.height;  // 300px
+const distance = (slideHeight / 2) / Math.tan(fov / 2);
+
+// CORRECT (after)
+const canvasHeight = params.canvasSize.y;  // 1080px
+const distance = (canvasHeight / 2) / Math.tan(fov / 2);
+```
+
+### Fix Applied
+**File**: `src/main.js:2310-2350`
+- Changed calculation to use `params.canvasSize.x/y` (studio canvas)
+- Camera now positions to fit the full studio frame in viewport
+- Added proper aspect ratio handling
+- Reduced padding from 10% to 5%
+
+### Test Results
+```bash
+npm run build
+# ✓ built in 14.48s
+# Bundle: 1,146 kB (292 kB gzipped)
+```
+
+**Behavior Now**:
+- Front viewpoint shows entire 1920x1080 studio canvas
+- Slides (400x300) appear correctly sized within frame
+- Works with any canvas size
+- Works with any slide dimensions
+
+---
+
+## UI Refactoring (2025-11-04)
+
+### Completed Tasks ✅
+
+1. **Reorganized UI structure** per 103.md specification
+2. **Split Studio folder** into Studio and Camera sections
+3. **Created tabbed interface** for File/Image/Video operations
+4. **Improved UI organization** for better workflow
+
+### UI Structure Changes
+
+**Before:**
+- Studio folder: Size, Mode, Zoom, FOV, Background, Transparent BG, Ambience, Viewpoint
+- Slides folder: Material, Distance
+- Animation folder: Play Hero Shot, Duration, Easing
+- Export folder: PNG, JSON
+- Actions: Defaults, Clear
+
+**After:**
+```
+Studio Folder
+├── Size (canvas dimensions)
+├── Color (background color)
+├── Transparent (background toggle)
+└── Ambience (floor reflection toggle)
+
+Camera Folder
+├── Viewpoint (Beauty/Center/Front/Top/Isometric/3D Stack/Side)
+├── Mode (Perspective/Orthographic/Isometric/Telephoto)
+├── Zoom (0.1-3.0x)
+└── FOV (15-120°)
+
+Slides Folder
+├── Material (preset selector)
+└── Distance (Z-spacing 0-500px)
+
+Tabbed Interface
+├── File Tab
+│   ├── JSON (Open/Paste/Save/Copy)
+│   └── Tools (Defaults/Clear)
+├── Image Tab
+│   └── PNG (1x/2x/4x export)
+└── Video Tab
+    ├── Play Hero Shot (button)
+    ├── Duration (0.5-5.0s)
+    └── Easing (preset selector)
+```
+
+### Benefits
+
+- **Better organization**: Logical grouping of related controls
+- **Improved workflow**: Separate tabs for different operations (File/Image/Video)
+- **Clearer hierarchy**: Studio settings vs Camera settings are now distinct
+- **Space efficiency**: Tabs reduce vertical scrolling
+- **Consistency**: Matches the specification in 103.md
+
+### Tests Passed
+
+```bash
+npm run build
+# ✓ built in 17.17s
+# Bundle size: 1,146 kB (292 kB gzipped)
+```
+
+### Decision: Not integrating uiconfig-tweakpane
+
+**Rationale:**
+- Current Tweakpane API approach is clear and maintainable
+- uiconfig-tweakpane would require significant rewrite
+- JSON-based config adds abstraction layer without clear benefit
+- Direct API calls provide better type safety and IDE support
+- Project size doesn't justify the added complexity
+
+**Alternative considered:**
+- uiconfig-tweakpane: JSON-based UI configuration system
+- Good for very large UIs with dynamic generation
+- Overkill for our ~30 control elements
+
+---
+
+## Ambience Rendering Upgrade (2025-11-04)
+
+- Added physically based ambience floor: grouped base plane plus custom blurred reflection shader (Three.js Reflector + RoomEnvironment PMREM).
+- Switched renderer to VSM shadow maps, raised directional light blur samples, and tuned envMap intensity on ambience materials for softer shadows.
+- Synced reflection render target with viewport changes and cleaned up environment/floor resources on teardown.
+- Tests: `npm run build`
+
 ## Quality Improvements Iteration 4 (2025-11-04)
 
 ### Completed Tasks ✅

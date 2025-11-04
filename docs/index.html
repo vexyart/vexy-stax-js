@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Vexy Stax - 3D Image Stack Visualizer</title>
-  <script type="module" crossorigin src="/vexy-stax-js/assets/index-CBaabKIt.js"></script>
-  <link rel="stylesheet" crossorigin href="/vexy-stax-js/assets/index-BfuKysjp.css">
+  <script type="module" crossorigin src="/vexy-stax-js/assets/index-DooWqGWw.js"></script>
+  <link rel="stylesheet" crossorigin href="/vexy-stax-js/assets/index-Dd7bdcC1.css">
 </head>
 <body>
     <div id="app">
@@ -13,13 +13,15 @@
         <div id="ui">
             <div id="controls"></div>
             <div id="image-manager">
-                <div id="drop-zone">
-                    <p>Drag & Drop Images Here</p>
-                    <p class="or">or</p>
-                    <label for="image-input" class="file-label">Browse Files</label>
-                    <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg" multiple style="display: none;">
+                <div id="image-list-container">
+                    <div id="drop-prompt">
+                        <p>Drag & Drop Images Here</p>
+                        <p class="or">or</p>
+                        <label for="image-input" class="file-label">Browse Files</label>
+                        <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg" multiple style="display: none;">
+                    </div>
+                    <div id="image-list"></div>
                 </div>
-                <div id="image-list"></div>
             </div>
         </div>
     </div>

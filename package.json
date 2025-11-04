@@ -8,13 +8,20 @@
     "build": "vite build --outDir docs",
     "preview": "vite preview"
   },
-  "keywords": ["threejs", "3d", "image-stack", "visualization"],
+  "keywords": [
+    "threejs",
+    "3d",
+    "image-stack",
+    "visualization"
+  ],
   "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
   "license": "Apache-2.0",
   "dependencies": {
+    "@kitschpatrol/tweakpane-plugin-essentials": "^0.2.2-beta.3",
     "gsap": "^3.13.0",
     "three": "^0.181.0",
-    "tweakpane": "^4.0.5"
+    "tweakpane": "^4.0.5",
+    "tweakpane-plugin-color-plus": "^0.1.8"
   },
   "devDependencies": {
     "vite": "^7.1.12"

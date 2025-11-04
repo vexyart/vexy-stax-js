@@ -12,13 +12,15 @@
         <div id="ui">
             <div id="controls"></div>
             <div id="image-manager">
-                <div id="drop-zone">
-                    <p>Drag & Drop Images Here</p>
-                    <p class="or">or</p>
-                    <label for="image-input" class="file-label">Browse Files</label>
-                    <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg" multiple style="display: none;">
+                <div id="image-list-container">
+                    <div id="drop-prompt">
+                        <p>Drag & Drop Images Here</p>
+                        <p class="or">or</p>
+                        <label for="image-input" class="file-label">Browse Files</label>
+                        <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg" multiple style="display: none;">
+                    </div>
+                    <div id="image-list"></div>
                 </div>
-                <div id="image-list"></div>
             </div>
         </div>
     </div>

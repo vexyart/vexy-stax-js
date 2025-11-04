@@ -170,3 +170,29 @@
 - [x] Replace blocking alert() with showToast() for file loading errors
 - [x] Remove blocking confirm() for large file warning
 - [x] Test all changes and verify build succeeds
+
+## Phase 6.8: Code Quality Iteration 9 (Current) ⏳
+
+**Goal**: Fix critical bugs and improve resource management
+
+### Task 1: Fix Front Viewpoint Calculation ✅
+- [x] Fix setViewpointFitToFrame() to use studio canvas size (1920x1080)
+- [x] Previously used slide dimensions (400x300) incorrectly
+- [x] Camera now positions to show full studio frame
+- [x] Test build succeeds
+**Result**: Front viewpoint now correctly fits studio canvas in frame
+
+### Task 2: Add Event Listener Cleanup ⏳
+- [ ] Track all window/canvas event listeners in array
+- [ ] Remove listeners in beforeunload cleanup handler
+- [ ] Add removeEventListener calls for resize, keydown, context events
+- [ ] Test cleanup happens correctly on page unload
+**Benefit**: Prevents memory leaks, cleaner resource management
+
+### Task 3: Implement Debug Log Levels ⏳
+- [ ] Create logger utility with levels: ERROR, WARN, INFO, DEBUG
+- [ ] Add DEBUG flag (default: false in production)
+- [ ] Replace 138 console.log() calls with appropriate levels
+- [ ] Keep console.error/warn but reduce info/debug noise
+- [ ] Expose window.vexyStax.setLogLevel('DEBUG') API
+**Benefit**: Cleaner console, easier debugging, production-ready logging

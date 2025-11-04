@@ -1,7 +1,11 @@
 // src/main.js
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { Pane } from 'tweakpane';
+import * as EssentialsPlugin from '@kitschpatrol/tweakpane-plugin-essentials';
+import * as ColorPlusPlugin from 'tweakpane-plugin-color-plus';
 import { CameraAnimator } from './camera/animation.js';
 
 // Scene, Camera, Renderer
@@ -12,7 +16,10 @@ let cameraAnimator; // Camera animation system
 
 // Lighting and environment
 let ambientLight, mainLight, fillLight;
-let floor = null;  // Floor plane for ambience mode
+let floorGroup = null;
+let floorBase = null;
+let floorReflector = null;
+let environmentTexture = null;
 
 // Image stack management
 let imageStack = [];
@@ -37,25 +44,134 @@ const MEMORY_CRITICAL_THRESHOLD_MB = 1000;
 let lastMemoryWarning = 0;
 const MEMORY_WARNING_COOLDOWN = 30000; // 30 seconds between warnings
 
+// Ambience constants
+const FLOOR_Y = -250;
+const FLOOR_SIZE = 2000;
+const REFLECTION_TEXTURE_BASE = 0.65; // Fraction of screen resolution
+const REFLECTION_MIN_RESOLUTION = 512;
+const REFLECTION_OPACITY = 0.32;
+const REFLECTION_BLUR_RADIUS = 0.003;
+const REFLECTION_FADE_STRENGTH = 2.7;
+
+const SoftReflectorShader = {
+    name: 'SoftReflectorShader',
+    uniforms: {
+        color: { value: new THREE.Color(0xffffff) },
+        tDiffuse: { value: null },
+        textureMatrix: { value: null },
+        opacity: { value: REFLECTION_OPACITY },
+        blurRadius: { value: REFLECTION_BLUR_RADIUS },
+        fadeStrength: { value: REFLECTION_FADE_STRENGTH },
+        floorSize: { value: FLOOR_SIZE }
+    },
+    vertexShader: /* glsl */`
+        uniform mat4 textureMatrix;
+        varying vec4 vUv;
+        varying vec3 vWorldPosition;
+
+        #include <common>
+        #include <logdepthbuf_pars_vertex>
+
+        void main() {
+            vUv = textureMatrix * vec4( position, 1.0 );
+            vWorldPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz;
+            gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
+            #include <logdepthbuf_vertex>
+        }
+    `,
+    fragmentShader: /* glsl */`
+        uniform vec3 color;
+        uniform sampler2D tDiffuse;
+        uniform float opacity;
+        uniform float blurRadius;
+        uniform float fadeStrength;
+        uniform float floorSize;
+
+        varying vec4 vUv;
+        varying vec3 vWorldPosition;
+
+        #include <logdepthbuf_pars_fragment>
+
+        vec4 sampleReflection( vec2 offset ) {
+            vec4 offsetUv = vUv;
+            offsetUv.xy += offset * vUv.w;
+            return texture2DProj( tDiffuse, offsetUv );
+        }
+
+        void main() {
+            #include <logdepthbuf_fragment>
+
+            vec4 reflection = sampleReflection( vec2( 0.0 ) );
+            reflection += sampleReflection( vec2(  blurRadius, 0.0 ) );
+            reflection += sampleReflection( vec2( -blurRadius, 0.0 ) );
+            reflection += sampleReflection( vec2( 0.0,  blurRadius ) );
+            reflection += sampleReflection( vec2( 0.0, -blurRadius ) );
+            reflection += sampleReflection( vec2(  blurRadius,  blurRadius ) );
+            reflection += sampleReflection( vec2( -blurRadius,  blurRadius ) );
+            reflection += sampleReflection( vec2(  blurRadius, -blurRadius ) );
+            reflection += sampleReflection( vec2( -blurRadius, -blurRadius ) );
+            reflection /= 9.0;
+
+            float radialDistance = length( vWorldPosition.xz ) / max( floorSize * 0.5, 0.0001 );
+            float falloff = clamp( exp( -radialDistance * fadeStrength ), 0.0, 1.0 );
+
+            vec3 tinted = mix( color, reflection.rgb, 0.6 * falloff );
+            gl_FragColor = vec4( tinted, opacity * falloff );
+
+            #include <tonemapping_fragment>
+            #include <colorspace_fragment>
+        }
+    `
+};
+
 // Parameters
 const params = {
-    zSpacing: 100,
+    // Studio settings
+    canvasSize: { x: 1920, y: 1080 },  // Canvas size (render area)
     bgColor: '#000000',
+    transparentBg: false,
+    ambience: false,  // Realistic floor with reflections and shadows
     cameraMode: 'perspective',
     cameraFOV: 75,
     cameraZoom: 1.0,  // Unified zoom parameter (1.0 = default)
-    transparentBg: false,
-    ambience: false,  // Realistic floor with reflections and shadows
-    // Material properties
-    materialRoughness: 0.7,
-    materialMetalness: 0.1,
-    materialThickness: 1.0,  // Depth multiplier (1.0 = thin plane)
+    // Slides settings
+    zSpacing: 100,
+    materialPreset: 'metallic-card',  // Current material preset
+    materialRoughness: 0.2,
+    materialMetalness: 0.8,
+    materialThickness: 2.0,  // Depth multiplier (1.0 = thin plane)
     materialBorderWidth: 0,  // Border width in pixels
     materialBorderColor: '#ffffff',
+    // Viewpoint preset
+    viewpointPreset: 'front',  // Current viewpoint preset
     // Animation properties
     animDuration: 1.5,  // Tween duration in seconds
-    animHoldTime: 1.0,  // Hold time at hero position
     animEasing: 'power2.inOut'  // GSAP easing function
+};
+
+// Material presets
+const MATERIAL_PRESETS = {
+    'flat-matte': { roughness: 1.0, metalness: 0, thickness: 1, borderWidth: 0 },
+    'glossy-photo': { roughness: 0.1, metalness: 0, thickness: 1, borderWidth: 0 },
+    'plastic-card': { roughness: 0.4, metalness: 0.1, thickness: 2, borderWidth: 0 },
+    'thick-board': { roughness: 0.9, metalness: 0, thickness: 8, borderWidth: 0 },
+    'metal-sheet': { roughness: 0.2, metalness: 0.8, thickness: 1, borderWidth: 0 },
+    'metallic-card': { roughness: 0.2, metalness: 0.8, thickness: 2, borderWidth: 0 },  // New default
+    'glass-slide': { roughness: 0.05, metalness: 0, thickness: 1, borderWidth: 0 },
+    'matte-print': { roughness: 0.7, metalness: 0, thickness: 1, borderWidth: 0 },
+    'bordered': { roughness: 0.2, metalness: 0, thickness: 1, borderWidth: 20 },
+    '3d-box': { roughness: 0.6, metalness: 0, thickness: 15, borderWidth: 0 }
+};
+
+// Viewpoint presets
+const VIEWPOINT_PRESETS = {
+    'center': null,  // Special case - calls centerViewOnContent
+    'front': 'fitToFrame',  // Special case - calculates distance to fit frontmost slide
+    'beauty': { x: 600, y: 400, z: 700 },  // Angled dramatic view
+    'top': { x: 0, y: 800, z: 100 },
+    'isometric': { x: 500, y: 500, z: 500 },
+    '3d-stack': { x: 400, y: 300, z: 600 },
+    'side': { x: 800, y: 0, z: 0 }
 };
 
 // UI
@@ -157,17 +273,37 @@ function init() {
     orthoCamera.lookAt(0, 0, 0);
     orthoCamera.zoom = params.cameraZoom;
 
-    // Create renderer with shadows and transparency support
+    // Create renderer with advanced photorealistic features
     renderer = new THREE.WebGLRenderer({
         canvas: canvas,
         antialias: true,
         alpha: true,  // Enable transparency
-        preserveDrawingBuffer: true  // Needed for export
+        preserveDrawingBuffer: true,  // Needed for export
+        powerPreference: "high-performance"  // Use dedicated GPU if available
     });
     renderer.setSize(window.innerWidth, window.innerHeight);
     renderer.setPixelRatio(window.devicePixelRatio);
+
+    // Enable high-quality shadows with soft edges
     renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.VSMShadowMap;  // Variance shadows for softer look
+    renderer.shadowMap.autoUpdate = true;
+
+    // Enable physically correct lighting and rendering
+    renderer.physicallyCorrectLights = true;  // Realistic light falloff
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;  // Cinematic tone mapping
+    renderer.toneMappingExposure = 1.2;  // Slightly brighter for better visibility
+    renderer.outputColorSpace = THREE.SRGBColorSpace;  // Correct color space for displays (Three.js r152+)
+
+    const pmremGenerator = new THREE.PMREMGenerator(renderer);
+    pmremGenerator.compileEquirectangularShader();
+    if (environmentTexture) {
+        environmentTexture.dispose();
+    }
+    environmentTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    scene.environment = environmentTexture;
+    pmremGenerator.dispose();
+
     renderer.setClearColor(0x000000, 1);  // Default opaque black
 
     // Add lighting for 3D depth
@@ -188,6 +324,9 @@ function init() {
 
     // Setup Tweakpane UI
     setupTweakpane();
+
+    // Initialize studio frame visual indicator
+    updateStudioFrame();
 
     console.log('Initialization complete - UI should be visible');
 
@@ -244,15 +383,30 @@ function calculateLuminance(hexColor) {
  * @returns {number} Ambient light intensity
  */
 function getAdaptiveAmbientIntensity(luminance) {
-    // Base intensity is 1.5 for full brightness
-    // For dark backgrounds (luminance < 0.5), increase light
-    // For bright backgrounds (luminance > 0.5), decrease light slightly
-    // Range: 1.2 (bright bg) to 1.8 (dark bg) - noticeable but not huge
-    const minIntensity = 1.2;
-    const maxIntensity = 1.8;
+    // Reduced intensity range to prevent overexposure
+    // Range: 0.5 (bright bg) to 0.8 (dark bg)
+    const minIntensity = 0.5;
+    const maxIntensity = 0.8;
 
     // Inverse relationship: darker background = more light
     return maxIntensity - (luminance * (maxIntensity - minIntensity));
+}
+
+/**
+ * Get adaptive emissive intensity for materials based on background luminance
+ * Helps slides remain visible on dark backgrounds and prevents washout on bright ones
+ * @param {number} luminance - Background luminance (0-1)
+ * @returns {number} Emissive intensity (0-1)
+ */
+function getAdaptiveEmissiveIntensity(luminance) {
+    // For dark backgrounds, add subtle emissive glow
+    // For bright backgrounds, reduce emissive to near zero
+    // Range: 0.05 (bright bg) to 0.25 (dark bg)
+    const minEmissive = 0.05;
+    const maxEmissive = 0.25;
+
+    // Inverse relationship: darker background = more emissive
+    return maxEmissive - (luminance * (maxEmissive - minEmissive));
 }
 
 function setupLighting() {
@@ -264,27 +418,40 @@ function setupLighting() {
     ambientLight = new THREE.AmbientLight(0xffffff, ambientIntensity);
     scene.add(ambientLight);
 
-    // Main directional light (sun-like) with shadows
-    mainLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    // Main directional light (sun-like) with high-quality shadows
+    // Reduced intensity to prevent overexposure
+    mainLight = new THREE.DirectionalLight(0xffffff, Math.PI * 0.4);
     mainLight.position.set(5, 10, 7);
     mainLight.castShadow = true;
 
-    // Configure shadow properties
-    mainLight.shadow.mapSize.width = 2048;
-    mainLight.shadow.mapSize.height = 2048;
+    // Configure high-quality shadow properties for photorealism
+    mainLight.shadow.mapSize.width = 4096;  // High-res shadows
+    mainLight.shadow.mapSize.height = 4096;
     mainLight.shadow.camera.near = 0.5;
     mainLight.shadow.camera.far = 500;
     mainLight.shadow.camera.left = -500;
     mainLight.shadow.camera.right = 500;
     mainLight.shadow.camera.top = 500;
     mainLight.shadow.camera.bottom = -500;
+    mainLight.shadow.bias = -0.0001;       // Adjusted to prevent flickering
+    mainLight.shadow.normalBias = 0.05;    // Increased to prevent shadow acne and flickering
+    mainLight.shadow.radius = 6;            // Softer shadow edges
+    mainLight.shadow.blurSamples = 16;      // VSM-specific softness control
 
     scene.add(mainLight);
 
-    // Fill light from opposite side for softer shadows
-    fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    // Fill light from opposite side for softer shadows and ambient feel
+    fillLight = new THREE.DirectionalLight(0xffffff, Math.PI * 0.15);
     fillLight.position.set(-5, 5, -5);
     scene.add(fillLight);
+
+    // Add hemisphere light for realistic sky/ground ambient lighting
+    const hemisphereLight = new THREE.HemisphereLight(
+        0xffffff,  // Sky color
+        0x444444,  // Ground color
+        0.3        // Reduced intensity
+    );
+    scene.add(hemisphereLight);
 
     console.log(`Lighting setup complete (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${ambientIntensity.toFixed(2)})`);
 }
@@ -301,6 +468,209 @@ function updateLighting() {
 
     ambientLight.intensity = newIntensity;
     console.log(`Lighting updated (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${newIntensity.toFixed(2)})`);
+}
+
+function getReflectionResolution() {
+    const pixelRatio = window.devicePixelRatio || 1;
+    const width = Math.max(
+        REFLECTION_MIN_RESOLUTION,
+        Math.round(window.innerWidth * pixelRatio * REFLECTION_TEXTURE_BASE)
+    );
+    const height = Math.max(
+        REFLECTION_MIN_RESOLUTION,
+        Math.round(window.innerHeight * pixelRatio * REFLECTION_TEXTURE_BASE)
+    );
+    return { width, height, pixelRatio };
+}
+
+function updateReflectionSettings() {
+    if (!floorReflector) {
+        return;
+    }
+
+    const { width, height, pixelRatio } = getReflectionResolution();
+    const target = floorReflector.getRenderTarget();
+    if (target.width !== width || target.height !== height) {
+        target.setSize(width, height);
+    }
+
+    floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
+    floorReflector.material.uniforms.floorSize.value = FLOOR_SIZE;
+}
+
+/**
+ * Create realistic floor with reflections and shadows
+ * Floor is positioned below the images
+ */
+function createFloor() {
+    if (floorGroup) return; // Already exists
+
+    const { width, height, pixelRatio } = getReflectionResolution();
+
+    floorGroup = new THREE.Group();
+    floorGroup.name = 'ambience-floor';
+
+    const baseGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
+    const baseMaterial = new THREE.MeshStandardMaterial({
+        color: params.bgColor,
+        roughness: 0.45,
+        metalness: 0.08,
+        envMapIntensity: 0.35,
+        side: THREE.DoubleSide
+    });
+
+    floorBase = new THREE.Mesh(baseGeometry, baseMaterial);
+    floorBase.rotation.x = -Math.PI / 2;
+    floorBase.position.y = FLOOR_Y;
+    floorBase.receiveShadow = true;
+
+    const reflectionGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
+    floorReflector = new Reflector(reflectionGeometry, {
+        textureWidth: width,
+        textureHeight: height,
+        shader: SoftReflectorShader,
+        multisample: Math.max(2, Math.round(pixelRatio * 2))
+    });
+    floorReflector.rotation.x = -Math.PI / 2;
+    floorReflector.position.y = FLOOR_Y + 0.1; // Prevent z-fighting with more separation
+    floorReflector.material.transparent = true;
+    floorReflector.material.depthWrite = false;
+    floorReflector.material.uniforms.color.value.set(params.bgColor);
+    floorReflector.material.uniforms.opacity.value = REFLECTION_OPACITY;
+    floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
+    floorReflector.material.uniforms.fadeStrength.value = REFLECTION_FADE_STRENGTH;
+    floorReflector.material.uniforms.floorSize.value = FLOOR_SIZE;
+
+    floorGroup.add(floorBase);
+    floorGroup.add(floorReflector);
+    scene.add(floorGroup);
+    updateReflectionSettings();
+
+    console.log(`Floor created at y=${FLOOR_Y} with ambience reflections (texture ${width}x${height})`);
+
+    // Update all images to stand on floor and cast shadows
+    updateImagesForAmbience(true);
+}
+
+/**
+ * Remove floor from scene
+ */
+function removeFloor() {
+    if (!floorGroup) return;
+
+    scene.remove(floorGroup);
+    if (floorReflector) {
+        floorReflector.dispose();
+        floorReflector = null;
+    }
+    if (floorBase) {
+        floorBase.geometry.dispose();
+        floorBase.material.dispose();
+        floorBase = null;
+    }
+    floorGroup = null;
+
+    console.log('Floor removed');
+
+    // Update images to remove shadow casting
+    updateImagesForAmbience(false);
+}
+
+/**
+ * Update all images in stack for ambience mode
+ * - Change material to MeshStandardMaterial (responds to lighting)
+ * - Enable shadow casting
+ * - Position to stand on floor like domino pieces
+ * @param {boolean} enabled - Whether ambience is enabled
+ */
+function updateImagesForAmbience(enabled) {
+    imageStack.forEach((imageData, index) => {
+        const texture = imageData.mesh.material.map;
+        const width = imageData.width;
+        const height = imageData.height;
+
+        // Remove old mesh
+        scene.remove(imageData.mesh);
+        imageData.mesh.geometry.dispose();
+        imageData.mesh.material.dispose();
+
+        // Create new geometry
+        let geometry;
+        if (params.materialThickness > 1) {
+            geometry = new THREE.BoxGeometry(width, height, params.materialThickness);
+        } else {
+            geometry = new THREE.PlaneGeometry(width, height);
+        }
+
+        // Create material based on ambience mode
+        let material;
+        if (enabled) {
+            // Calculate adaptive emissive for background contrast
+            const bgLuminance = calculateLuminance(params.bgColor);
+            const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
+
+            // Use MeshStandardMaterial for realistic lighting
+            material = new THREE.MeshStandardMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                transparent: true,
+                roughness: params.materialRoughness,
+                metalness: params.materialMetalness,
+                emissive: new THREE.Color(0xffffff),
+                emissiveMap: texture,
+                emissiveIntensity: emissiveIntensity
+            });
+            material.envMapIntensity = 0.55;
+            material.needsUpdate = true;
+        } else {
+            // Use MeshBasicMaterial for flat, unlit appearance
+            material = new THREE.MeshBasicMaterial({
+                map: texture,
+                side: THREE.DoubleSide,
+                transparent: true
+            });
+        }
+
+        // Create new mesh
+        const mesh = new THREE.Mesh(geometry, material);
+
+        if (enabled) {
+            // Enable shadows
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+
+            // Position to stand on floor (rotate to be vertical like domino)
+            mesh.rotation.y = 0; // Face forward
+            mesh.position.y = FLOOR_Y + (height / 2); // Bottom edge touches floor
+            mesh.position.z = index * params.zSpacing;
+        } else {
+            // Default positioning (centered, no rotation)
+            mesh.position.z = index * params.zSpacing;
+            mesh.position.y = 0;
+        }
+
+        // Update image data
+        imageData.mesh = mesh;
+        scene.add(mesh);
+    });
+
+    console.log(`Images updated for ambience mode: ${enabled ? 'enabled' : 'disabled'}`);
+}
+
+/**
+ * Toggle ambience mode (floor + realistic lighting)
+ * @param {boolean} enabled - Whether to enable ambience
+ */
+function toggleAmbience(enabled) {
+    params.ambience = enabled;
+
+    if (enabled) {
+        createFloor();
+        showToast('✨ Ambience enabled: Realistic floor & shadows', 'success');
+    } else {
+        removeFloor();
+        showToast('Ambience disabled: Flat rendering', 'info');
+    }
 }
 
 function setupKeyboardShortcuts() {
@@ -536,16 +906,15 @@ function exposeDebugAPI() {
 
             const topSlide = imageStack[imageStack.length - 1];
             const duration = config.duration || params.animDuration;
-            const holdTime = config.holdTime || params.animHoldTime;
             const easing = config.easing || params.animEasing;
 
-            console.log(`[API] Playing hero shot animation (duration: ${duration}s, hold: ${holdTime}s, easing: ${easing})`);
+            console.log(`[API] Playing hero shot animation (duration: ${duration}s, easing: ${easing})`);
 
             try {
                 await cameraAnimator.playHeroShot({
                     topSlide,
+                    canvasSize: params.canvasSize,
                     duration,
-                    holdTime,
                     easing
                 });
                 console.log('[API] Animation complete');
@@ -714,6 +1083,8 @@ function setupCleanup() {
         console.log('[Cleanup] Disposing Three.js resources...');
 
         try {
+            removeFloor();
+
             // Dispose all images in stack
             imageStack.forEach(imageData => {
                 if (imageData.mesh) {
@@ -751,7 +1122,13 @@ function setupCleanup() {
 
             // Clear scene
             if (scene) {
+                scene.environment = null;
                 scene.clear();
+            }
+
+            if (environmentTexture) {
+                environmentTexture.dispose();
+                environmentTexture = null;
             }
 
             console.log('[Cleanup] All resources disposed successfully');
@@ -1325,12 +1702,85 @@ function setupTweakpane() {
         expanded: true
     });
 
+    // Register plugins
+    pane.registerPlugin(EssentialsPlugin);
+    pane.registerPlugin(ColorPlusPlugin);
+
     console.log('Tweakpane created successfully');
 
-    // Camera settings folder
+    // ===== STUDIO SECTION =====
+    const studioFolder = pane.addFolder({
+        title: 'Studio',
+        expanded: true
+    });
+
+    // Canvas size (Point control)
+    studioFolder.addBinding(params, 'canvasSize', {
+        label: 'Size',
+        x: { min: 640, max: 3840, step: 1 },
+        y: { min: 480, max: 2160, step: 1 }
+    }).on('change', (ev) => {
+        updateCanvasSize(ev.value);
+        saveSettings();
+    });
+
+    // Background color (using color-plus plugin)
+    studioFolder.addBinding(params, 'bgColor', {
+        label: 'Color',
+        view: 'color',
+        picker: 'inline',
+        expanded: false
+    }).on('change', (ev) => {
+        updateBackground();
+        saveSettings();
+    });
+
+    // Transparent background toggle
+    studioFolder.addBinding(params, 'transparentBg', {
+        label: 'Transparent'
+    }).on('change', (ev) => {
+        updateBackground();
+        saveSettings();
+    });
+
+    // Ambience toggle (realistic floor with shadows)
+    studioFolder.addBinding(params, 'ambience', {
+        label: 'Ambience'
+    }).on('change', (ev) => {
+        toggleAmbience(ev.value);
+        saveSettings();
+    });
+
+    // ===== CAMERA SECTION =====
     const cameraFolder = pane.addFolder({
         title: 'Camera',
         expanded: true
+    });
+
+    // Viewpoint selector dropdown
+    cameraFolder.addBinding(params, 'viewpointPreset', {
+        label: 'Viewpoint',
+        options: {
+            'Beauty': 'beauty',
+            'Center': 'center',
+            'Front': 'front',
+            'Top': 'top',
+            'Isometric': 'isometric',
+            '3D Stack': '3d-stack',
+            'Side': 'side'
+        }
+    }).on('change', (ev) => {
+        const preset = VIEWPOINT_PRESETS[ev.value];
+        if (preset === null) {
+            // Center is special case
+            centerViewOnContent();
+        } else if (preset === 'fitToFrame') {
+            // Front view - fit frontmost slide to studio frame
+            setViewpointFitToFrame();
+        } else {
+            setViewpoint(preset.x, preset.y, preset.z);
+        }
+        saveSettings();
     });
 
     // Camera mode selector
@@ -1372,9 +1822,35 @@ function setupTweakpane() {
         saveSettings();
     });
 
-    // Z-spacing slider
-    pane.addBinding(params, 'zSpacing', {
-        label: 'Z-Spacing',
+    // ===== SLIDES SECTION =====
+    const slidesFolder = pane.addFolder({
+        title: 'Slides',
+        expanded: true
+    });
+
+    // Material selector dropdown
+    slidesFolder.addBinding(params, 'materialPreset', {
+        label: 'Material',
+        options: {
+            'Metallic Card': 'metallic-card',
+            'Flat Matte': 'flat-matte',
+            'Glossy Photo': 'glossy-photo',
+            'Plastic Card': 'plastic-card',
+            'Thick Board': 'thick-board',
+            'Metal Sheet': 'metal-sheet',
+            'Glass Slide': 'glass-slide',
+            'Matte Print': 'matte-print',
+            'Bordered': 'bordered',
+            '3D Box': '3d-box'
+        }
+    }).on('change', (ev) => {
+        applyMaterialPreset(MATERIAL_PRESETS[ev.value]);
+        saveSettings();
+    });
+
+    // Distance slider (renamed from Z-Spacing)
+    slidesFolder.addBinding(params, 'zSpacing', {
+        label: 'Distance',
         min: 0,
         max: 500,
         step: 10
@@ -1383,56 +1859,90 @@ function setupTweakpane() {
         saveSettings();
     });
 
-    // Background color
-    pane.addBinding(params, 'bgColor', {
-        label: 'Background'
-    }).on('change', (ev) => {
-        updateBackground();
-        saveSettings();
+    // ===== TABBED INTERFACE =====
+    const tabs = pane.addTab({
+        pages: [
+            { title: 'File' },
+            { title: 'Image' },
+            { title: 'Video' }
+        ]
     });
 
-    // Transparent background toggle
-    pane.addBinding(params, 'transparentBg', {
-        label: 'Transparent BG'
-    }).on('change', (ev) => {
-        updateBackground();
-        saveSettings();
+    // ===== FILE TAB =====
+    const fileTab = tabs.pages[0];
+
+    // JSON button grid (2x2 grid)
+    fileTab.addBlade({
+        view: 'buttongrid',
+        size: [2, 2],
+        cells: (x, y) => ({
+            title: [
+                ['Open', 'Paste'],
+                ['Save', 'Copy']
+            ][y][x]
+        }),
+        label: 'JSON'
+    }).on('click', (ev) => {
+        const [x, y] = ev.index;
+        if (y === 0 && x === 0) {
+            // Open
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => importJSON(e.target.files[0]);
+            input.click();
+        } else if (y === 0 && x === 1) {
+            // Paste
+            pasteJSON();
+        } else if (y === 1 && x === 0) {
+            // Save
+            exportJSON();
+        } else if (y === 1 && x === 1) {
+            // Copy
+            copyJSON();
+        }
     });
 
-    // Viewpoint presets folder
-    const viewFolder = pane.addFolder({
-        title: 'Viewpoints'
+    // Tools button grid (2x1 grid)
+    fileTab.addBlade({
+        view: 'buttongrid',
+        size: [2, 1],
+        cells: (x, y) => ({
+            title: [['Defaults', 'Clear']][y][x]
+        }),
+        label: 'Tools'
+    }).on('click', (ev) => {
+        if (ev.index[0] === 0) {
+            // Defaults
+            if (confirm('Reset all settings to defaults? This will clear saved preferences.')) {
+                resetSettings();
+            }
+        } else {
+            // Clear
+            clearAll();
+        }
     });
 
-    viewFolder.addButton({ title: 'Center' }).on('click', centerViewOnContent);
+    // ===== IMAGE TAB =====
+    const imageTab = tabs.pages[1];
 
-    viewFolder.addButton({ title: 'Front' }).on('click', () => {
-        setViewpoint(0, 0, 800);
+    // PNG button grid (1x3 grid)
+    imageTab.addBlade({
+        view: 'buttongrid',
+        size: [3, 1],
+        cells: (x, y) => ({
+            title: [['1x', '2x', '4x']][y][x]
+        }),
+        label: 'PNG'
+    }).on('click', (ev) => {
+        const scale = ev.index[0] === 0 ? 1 : ev.index[0] === 1 ? 2 : 4;
+        exportPNG(scale);
     });
 
-    viewFolder.addButton({ title: 'Top' }).on('click', () => {
-        setViewpoint(0, 800, 100);
-    });
+    // ===== VIDEO TAB =====
+    const videoTab = tabs.pages[2];
 
-    viewFolder.addButton({ title: 'Isometric' }).on('click', () => {
-        setViewpoint(500, 500, 500);
-    });
-
-    viewFolder.addButton({ title: '3D Stack View' }).on('click', () => {
-        setViewpoint(400, 300, 600);
-    });
-
-    viewFolder.addButton({ title: 'Side' }).on('click', () => {
-        setViewpoint(800, 0, 0);
-    });
-
-    // Animation folder
-    const animFolder = pane.addFolder({
-        title: 'Animation',
-        expanded: false
-    });
-
-    animFolder.addButton({ title: 'Play Hero Shot' }).on('click', async () => {
+    videoTab.addButton({ title: 'Play Hero Shot' }).on('click', async () => {
         if (imageStack.length === 0) {
             showToast('No images loaded', 'error');
             return;
@@ -1444,13 +1954,13 @@ function setupTweakpane() {
             return;
         }
 
-        showToast('Playing hero shot animation...', 'info');
+        showToast('Animating to Front view...', 'info');
 
         try {
             await cameraAnimator.playHeroShot({
                 topSlide: topSlide,
+                canvasSize: params.canvasSize,
                 duration: params.animDuration,
-                holdTime: params.animHoldTime,
                 easing: params.animEasing
             });
             showToast('Animation complete', 'success');
@@ -1460,21 +1970,14 @@ function setupTweakpane() {
         }
     });
 
-    animFolder.addBinding(params, 'animDuration', {
+    videoTab.addBinding(params, 'animDuration', {
         label: 'Duration',
         min: 0.5,
         max: 5.0,
         step: 0.1
     }).on('change', saveSettings);
 
-    animFolder.addBinding(params, 'animHoldTime', {
-        label: 'Hold Time',
-        min: 0,
-        max: 3.0,
-        step: 0.1
-    }).on('change', saveSettings);
-
-    animFolder.addBinding(params, 'animEasing', {
+    videoTab.addBinding(params, 'animEasing', {
         label: 'Easing',
         options: {
             'Power In/Out': 'power2.inOut',
@@ -1485,80 +1988,6 @@ function setupTweakpane() {
             'Circ In/Out': 'circ.inOut'
         }
     }).on('change', saveSettings);
-
-    // Export folder with compact layout
-    const exportFolder = pane.addFolder({
-        title: 'Export'
-    });
-
-    // PNG exports row
-    const pngRow = exportFolder.addFolder({ title: 'PNG', expanded: false });
-    pngRow.addButton({ title: '1x' }).on('click', exportPNG);
-    pngRow.addButton({ title: '2x' }).on('click', () => exportPNG(2));
-    pngRow.addButton({ title: '4x' }).on('click', () => exportPNG(4));
-
-    // JSON operations row
-    const jsonRow = exportFolder.addFolder({ title: 'JSON', expanded: false });
-    jsonRow.addButton({ title: 'Export' }).on('click', exportJSON);
-    jsonRow.addButton({ title: 'Import' }).on('click', () => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = '.json';
-        input.onchange = (e) => importJSON(e.target.files[0]);
-        input.click();
-    });
-    jsonRow.addButton({ title: 'Copy' }).on('click', copyJSON);
-    jsonRow.addButton({ title: 'Paste' }).on('click', pasteJSON);
-
-    // Materials folder
-    const materialsFolder = pane.addFolder({
-        title: 'Materials',
-        expanded: false
-    });
-
-    materialsFolder.addButton({ title: 'Flat Matte' }).on('click', () => {
-        applyMaterialPreset({ roughness: 1.0, metalness: 0, thickness: 1, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Glossy Photo' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.1, metalness: 0, thickness: 1, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Plastic Card' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.4, metalness: 0.1, thickness: 2, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Thick Board' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.9, metalness: 0, thickness: 8, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Metal Sheet' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.2, metalness: 0.8, thickness: 1, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Glass Slide' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.05, metalness: 0, thickness: 1, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Matte Print' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.7, metalness: 0, thickness: 1, borderWidth: 0 });
-    });
-
-    materialsFolder.addButton({ title: 'Bordered' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.2, metalness: 0, thickness: 1, borderWidth: 20 });
-    });
-
-    materialsFolder.addButton({ title: '3D Box' }).on('click', () => {
-        applyMaterialPreset({ roughness: 0.6, metalness: 0, thickness: 15, borderWidth: 0 });
-    });
-
-    // Actions
-    pane.addButton({ title: 'Reset to Defaults' }).on('click', () => {
-        if (confirm('Reset all settings to defaults? This will clear saved preferences.')) {
-            resetSettings();
-        }
-    });
-    pane.addButton({ title: 'Clear All' }).on('click', clearAll);
 }
 
 function exportPNG(scale = 1) {
@@ -1702,6 +2131,56 @@ function updateZoom(zoomValue) {
     console.log(`Zoom updated to ${zoomValue.toFixed(1)}x`);
 }
 
+function updateCanvasSize(size) {
+    params.canvasSize = size;
+    console.log(`Studio size updated to ${size.x}x${size.y}`);
+
+    // Update the visual frame indicator if it exists
+    updateStudioFrame();
+}
+
+// Global variable for studio frame helper
+let studioFrame = null;
+
+/**
+ * Create or update visual frame indicator showing studio bounds
+ */
+function updateStudioFrame() {
+    // Remove existing frame
+    if (studioFrame) {
+        scene.remove(studioFrame);
+        studioFrame.geometry.dispose();
+        studioFrame.material.dispose();
+    }
+
+    // Create frame geometry
+    const aspect = params.canvasSize.x / params.canvasSize.y;
+    const height = 500; // Base height
+    const width = height * aspect;
+
+    const geometry = new THREE.EdgesGeometry(
+        new THREE.PlaneGeometry(width, height)
+    );
+    const material = new THREE.LineBasicMaterial({
+        color: 0x4a90e2,
+        opacity: 0.3,
+        transparent: true
+    });
+
+    studioFrame = new THREE.LineSegments(geometry, material);
+    studioFrame.position.z = -50; // Slightly behind front
+    scene.add(studioFrame);
+}
+
+function removeStudioFrame() {
+    if (studioFrame) {
+        scene.remove(studioFrame);
+        studioFrame.geometry.dispose();
+        studioFrame.material.dispose();
+        studioFrame = null;
+    }
+}
+
 function centerViewOnContent() {
     if (imageStack.length === 0) {
         console.log('No content to center on');
@@ -1779,6 +2258,35 @@ function updateBackground() {
         scene.background = new THREE.Color(params.bgColor);
         renderer.setClearColor(params.bgColor, 1);
     }
+
+    // Update lighting to adapt to new background color
+    updateLighting();
+
+    // Update floor color to match background if ambience is enabled
+    if (params.ambience) {
+        if (floorBase) {
+            floorBase.material.color.set(params.bgColor);
+            floorBase.material.needsUpdate = true;
+        }
+        if (floorReflector) {
+            floorReflector.material.uniforms.color.value.set(params.bgColor);
+        }
+        console.log(`Floor color updated to ${params.bgColor}`);
+    }
+
+    // Update all existing slides' emissive intensity to react to background
+    if (params.ambience) {
+        const bgLuminance = calculateLuminance(params.bgColor);
+        const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
+
+        imageStack.forEach(imageData => {
+            if (imageData.mesh.material.emissiveIntensity !== undefined) {
+                imageData.mesh.material.emissiveIntensity = emissiveIntensity;
+                imageData.mesh.material.needsUpdate = true;
+            }
+        });
+        console.log(`Slides emissive updated (luminance: ${bgLuminance.toFixed(2)}, emissive: ${emissiveIntensity.toFixed(2)})`);
+    }
 }
 
 function updateZSpacing(newSpacing) {
@@ -1794,6 +2302,51 @@ function setViewpoint(x, y, z) {
     camera.lookAt(0, 0, 0);
     controls.update();
     console.log(`Viewpoint set to (${x}, ${y}, ${z})`);
+}
+
+/**
+ * Set viewpoint to fit frontmost slide within studio frame
+ */
+function setViewpointFitToFrame() {
+    if (imageStack.length === 0) {
+        // Default front view if no images
+        setViewpoint(0, 0, 800);
+        return;
+    }
+
+    // Get frontmost slide (last in stack)
+    const frontSlide = imageStack[imageStack.length - 1];
+
+    // Calculate camera distance to fit studio canvas (not slide) in frame
+    // The viewport should show the entire studio canvas size at the frontmost slide position
+    const fov = params.cameraFOV * (Math.PI / 180); // Convert to radians
+    const canvasHeight = params.canvasSize.y;
+    const canvasWidth = params.canvasSize.x;
+
+    // Calculate distance needed to fit canvas height in frame
+    const distanceForHeight = (canvasHeight / 2) / Math.tan(fov / 2);
+
+    // Calculate distance needed to fit canvas width in frame
+    const aspect = camera.aspect; // Actual viewport aspect ratio
+    const visibleHeightAtDistance = 2 * Math.tan(fov / 2) * distanceForHeight;
+    const visibleWidthAtDistance = visibleHeightAtDistance * aspect;
+
+    // Adjust if canvas width exceeds visible width
+    const distanceForWidth = canvasWidth > visibleWidthAtDistance ?
+        (canvasWidth / 2) / (Math.tan(fov / 2) * aspect) :
+        distanceForHeight;
+
+    // Use the larger distance to ensure both dimensions fit
+    const distance = Math.max(distanceForHeight, distanceForWidth) * 1.05; // 5% padding
+
+    // Position camera at front of slide stack
+    const frontSlideZ = frontSlide.mesh.position.z;
+    camera.position.set(0, 0, frontSlideZ + distance);
+    camera.lookAt(0, 0, frontSlideZ);
+    controls.target.set(0, 0, frontSlideZ);
+    controls.update();
+
+    console.log(`Front view: fitted studio canvas ${canvasWidth}×${canvasHeight}px at distance ${distance.toFixed(1)} from slide`);
 }
 
 function clearAll() {
@@ -1823,7 +2376,7 @@ function clearAll() {
 
 function setupFileInput() {
     const fileInput = document.getElementById('image-input');
-    const dropZone = document.getElementById('drop-zone');
+    const dropZone = document.getElementById('image-list-container');
 
     // File input change
     fileInput.addEventListener('change', handleFileSelect);
@@ -1961,19 +2514,33 @@ function applyMaterialPreset(preset) {
             geometry = new THREE.PlaneGeometry(width, height);
         }
 
+        // Calculate adaptive emissive for background contrast
+        const bgLuminance = calculateLuminance(params.bgColor);
+        const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
+
         // Create new material with updated properties
         const material = new THREE.MeshStandardMaterial({
             map: texture,
             side: THREE.DoubleSide,
             transparent: true,
             roughness: params.materialRoughness,
-            metalness: params.materialMetalness
+            metalness: params.materialMetalness,
+            emissive: new THREE.Color(0xffffff),
+            emissiveMap: texture,
+            emissiveIntensity: emissiveIntensity
         });
+        material.envMapIntensity = 0.55;
+        material.needsUpdate = true;
 
         // Create new mesh
         const mesh = new THREE.Mesh(geometry, material);
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
+        if (params.ambience) {
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            mesh.position.y = FLOOR_Y + (height / 2);
+        } else {
+            mesh.position.y = 0;
+        }
         mesh.position.z = index * params.zSpacing;
 
         // Add border if enabled
@@ -1987,10 +2554,13 @@ function applyMaterialPreset(preset) {
                 roughness: params.materialRoughness,
                 metalness: params.materialMetalness
             });
+            borderMaterial.envMapIntensity = 0.35;
             const borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
             borderMesh.position.z = -0.5;
-            borderMesh.castShadow = true;
-            borderMesh.receiveShadow = true;
+            if (params.ambience) {
+                borderMesh.castShadow = true;
+                borderMesh.receiveShadow = true;
+            }
             mesh.add(borderMesh);
         }
 
@@ -2129,18 +2699,42 @@ function addImageToStack(texture, filename) {
         geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
     }
 
-    // Use MeshBasicMaterial to show true colors without lighting effects
-    // This ensures images appear at their actual brightness
-    const material = new THREE.MeshBasicMaterial({
-        map: texture,
-        side: THREE.DoubleSide,
-        transparent: true
-    });
+    // Create material based on ambience mode
+    // Calculate adaptive emissive for background contrast
+    const bgLuminance = calculateLuminance(params.bgColor);
+    const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
+
+    let material;
+    if (params.ambience) {
+        // Use MeshStandardMaterial for realistic lighting
+        material = new THREE.MeshStandardMaterial({
+            map: texture,
+            side: THREE.DoubleSide,
+            transparent: true,
+            roughness: params.materialRoughness,
+            metalness: params.materialMetalness,
+            emissive: new THREE.Color(0xffffff),
+            emissiveMap: texture,
+            emissiveIntensity: emissiveIntensity
+        });
+        material.envMapIntensity = 0.55;
+        material.needsUpdate = true;
+    } else {
+        // Use MeshBasicMaterial to show true colors without lighting effects
+        material = new THREE.MeshBasicMaterial({
+            map: texture,
+            side: THREE.DoubleSide,
+            transparent: true
+        });
+    }
 
     // Create main mesh
     const mesh = new THREE.Mesh(geometry, material);
-    mesh.castShadow = true;
-    mesh.receiveShadow = true;
+
+    if (params.ambience) {
+        mesh.castShadow = true;
+        mesh.receiveShadow = true;
+    }
 
     // Add border if enabled
     let borderMesh = null;
@@ -2154,16 +2748,26 @@ function addImageToStack(texture, filename) {
             roughness: params.materialRoughness,
             metalness: params.materialMetalness
         });
+        borderMaterial.envMapIntensity = 0.35;
         borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
         borderMesh.position.z = -0.5; // Slightly behind the image
-        borderMesh.castShadow = true;
-        borderMesh.receiveShadow = true;
+        if (params.ambience) {
+            borderMesh.castShadow = true;
+            borderMesh.receiveShadow = true;
+        }
         mesh.add(borderMesh);
     }
 
-    // Position along Z-axis
-    const zPosition = imageStack.length * params.zSpacing;
-    mesh.position.z = zPosition;
+    // Position based on ambience mode
+    const index = imageStack.length;
+    if (params.ambience) {
+        // Stand on floor like domino pieces
+        mesh.position.y = FLOOR_Y + (planeHeight / 2);
+        mesh.position.z = index * params.zSpacing;
+    } else {
+        // Default positioning (centered)
+        mesh.position.z = index * params.zSpacing;
+    }
 
     // Store in stack
     const imageData = {
@@ -2189,6 +2793,14 @@ function addImageToStack(texture, filename) {
 
 function updateImageList() {
     const listContainer = document.getElementById('image-list');
+    const dropZoneContainer = document.getElementById('image-list-container');
+
+    // Toggle has-images class based on whether images are loaded
+    if (imageStack.length > 0) {
+        dropZoneContainer.classList.add('has-images');
+    } else {
+        dropZoneContainer.classList.remove('has-images');
+    }
 
     // Remove existing items properly to prevent memory leaks
     while (listContainer.firstChild) {
@@ -2398,6 +3010,7 @@ function onWindowResize() {
     orthoCamera.updateProjectionMatrix();
 
     renderer.setSize(window.innerWidth, window.innerHeight);
+    updateReflectionSettings();
 }
 
 function animate() {

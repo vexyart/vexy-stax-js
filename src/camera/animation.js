@@ -39,45 +39,53 @@ export class CameraAnimator {
   }
 
   /**
-   * Calculate hero position for the top slide in the stack
+   * Calculate Front viewpoint position for the top slide
+   * Fits the frontmost slide within the studio frame
    * @param {Object} topSlide - The mesh of the top slide
+   * @param {Object} canvasSize - Studio canvas size {x, y}
    * @returns {Object} { position: Vector3, target: Vector3 }
    */
-  calculateHeroPosition(topSlide) {
-    // Get bounding box of top slide
-    const box = new THREE.Box3().setFromObject(topSlide);
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
+  calculateFrontViewpoint(topSlide, canvasSize) {
+    // Get slide dimensions and position
+    const slideHeight = topSlide.height;
+    const slideWidth = topSlide.width;
+    const slideZ = topSlide.mesh.position.z;
 
-    // Calculate camera distance to fit the slide in viewport
-    // Account for FOV and add padding (1.2x multiplier)
+    // Calculate based on studio frame aspect ratio
+    const aspect = canvasSize.x / canvasSize.y;
     const fov = this.camera.fov * (Math.PI / 180);
-    const maxDim = Math.max(size.x, size.y);
-    const distance = (maxDim / 2 / Math.tan(fov / 2)) * 1.2;
 
-    // Position camera in front of the slide
-    const position = new THREE.Vector3(
-      center.x,
-      center.y,
-      center.z + distance
-    );
+    // Calculate distance needed to fit slide height in frame
+    const distanceForHeight = (slideHeight / 2) / Math.tan(fov / 2);
 
-    return { position, target: center };
+    // Calculate distance needed to fit slide width in frame
+    const frameWidth = slideHeight * aspect;
+    const distanceForWidth = slideWidth > frameWidth ?
+        (slideWidth / 2) / Math.tan(fov / 2) * (slideWidth / frameWidth) :
+        distanceForHeight;
+
+    // Use the larger distance with padding
+    const distance = Math.max(distanceForHeight, distanceForWidth) * 1.1;
+
+    // Front view: camera directly in front of slide
+    const position = new THREE.Vector3(0, 0, slideZ + distance);
+    const target = new THREE.Vector3(0, 0, slideZ);
+
+    return { position, target };
   }
 
   /**
    * Play hero shot animation
-   * Tweens camera to top slide, holds, then returns
+   * Animates camera from current position to Front viewpoint
    *
    * @param {Object} params - Animation parameters
-   * @param {Object} params.topSlide - The top slide mesh
+   * @param {Object} params.topSlide - The top slide data object
+   * @param {Object} params.canvasSize - Studio canvas size {x, y}
    * @param {number} params.duration - Tween duration in seconds (default: 1.5)
-   * @param {number} params.holdTime - Hold time at hero position (default: 1.0)
    * @param {string} params.easing - GSAP easing function (default: "power2.inOut")
    * @returns {Promise} Resolves when animation completes, rejects on error
    */
-  async playHeroShot({ topSlide, duration = 1.5, holdTime = 1.0, easing = "power2.inOut" }) {
-    // Return promise with proper error handling
+  async playHeroShot({ topSlide, canvasSize, duration = 1.5, easing = "power2.inOut" }) {
     return new Promise((resolve, reject) => {
       try {
         // Validation checks
@@ -93,9 +101,9 @@ export class CameraAnimator {
           return;
         }
 
-        if (!topSlide.mesh) {
-          console.error('Top slide has no mesh property');
-          reject(new Error('Invalid top slide object'));
+        if (!canvasSize) {
+          console.error('No canvas size provided for hero shot');
+          reject(new Error('No canvas size provided'));
           return;
         }
 
@@ -103,15 +111,12 @@ export class CameraAnimator {
         this.isAnimating = true;
         this.controls.enabled = false;
 
-        // Save current state
-        this.saveState();
-
-        // Calculate hero position (wrap in try-catch for calculation errors)
-        let heroPos;
+        // Calculate Front viewpoint position
+        let frontPos;
         try {
-          heroPos = this.calculateHeroPosition(topSlide.mesh || topSlide);
+          frontPos = this.calculateFrontViewpoint(topSlide, canvasSize);
         } catch (calcError) {
-          console.error('Failed to calculate hero position:', calcError);
+          console.error('Failed to calculate Front viewpoint:', calcError);
           this.cleanup();
           reject(new Error('Failed to calculate camera position'));
           return;
@@ -120,52 +125,22 @@ export class CameraAnimator {
         // Create animation timeline
         const timeline = gsap.timeline();
 
-        // Tween to hero position
+        // Tween from current position to Front viewpoint
         timeline.to(this.camera.position, {
-          x: heroPos.position.x,
-          y: heroPos.position.y,
-          z: heroPos.position.z,
+          x: frontPos.position.x,
+          y: frontPos.position.y,
+          z: frontPos.position.z,
           duration: duration,
           ease: easing,
         });
 
         timeline.to(this.controls.target, {
-          x: heroPos.target.x,
-          y: heroPos.target.y,
-          z: heroPos.target.z,
+          x: frontPos.target.x,
+          y: frontPos.target.y,
+          z: frontPos.target.z,
           duration: duration,
           ease: easing,
         }, "<"); // Start at same time as camera position
-
-        // Hold at hero position
-        timeline.to({}, { duration: holdTime });
-
-        // Get restored state
-        const restored = this.restoreState();
-
-        if (!restored) {
-          console.error('Failed to restore camera state');
-          this.cleanup();
-          reject(new Error('Failed to restore camera state'));
-          return;
-        }
-
-        // Tween back to original
-        timeline.to(this.camera.position, {
-          x: restored.position.x,
-          y: restored.position.y,
-          z: restored.position.z,
-          duration: duration,
-          ease: easing,
-        });
-
-        timeline.to(this.controls.target, {
-          x: restored.target.x,
-          y: restored.target.y,
-          z: restored.target.z,
-          duration: duration,
-          ease: easing,
-        }, "<");
 
         // Set up completion and error handlers
         timeline.eventCallback('onComplete', () => {

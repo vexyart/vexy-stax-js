@@ -43,27 +43,44 @@ body {
     max-width: 300px;
 }
 
-#drop-zone {
+#image-list-container {
     border: 2px dashed #4a90e2;
     border-radius: 8px;
-    padding: 30px 20px;
-    text-align: center;
+    padding: 15px;
+    min-height: 150px;
     transition: all 0.3s;
-    margin-bottom: 15px;
+    position: relative;
 }
 
-#drop-zone.drag-over {
+#image-list-container.drag-over {
     border-color: #5cb85c;
     background: rgba(92, 184, 92, 0.1);
 }
 
-#drop-zone p {
+#image-list-container.has-images {
+    border-style: solid;
+    border-color: #444;
+    padding: 10px;
+}
+
+#drop-prompt {
+    text-align: center;
+    padding: 20px 10px;
+    pointer-events: none;
+}
+
+#image-list-container.has-images #drop-prompt {
+    display: none;
+}
+
+#drop-prompt p {
     margin: 5px 0;
     color: #ccc;
     font-size: 14px;
+    pointer-events: none;
 }
 
-#drop-zone .or {
+#drop-prompt .or {
     font-size: 12px;
     color: #888;
 }
@@ -77,6 +94,7 @@ body {
     cursor: pointer;
     font-size: 14px;
     transition: background 0.2s;
+    pointer-events: all;
 }
 
 .file-label:hover {
