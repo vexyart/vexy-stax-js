@@ -49,6 +49,12 @@
 - Zero syntax errors
 - Memory leaks fixed
 
+### Verification - 2025-11-04
+- `/test` workflow (`fd` + `uvx hatch test`): hatch spins up Python env but finds 0 tests; pytest exits 5 (“no tests ran”)—expected until Python modules exist.
+- `npm run test` (node --test): 18/18 specs pass in ~0.18s; confirms AppState/EventBus/constants suites still green.
+- Historical note: earlier (pre-constants suite) run of `npm run test` (node --test) recorded 10/10 passing cases for AppState/EventBus, confirming baseline stability.
+- Added `tests/core_constants.test.js` and extra guard-rail assertions for `AppState`/`EventBus` to lock current behaviour before refactor work.
+
 ---
 
 ### Phase 7: Code Refactoring Plan

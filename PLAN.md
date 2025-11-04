@@ -12,7 +12,6 @@ Maintainable Three.js studio for stacking 2D artwork, animating cameras, and exp
   - Finalise use of `src/core/constants.js` everywhere; delete duplicate literals in `main.js`.
   - Replace ad-hoc globals with `appState` accessors and persist shared objects (scene, cameras, renderer, history) through the singleton.
   - Introduce `EventBus` wiring points for inter-module communication (background updates, image stack changes, camera events).
-  - Expand unit coverage (`tests/`) to guard `constants`, `AppState`, and `EventBus` helpers.
   - Deliverable: `npm test`, `npm run build`, documentation updates (`WORK.md`, `CHANGELOG.md`).
 - **Phase 1 – Scene & Loop**:
   - Extract renderer/scene bootstrap and animation loop into `scene/SceneManager.js`.

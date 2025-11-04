@@ -71,3 +71,25 @@ test('AppState reset restores initial snapshot', () => {
     assert.deepStrictEqual(state.get('imageStack'), [], 'imageStack should be emptied');
     assert.equal(state.get('historyIndex'), -1, 'history index should reset');
 });
+
+test('AppState mergeInto rejects non-object patches', () => {
+    const state = new AppState({ params: { a: 1 } });
+
+    assert.throws(
+        () => state.mergeInto('params', null),
+        /plain object/,
+        'mergeInto must reject non-object patches'
+    );
+});
+
+test('AppState pushTo rejects non-array targets', () => {
+    const state = new AppState({ params: { a: 1 } });
+
+    state.set('params', { a: 2 });
+
+    assert.throws(
+        () => state.pushTo('params', 3),
+        /not an array/,
+        'pushTo must guard against non-array targets'
+    );
+});

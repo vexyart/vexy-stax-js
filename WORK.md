@@ -1,203 +1,26 @@
 # Vexy Stax JS - Work Progress
+<!-- this_file: WORK.md -->
 
-## Phase 6.9: Code Quality Iteration 10 (2025-11-04)
+## 2025-11-04 – Verification Log
+- Ran `/test` command sequence (`fd … uvx hatch test`); hatch env spun up but zero Python tests exist, pytest exited 5 (“no tests ran”). Recorded as expected gap—repository is JS-only today.
+- Follow-up safety net: `npm run test` (node --test) passes 18/18 assertions in 0.17s; confirms JS core modules remain green.
+- Earlier iteration log (pre-constant tests): `npm run test` twice (node --test) maintained 10/10 AppState/EventBus assertions in ~0.13s; retaining note for provenance.
+- Re-read `src/core/AppState.js` and `src/core/EventBus.js`; logic remains deterministic with defensive guard clauses. Residual risk: medium—state consumers in `main.js` still bypass the singleton in places, so future refactors must confirm all writes flow through `appState`.
+- Spot-checked `index.html`, `styles/main.css`, and `src/main.js` entry sections for drift; no config skew detected. Risk: low—monolith still large but unchanged during this iteration.
+- Sanity review of `tests/core.test.js` confirms coverage matches implemented helpers; gap: no negative-path assertions for invalid EventBus events (document in TODO if needed during next work cycle).
+- Confidence level: I’m certain current tests cover exercised modules; broader system remains high risk until refactor phases land because `main.js` lacks unit coverage.
 
-### Completed Tasks ✅
+## 2025-11-04 – Active Iteration Notes
+- Targeting TODO “Phase 0: Extend unit tests to cover constants, AppState flows, and EventBus helpers; record results in `WORK.md`.”
+- Plan: add dedicated `tests/core_constants.test.js` validating `createDefaultParams()` immutability and preset tables; consider negative-path assertions for EventBus if quick win.
+- Risk assessment: low—pure data module, no runtime side effects. Primary risk is missing frozen checks; mitigated by asserting `.freeze` behaviour.
+- Outcome: Added `tests/core_constants.test.js`, extended AppState/EventBus suites with guard-rail cases; `npm run test` (node --test) now runs 18 passing specs in ~0.18s. Residual risk: low—tests only cover pure modules, monolithic `main.js` still untested.
 
-#### Task 1: Extract Magic Numbers to Constants
-**Problem**: Hard-coded values scattered throughout codebase (10MB, 50MB, 4096, retry delays)
-**Impact**: Difficult to maintain, violates CLAUDE.md guidelines
-
-**Fix**: Created constants at top of file (lines 56-61)
-```javascript
-const FILE_SIZE_WARN_MB = 10; // 10MB warning threshold
-const FILE_SIZE_REJECT_MB = 50; // 50MB rejection threshold
-const MAX_DIMENSION_PX = 4096; // Maximum recommended image dimension
-const MAX_LOAD_RETRIES = 3; // Number of retry attempts
-const RETRY_DELAYS_MS = [500, 1500, 3000]; // Exponential backoff delays
-```
-
-**Changes**:
-- `src/main.js:56-61` - Added constants
-- `src/main.js:2571-2577` - File size validation uses constants
-- `src/main.js:2611-2613` - Dimension validation uses MAX_DIMENSION_PX
-- `src/main.js:2625-2634` - Retry logic uses MAX_LOAD_RETRIES, RETRY_DELAYS_MS
-
-**Result**: Single source of truth, easier to adjust limits, clearer code
-
----
-
-#### Task 2: Fix Unsafe Array Access Patterns
-**Problem**: Multiple places accessed `imageStack[imageStack.length - 1]` with inconsistent validation
-**Impact**: Potential undefined access if pattern isn't followed consistently
-
-**Fix**: Added defensive checks after array access
-- `src/main.js:922-925` - Added check in playAnimation()
-- `src/main.js:2318-2322` - Added check in setViewpointFitToFrame()
-
-**Pattern**:
-```javascript
-if (imageStack.length === 0) {
-    // Handle empty case
-    return;
-}
-const topSlide = imageStack[imageStack.length - 1];
-if (!topSlide) {
-    // Defensive check (should never trigger)
-    return;
-}
-```
-
-**Result**: Consistent validation pattern, prevents potential crashes
-
----
-
-#### Task 3: Add Event Listener Cleanup
-**Problem**: 16+ event listeners registered but ZERO removeEventListener calls
-**Impact**: Memory leak when navigating away or refreshing page
-
-**Fix**: Implemented tracked event listener system
-
-**1. Created tracking infrastructure**:
-- `src/main.js:28` - Added `eventListeners` array
-- `src/main.js:700-703` - Created `addTrackedEventListener()` helper
-
-**2. Replaced all addEventListener calls**:
-- `src/main.js:823` - Keyboard shortcuts (window keydown)
-- `src/main.js:1198` - Debounced resize (window resize)
-- `src/main.js:1283-1284` - Context loss recovery (canvas events × 2)
-- `src/main.js:2424-2427` - File input handlers (fileInput, dropZone × 4)
-
-**3. Added cleanup in beforeunload handler**:
-```javascript
-// src/main.js:1169-1174
-eventListeners.forEach(({ target, event, handler, options }) => {
-    target.removeEventListener(event, handler, options);
-});
-eventListeners = [];
-```
-
-**Result**: All event listeners properly cleaned up on page unload
-
----
-
-### Additional Improvements
-
-#### Fix: Slide Color Saturation (User Request)
-**Problem**: Slides appeared washed out and desaturated in ambience mode
-- Emissive lighting (emissiveIntensity: 0.05-0.25) added white glow
-- High envMapIntensity (0.55) added environment reflections
-- Combined effect desaturated original texture colors
-
-**Fix**: Removed emissive properties, reduced environment map intensity
-```javascript
-// Before (src/main.js:2738-2748)
-material = new THREE.MeshStandardMaterial({
-    map: texture,
-    roughness: params.materialRoughness,
-    metalness: params.materialMetalness,
-    emissive: new THREE.Color(0xffffff),
-    emissiveMap: texture,
-    emissiveIntensity: emissiveIntensity  // 0.05-0.25
-});
-material.envMapIntensity = 0.55;
-
-// After (src/main.js:2733-2742)
-material = new THREE.MeshStandardMaterial({
-    map: texture,
-    roughness: params.materialRoughness,
-    metalness: params.materialMetalness,
-    // NO emissive - keeps full color saturation
-    envMapIntensity: 0.15  // Reduced from 0.55
-});
-```
-
-**Result**: Full saturation preserved, slides show true colors
-
----
-
-#### Confirmed: Floor Color Matches Background
-**User Request**: Floor must match background exactly (black on black, white on white)
-**Status**: Already implemented correctly
-- `src/main.js:518` - `return new THREE.Color(bgColor);`
-- Floor gets exact background color
-- Depth perception comes from reflections and shadows, not floor color
-
----
-
-### Test Results
-```bash
-npm run build
-# ✓ Syntax check passed
-# ✓ Build succeeded in 6.19s
-# Bundle size: 1,141.68 kB (stable)
-# JS increased by 0.10 kB (tracking infrastructure)
-```
-
-### Code Quality Metrics
-- ✅ Magic numbers: Eliminated (6 constants extracted)
-- ✅ Array access: Consistent defensive pattern
-- ✅ Event listeners: All tracked and cleaned up
-- ✅ Memory leaks: Fixed (event listener cleanup)
-- ✅ Color saturation: Full saturation restored
-- ✅ Build: Passing
-
----
-
-## Previous Work History
-
-### UI and Ambience Improvements (2025-11-04)
-
-#### Issue 1: Drop Area Styling
-**Problem**: Drop area didn't match Tweakpane's visual design
-- Used bright blue borders (#4a90e2)
-- Large border radius (8px)
-- Inconsistent with Tweakpane's subtle dark theme
-
-**Fix**: Updated styles/main.css
-- Changed to rgba() colors with transparency
-- Border radius reduced to 2px (matches Tweakpane)
-- Button colors now subtle with rgba(255, 255, 255, 0.1) backgrounds
-- Consistent hover states
-- File: `styles/main.css:46-110`
-
-**Result**: Drop area now seamlessly integrated with Tweakpane UI
-
-#### Issue 2: Ambience Floor Color
-**Problem**: Floor color used background color directly
-- Black background (#000000) → Black floor (invisible, too dark)
-- White background (#ffffff) → White floor (too bright, washed out)
-- No contrast between floor and background
-
-**Root Cause**: `createFloor()` set floor color to `params.bgColor` directly (line 512)
-
-**Fix**: Created adaptive floor color system
-- New function: `getAdaptiveFloorColor()` at src/main.js:506-515
-- Calculates luminance of background color
-- Dark backgrounds (< 0.5) → Medium gray floor (0.30)
-- Light backgrounds (>= 0.5) → Darker gray floor (0.20)
-- Updated `createFloor()` to use adaptive color (line 526)
-- Updated `updateBackground()` to use adaptive color (line 2259)
-
-**Result**: Floor now has proper visual separation from background regardless of background color
-
-**Note**: Later changed to match background exactly per user request
-
-### Test Results
-```bash
-npm run build
-# ✓ built in 21.15s
-# CSS: 2.37 kB (was 2.19 kB)
-# JS: 1,141 kB (stable)
-```
-
-**Behavior Now**:
-- Drop area matches Tweakpane styling
-- Black background: Medium gray floor (visible contrast)
-- White background: Dark gray floor (visible contrast)
-- Floor color updates dynamically when background changes
-
----
+## Current Focus (2025-11-04)
+- Establish foundation for modular refactor by wiring `core/constants`, `AppState`, and `EventBus` across `main.js`.
+- Design and implement new three-column layout (left slides strip, centred studio, right Tweakpane) with retina-aware sizing.
+- Expand automated tests (Node test runner) to cover new core helpers before migrating additional modules.
+- Plan validation: run `npm test`, `npm run build`, then execute manual smoke checks covering drag/drop, thumbnail ordering, retina clarity, and layout centring.
 
 ### Front Viewpoint Bug Fix (2025-11-04)
 

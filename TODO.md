@@ -5,7 +5,7 @@
 - [ ] Phase 0: Replace inline literals in `main.js` with imports from `core/constants.js`.
 - [ ] Phase 0: Route shared objects (scene, cameras, renderer, history, listeners) through `appState`.
 - [ ] Phase 0: Integrate `EventBus` placeholders for background, stack, and camera events.
-- [ ] Phase 0: Extend unit tests to cover constants, AppState flows, and EventBus helpers; record results in `WORK.md`.
+- [x] Phase 0: Extend unit tests to cover constants, AppState flows, and EventBus helpers; record results in `WORK.md`. (2025-11-04)
 - [ ] Phase 1: Create `scene/SceneManager.js` and migrate renderer/loop initialisation.
 - [ ] Phase 1: Move lighting and floor logic into `scene/LightingManager.js` and `scene/FloorManager.js`.
 - [ ] Phase 2: Implement camera managers (`CameraManager`, `ControlsManager`, `ViewpointService`) and port fit-to-frame maths.

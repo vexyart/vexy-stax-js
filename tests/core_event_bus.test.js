@@ -82,3 +82,13 @@ test('EventBus clear removes every listener', () => {
 
     assert.equal(count, 0, 'no handler should fire after clear');
 });
+
+test('EventBus on rejects non-function handlers', () => {
+    const bus = new EventBus();
+
+    assert.throws(
+        () => bus.on('demo', 'not-a-function'),
+        /requires a function handler/,
+        'on should reject invalid handlers'
+    );
+});
