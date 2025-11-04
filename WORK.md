@@ -150,3 +150,58 @@ wc -l src/main.js
 ```
 
 **Status**: All 5 quality improvement iterations complete
+
+### Quality Improvements Iteration 6 (2025-11-04)
+
+#### Completed Tasks ✅
+1. **Replaced alert() with showToast()** - Better UX for clipboard operations (lines 2540, 2543)
+2. **Made loadConfig() promise-based** - Returns promise that resolves when all images loaded
+
+#### User Experience Improvements
+- **Clipboard operations**:
+  - Before: `alert('Configuration copied to clipboard!')`
+  - After: `showToast('📋 Configuration copied to clipboard!', 'success')`
+  - Result: Consistent toast notifications, no blocking modals
+
+#### Async Completion Improvements  
+- **loadConfig()**: Now returns Promise
+  - Maps over `config.images`, creates promise for each texture load
+  - Uses `Promise.all(loadPromises)` to wait for completion
+  - Python browser.py can now reliably wait for completion
+  - Result: No race conditions, deterministic loading
+
+#### Code Changes
+**main.js (lines 505-604)**:
+```javascript
+loadConfig: (config) => {
+    return new Promise((resolve, reject) => {
+        const loadPromises = config.images.map((imageConfig, index) => {
+            return new Promise((resolveImage, rejectImage) => {
+                textureLoader.load(
+                    imageConfig.dataURL,
+                    (texture) => { /* success */ resolveImage(); },
+                    undefined,
+                    (error) => { /* error */ rejectImage(error); }
+                );
+            });
+        });
+        
+        Promise.all(loadPromises)
+            .then(() => resolve())
+            .catch((error) => reject(error));
+    });
+},
+```
+
+#### Tests Passed
+```bash
+npm run build
+# ✓ built in 4.10s
+```
+
+#### Commit
+- 669119e - "Quality Iteration 6: Better UX and promise-based config loading"
+
+---
+
+**Last Updated**: 2025-11-04
