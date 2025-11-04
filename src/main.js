@@ -2105,7 +2105,11 @@ function addImageToStack(texture, filename) {
 
 function updateImageList() {
     const listContainer = document.getElementById('image-list');
-    listContainer.innerHTML = '';
+
+    // Remove existing items properly to prevent memory leaks
+    while (listContainer.firstChild) {
+        listContainer.removeChild(listContainer.firstChild);
+    }
 
     imageStack.forEach((imageData, index) => {
         const item = document.createElement('div');

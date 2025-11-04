@@ -83,6 +83,12 @@
 - [x] Add imageStack empty checks to prevent errors
 - [x] Standardize error messaging to use showToast consistently
 
+## Phase 6.6: Code Quality Iteration 5 🔄
+
+- [ ] Fix event listener memory leak in updateImageList()
+- [ ] Refactor duplicated image loading logic in cli.py (Python)
+- [ ] Add error handling for empty folders in cli.py (Python)
+
 ## Phase 7: Code Refactoring ⏳
 
 **Goal**: Split main.js (2,600+ lines) into modules per 101.md Task 3
