@@ -505,80 +505,102 @@ function exposeDebugAPI() {
         loadConfig: (config) => {
             console.log('[API] Loading configuration from object');
 
-            try {
-                // Validate config
-                if (!config.version || !config.params || !config.images) {
-                    throw new Error('Invalid config format');
-                }
+            // Return promise that resolves when all images are loaded
+            return new Promise((resolve, reject) => {
+                try {
+                    // Validate config
+                    if (!config.version || !config.params || !config.images) {
+                        throw new Error('Invalid config format');
+                    }
 
-                // Clear existing
-                clearAll();
+                    // Clear existing
+                    clearAll();
 
-                // Apply params
-                params.zSpacing = config.params.zSpacing;
-                params.bgColor = config.params.bgColor;
-                if (config.params.cameraMode) params.cameraMode = config.params.cameraMode;
-                if (config.params.cameraFOV) params.cameraFOV = config.params.cameraFOV;
+                    // Apply params
+                    params.zSpacing = config.params.zSpacing;
+                    params.bgColor = config.params.bgColor;
+                    if (config.params.cameraMode) params.cameraMode = config.params.cameraMode;
+                    if (config.params.cameraFOV) params.cameraFOV = config.params.cameraFOV;
 
-                // Update scene background
-                scene.background = new THREE.Color(params.bgColor);
+                    // Update scene background
+                    scene.background = new THREE.Color(params.bgColor);
 
-                // Update camera
-                if (config.camera && config.camera.position) {
-                    camera.position.set(
-                        config.camera.position.x,
-                        config.camera.position.y,
-                        config.camera.position.z
-                    );
-                    camera.lookAt(0, 0, 0);
-                    controls.update();
-                }
-
-                // Load images
-                const textureLoader = new THREE.TextureLoader();
-                config.images.forEach((imageConfig, index) => {
-                    textureLoader.load(imageConfig.dataURL, (texture) => {
-                        // Create geometry with saved dimensions
-                        const geometry = new THREE.PlaneGeometry(
-                            imageConfig.width,
-                            imageConfig.height
+                    // Update camera
+                    if (config.camera && config.camera.position) {
+                        camera.position.set(
+                            config.camera.position.x,
+                            config.camera.position.y,
+                            config.camera.position.z
                         );
+                        camera.lookAt(0, 0, 0);
+                        controls.update();
+                    }
 
-                        // Create material
-                        const material = new THREE.MeshBasicMaterial({
-                            map: texture,
-                            side: THREE.DoubleSide,
-                            transparent: true
+                    // Load images and wait for all to complete
+                    const textureLoader = new THREE.TextureLoader();
+                    const loadPromises = config.images.map((imageConfig, index) => {
+                        return new Promise((resolveImage, rejectImage) => {
+                            textureLoader.load(
+                                imageConfig.dataURL,
+                                (texture) => {
+                                    // Create geometry with saved dimensions
+                                    const geometry = new THREE.PlaneGeometry(
+                                        imageConfig.width,
+                                        imageConfig.height
+                                    );
+
+                                    // Create material
+                                    const material = new THREE.MeshBasicMaterial({
+                                        map: texture,
+                                        side: THREE.DoubleSide,
+                                        transparent: true
+                                    });
+
+                                    // Create mesh
+                                    const mesh = new THREE.Mesh(geometry, material);
+                                    mesh.position.z = index * params.zSpacing;
+
+                                    // Store and add to scene
+                                    imageStack.push({
+                                        mesh: mesh,
+                                        texture: texture,
+                                        filename: imageConfig.filename,
+                                        width: imageConfig.width,
+                                        height: imageConfig.height
+                                    });
+
+                                    scene.add(mesh);
+
+                                    console.log(`[API] Loaded ${imageConfig.filename} from config`);
+                                    resolveImage();
+                                },
+                                undefined,
+                                (error) => {
+                                    console.error(`[API] Failed to load ${imageConfig.filename}:`, error);
+                                    rejectImage(error);
+                                }
+                            );
                         });
-
-                        // Create mesh
-                        const mesh = new THREE.Mesh(geometry, material);
-                        mesh.position.z = index * params.zSpacing;
-
-                        // Store and add to scene
-                        imageStack.push({
-                            mesh: mesh,
-                            texture: texture,
-                            filename: imageConfig.filename,
-                            width: imageConfig.width,
-                            height: imageConfig.height
-                        });
-
-                        scene.add(mesh);
-
-                        console.log(`[API] Loaded ${imageConfig.filename} from config`);
                     });
-                });
 
-                // Refresh Tweakpane
-                pane.refresh();
+                    // Wait for all images to load
+                    Promise.all(loadPromises)
+                        .then(() => {
+                            // Refresh Tweakpane
+                            pane.refresh();
+                            console.log('[API] Configuration loaded successfully');
+                            resolve();
+                        })
+                        .catch((error) => {
+                            console.error('[API] Failed to load one or more images:', error);
+                            reject(error);
+                        });
 
-                console.log('[API] Configuration loaded successfully');
-
-            } catch (error) {
-                console.error('[API] Failed to load configuration:', error);
-                throw error;
-            }
+                } catch (error) {
+                    console.error('[API] Failed to load configuration:', error);
+                    reject(error);
+                }
+            });
         },
 
         // Help
@@ -2537,10 +2559,10 @@ function copyJSON() {
     const json = JSON.stringify(config, null, 2);
     navigator.clipboard.writeText(json).then(() => {
         console.log('JSON configuration copied to clipboard');
-        alert('Configuration copied to clipboard!');
+        showToast('📋 Configuration copied to clipboard!', 'success');
     }).catch(err => {
         console.error('Failed to copy to clipboard:', err);
-        alert('Failed to copy to clipboard. Check console for details.');
+        showToast('⚠️ Failed to copy to clipboard', 'warning');
     });
 }
 
