@@ -133,43 +133,39 @@ window.vexyStax API (for Python automation)
 - 🔄 Create PLAN.md (this file)
 - 🔄 Create TODO.md (next)
 
-### ⏳ Phase 7: Code Refactoring (PENDING)
+### ⏳ Phase 7: Code Refactoring (READY TO START)
 
-**Issue**: main.js is 2,600+ lines (per 101.md Task 3)
+**Issue**: main.js is 3,321 lines - violates CLAUDE.md complexity guidelines (files > 200 lines)
 
-**Proposed Structure**:
+**Solution**: Split into 25 modular ES6 files following Single Responsibility Principle
+
+**Comprehensive Plan**: See `REFACTOR_PLAN.md` for detailed 11-day refactoring strategy
+
+**High-Level Structure**:
 ```
 src/
-├── main.js (100-200 lines - entry point)
-├── scene/
-│   ├── renderer.js
-│   ├── camera.js  
-│   └── lights.js
-├── images/
-│   ├── loader.js
-│   └── stack.js
-├── camera/
-│   ├── animation.js ✅ (already extracted)
-│   └── controls.js
-├── materials/
-│   ├── presets.js
-│   └── manager.js
-├── ui/
-│   ├── tweakpane.js
-│   └── toast.js
-├── export/
-│   ├── png.js
-│   └── json.js
-└── api/
-    └── debug.js
+├── main.js (~180 lines - entry point)
+├── core/ (AppState, constants, EventBus)
+├── scene/ (SceneManager, LightingManager, FloorManager)
+├── camera/ (CameraManager, ViewpointPresets, ControlsManager, animation.js✅)
+├── images/ (ImageLoader, ImageStack, DragDropHandler)
+├── materials/ (presets, MaterialManager, BorderManager)
+├── ui/ (TweakpaneManager, ImageListUI, Toast)
+├── export/ (PNGExporter, JSONExporter)
+├── utils/ (helpers, HistoryManager, FPSMonitor, MemoryTracker)
+└── api/ (DebugAPI)
 ```
 
-**Refactoring Priority**:
-1. Extract UI (Tweakpane setup) - ~400 lines
-2. Extract export system - ~200 lines
-3. Extract material system - ~150 lines
-4. Extract scene setup - ~150 lines
-5. Extract image loading - ~100 lines
+**Benefits**:
+- Maintainability: Find any feature in <10 seconds
+- Testing: Each module unit-testable
+- Collaboration: Work on modules independently
+- Performance: Optimize individual modules
+- Future: Clean place to add video export
+
+**Strategy**: Phase-by-phase (10 phases), each phase tested and committed separately
+
+**Timeline**: 11 days (2-3 weeks with testing)
 
 ### ⏳ Phase 8: Video Export (FUTURE)
 

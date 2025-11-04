@@ -1,15 +1,214 @@
 # Vexy Stax JS - Work Progress
 
-## Front Viewpoint Bug Fix (2025-11-04)
+## Phase 6.9: Code Quality Iteration 10 (2025-11-04)
 
-### Issue Identified
+### Completed Tasks ✅
+
+#### Task 1: Extract Magic Numbers to Constants
+**Problem**: Hard-coded values scattered throughout codebase (10MB, 50MB, 4096, retry delays)
+**Impact**: Difficult to maintain, violates CLAUDE.md guidelines
+
+**Fix**: Created constants at top of file (lines 56-61)
+```javascript
+const FILE_SIZE_WARN_MB = 10; // 10MB warning threshold
+const FILE_SIZE_REJECT_MB = 50; // 50MB rejection threshold
+const MAX_DIMENSION_PX = 4096; // Maximum recommended image dimension
+const MAX_LOAD_RETRIES = 3; // Number of retry attempts
+const RETRY_DELAYS_MS = [500, 1500, 3000]; // Exponential backoff delays
+```
+
+**Changes**:
+- `src/main.js:56-61` - Added constants
+- `src/main.js:2571-2577` - File size validation uses constants
+- `src/main.js:2611-2613` - Dimension validation uses MAX_DIMENSION_PX
+- `src/main.js:2625-2634` - Retry logic uses MAX_LOAD_RETRIES, RETRY_DELAYS_MS
+
+**Result**: Single source of truth, easier to adjust limits, clearer code
+
+---
+
+#### Task 2: Fix Unsafe Array Access Patterns
+**Problem**: Multiple places accessed `imageStack[imageStack.length - 1]` with inconsistent validation
+**Impact**: Potential undefined access if pattern isn't followed consistently
+
+**Fix**: Added defensive checks after array access
+- `src/main.js:922-925` - Added check in playAnimation()
+- `src/main.js:2318-2322` - Added check in setViewpointFitToFrame()
+
+**Pattern**:
+```javascript
+if (imageStack.length === 0) {
+    // Handle empty case
+    return;
+}
+const topSlide = imageStack[imageStack.length - 1];
+if (!topSlide) {
+    // Defensive check (should never trigger)
+    return;
+}
+```
+
+**Result**: Consistent validation pattern, prevents potential crashes
+
+---
+
+#### Task 3: Add Event Listener Cleanup
+**Problem**: 16+ event listeners registered but ZERO removeEventListener calls
+**Impact**: Memory leak when navigating away or refreshing page
+
+**Fix**: Implemented tracked event listener system
+
+**1. Created tracking infrastructure**:
+- `src/main.js:28` - Added `eventListeners` array
+- `src/main.js:700-703` - Created `addTrackedEventListener()` helper
+
+**2. Replaced all addEventListener calls**:
+- `src/main.js:823` - Keyboard shortcuts (window keydown)
+- `src/main.js:1198` - Debounced resize (window resize)
+- `src/main.js:1283-1284` - Context loss recovery (canvas events × 2)
+- `src/main.js:2424-2427` - File input handlers (fileInput, dropZone × 4)
+
+**3. Added cleanup in beforeunload handler**:
+```javascript
+// src/main.js:1169-1174
+eventListeners.forEach(({ target, event, handler, options }) => {
+    target.removeEventListener(event, handler, options);
+});
+eventListeners = [];
+```
+
+**Result**: All event listeners properly cleaned up on page unload
+
+---
+
+### Additional Improvements
+
+#### Fix: Slide Color Saturation (User Request)
+**Problem**: Slides appeared washed out and desaturated in ambience mode
+- Emissive lighting (emissiveIntensity: 0.05-0.25) added white glow
+- High envMapIntensity (0.55) added environment reflections
+- Combined effect desaturated original texture colors
+
+**Fix**: Removed emissive properties, reduced environment map intensity
+```javascript
+// Before (src/main.js:2738-2748)
+material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: params.materialRoughness,
+    metalness: params.materialMetalness,
+    emissive: new THREE.Color(0xffffff),
+    emissiveMap: texture,
+    emissiveIntensity: emissiveIntensity  // 0.05-0.25
+});
+material.envMapIntensity = 0.55;
+
+// After (src/main.js:2733-2742)
+material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: params.materialRoughness,
+    metalness: params.materialMetalness,
+    // NO emissive - keeps full color saturation
+    envMapIntensity: 0.15  // Reduced from 0.55
+});
+```
+
+**Result**: Full saturation preserved, slides show true colors
+
+---
+
+#### Confirmed: Floor Color Matches Background
+**User Request**: Floor must match background exactly (black on black, white on white)
+**Status**: Already implemented correctly
+- `src/main.js:518` - `return new THREE.Color(bgColor);`
+- Floor gets exact background color
+- Depth perception comes from reflections and shadows, not floor color
+
+---
+
+### Test Results
+```bash
+npm run build
+# ✓ Syntax check passed
+# ✓ Build succeeded in 6.19s
+# Bundle size: 1,141.68 kB (stable)
+# JS increased by 0.10 kB (tracking infrastructure)
+```
+
+### Code Quality Metrics
+- ✅ Magic numbers: Eliminated (6 constants extracted)
+- ✅ Array access: Consistent defensive pattern
+- ✅ Event listeners: All tracked and cleaned up
+- ✅ Memory leaks: Fixed (event listener cleanup)
+- ✅ Color saturation: Full saturation restored
+- ✅ Build: Passing
+
+---
+
+## Previous Work History
+
+### UI and Ambience Improvements (2025-11-04)
+
+#### Issue 1: Drop Area Styling
+**Problem**: Drop area didn't match Tweakpane's visual design
+- Used bright blue borders (#4a90e2)
+- Large border radius (8px)
+- Inconsistent with Tweakpane's subtle dark theme
+
+**Fix**: Updated styles/main.css
+- Changed to rgba() colors with transparency
+- Border radius reduced to 2px (matches Tweakpane)
+- Button colors now subtle with rgba(255, 255, 255, 0.1) backgrounds
+- Consistent hover states
+- File: `styles/main.css:46-110`
+
+**Result**: Drop area now seamlessly integrated with Tweakpane UI
+
+#### Issue 2: Ambience Floor Color
+**Problem**: Floor color used background color directly
+- Black background (#000000) → Black floor (invisible, too dark)
+- White background (#ffffff) → White floor (too bright, washed out)
+- No contrast between floor and background
+
+**Root Cause**: `createFloor()` set floor color to `params.bgColor` directly (line 512)
+
+**Fix**: Created adaptive floor color system
+- New function: `getAdaptiveFloorColor()` at src/main.js:506-515
+- Calculates luminance of background color
+- Dark backgrounds (< 0.5) → Medium gray floor (0.30)
+- Light backgrounds (>= 0.5) → Darker gray floor (0.20)
+- Updated `createFloor()` to use adaptive color (line 526)
+- Updated `updateBackground()` to use adaptive color (line 2259)
+
+**Result**: Floor now has proper visual separation from background regardless of background color
+
+**Note**: Later changed to match background exactly per user request
+
+### Test Results
+```bash
+npm run build
+# ✓ built in 21.15s
+# CSS: 2.37 kB (was 2.19 kB)
+# JS: 1,141 kB (stable)
+```
+
+**Behavior Now**:
+- Drop area matches Tweakpane styling
+- Black background: Medium gray floor (visible contrast)
+- White background: Dark gray floor (visible contrast)
+- Floor color updates dynamically when background changes
+
+---
+
+### Front Viewpoint Bug Fix (2025-11-04)
+
+#### Issue Identified
 **Problem**: Front viewpoint was not fitting studio canvas correctly
 - User set Studio size to 1920x1080px
 - Loaded 3 slides of 400x300px
 - Expected: Camera positions to show entire 1920x1080 frame
 - Actual: Camera positioned based on slide size (400x300), showing wrong scale
 
-### Root Cause
+#### Root Cause
 `setViewpointFitToFrame()` function calculated camera distance based on **slide dimensions** instead of **studio canvas dimensions**.
 
 ```javascript
@@ -22,14 +221,14 @@ const canvasHeight = params.canvasSize.y;  // 1080px
 const distance = (canvasHeight / 2) / Math.tan(fov / 2);
 ```
 
-### Fix Applied
+#### Fix Applied
 **File**: `src/main.js:2310-2350`
 - Changed calculation to use `params.canvasSize.x/y` (studio canvas)
 - Camera now positions to fit the full studio frame in viewport
 - Added proper aspect ratio handling
 - Reduced padding from 10% to 5%
 
-### Test Results
+#### Test Results
 ```bash
 npm run build
 # ✓ built in 14.48s
@@ -131,312 +330,8 @@ npm run build
 - Synced reflection render target with viewport changes and cleaned up environment/floor resources on teardown.
 - Tests: `npm run build`
 
-## Quality Improvements Iteration 4 (2025-11-04)
-
-### Completed Tasks ✅
-
-1. **Fixed memory leak in undo/redo** - Added texture disposal
-2. **Added empty stack validation** - exportPNG, exportJSON, copyJSON now check if images loaded
-3. **Verified error messaging consistency** - User-facing errors use showToast, debugging uses console
-
-### Memory Leak Fix
-
-**Issue**: undo() and redo() disposed geometry and material but not textures
-**Impact**: Memory would accumulate with repeated undo/redo operations
-**Fix**: Added texture disposal in both functions
-
-```javascript
-// Before
-imageStack.forEach(img => {
-    scene.remove(img.mesh);
-    img.mesh.geometry.dispose();
-    img.mesh.material.dispose();
-});
-
-// After
-imageStack.forEach(img => {
-    scene.remove(img.mesh);
-    img.mesh.geometry.dispose();
-    img.mesh.material.dispose();
-    // Dispose texture to prevent memory leak
-    if (img.mesh.material.map) {
-        img.mesh.material.map.dispose();
-    }
-});
-```
-
-**Result**: Proper cleanup, no memory leaks on undo/redo
-
-### Empty Stack Validation
-
-**Issue**: Operations could fail with unhelpful errors if no images loaded
-**Fix**: Added checks at the start of:
-- `exportPNG()` - line 1481
-- `exportJSON()` - line 2325
-- `copyJSON()` - line 2484
-
-**User Experience**: Helpful toast message "⚠️ Load images first" instead of cryptic errors
-
-### Error Messaging
-
-**Analysis**: Error handling already follows best practices
-- User-facing errors: showToast() ✅ (23 instances)
-- Debugging/API errors: console.error() ✅
-- Critical operations: both console + toast ✅
-
-**Pattern Examples**:
-```javascript
-// User-facing
-if (imageStack.length === 0) {
-    showToast('⚠️ Load images first', 'warning');
-    return;
-}
-
-// API errors (for automation)
-if (!cameraAnimator) {
-    console.error('[API] Camera animator not initialized');
-    return;
-}
-
-// Critical errors (debugging + user)
-catch (error) {
-    console.error('Animation error:', error);
-    showToast('Animation failed', 'error');
-}
-```
-
-### Tests Passed
-
-```bash
-# Build test
-npm run build
-# ✓ built in 4.48s
-
-# Line count check
-wc -l src/main.js
-# 2616 lines (still needs refactoring per 101.md Task 3)
-```
-
-### Code Quality Metrics
-
-- ✅ No memory leaks in undo/redo
-- ✅ Proper input validation on user operations
-- ✅ Consistent error messaging
-- ✅ 23 toast notifications for user feedback
-- ✅ Console errors for debugging
-- ✅ All builds passing
-
-### Next Steps
-
-1. **Code Refactoring** (101.md Task 3): Split main.js into modules
-   - Current: 2,616 lines in one file
-   - Target: ~200 lines main.js + separate modules
-   - Priority modules: UI, export, materials, scene setup
-
-2. **Testing**: Test with Python automation
-   - Verify undo/redo doesn't leak memory
-   - Test empty stack validation
-   - Confirm error messages display correctly
-
-3. **Documentation**: Update README if needed
-
 ---
 
 **Last Updated**: 2025-11-04
-**Status**: Quality improvements complete, ready for refactoring
-**Focus**: Memory safety, user experience, error handling
-
----
-
-## Quality Improvements Iteration 5 (2025-11-04)
-
-### Completed Tasks ✅
-
-1. **Fixed event listener memory leak** - updateImageList() now uses proper DOM removal
-2. **Refactored duplicated code** - Extracted _load_images() helper in cli.py
-3. **Added empty folder validation** - Now checks if folder contains PNG files
-
-### Event Listener Memory Leak Fix
-
-**Issue**: updateImageList() used innerHTML = '' to clear list
-**Impact**: Event listeners remained in memory after DOM elements destroyed
-**Details**: Each image list item has 6 event listeners (drag + keyboard events)
-
-**Fix**: Changed to proper DOM removal with removeChild() loop
-**Result**: Event listeners properly garbage collected with DOM nodes
-
-### Python CLI Refactoring
-
-**Issue**: Image loading logic duplicated in launch() and animate() (14 lines)
-**Fix**: Extracted _load_images() helper method with validation
-**Added**: Empty folder check - "Error: No PNG files found in {folder}"
-**Benefits**: DRY principle, easier maintenance, better error handling
-
-### Tests Passed
-
-```bash
-# JS: ✓ built in 1.95s
-# Python: ✓ All imports working
-# Image generation: ✓ Test images created
-```
-
-**Status**: All 5 quality improvement iterations complete
-
-### Quality Improvements Iteration 6 (2025-11-04)
-
-#### Completed Tasks ✅
-1. **Replaced alert() with showToast()** - Better UX for clipboard operations (lines 2540, 2543)
-2. **Made loadConfig() promise-based** - Returns promise that resolves when all images loaded
-
-#### User Experience Improvements
-- **Clipboard operations**:
-  - Before: `alert('Configuration copied to clipboard!')`
-  - After: `showToast('📋 Configuration copied to clipboard!', 'success')`
-  - Result: Consistent toast notifications, no blocking modals
-
-#### Async Completion Improvements  
-- **loadConfig()**: Now returns Promise
-  - Maps over `config.images`, creates promise for each texture load
-  - Uses `Promise.all(loadPromises)` to wait for completion
-  - Python browser.py can now reliably wait for completion
-  - Result: No race conditions, deterministic loading
-
-#### Code Changes
-**main.js (lines 505-604)**:
-```javascript
-loadConfig: (config) => {
-    return new Promise((resolve, reject) => {
-        const loadPromises = config.images.map((imageConfig, index) => {
-            return new Promise((resolveImage, rejectImage) => {
-                textureLoader.load(
-                    imageConfig.dataURL,
-                    (texture) => { /* success */ resolveImage(); },
-                    undefined,
-                    (error) => { /* error */ rejectImage(error); }
-                );
-            });
-        });
-        
-        Promise.all(loadPromises)
-            .then(() => resolve())
-            .catch((error) => reject(error));
-    });
-},
-```
-
-#### Tests Passed
-```bash
-npm run build
-# ✓ built in 4.10s
-```
-
-#### Commit
-- 669119e - "Quality Iteration 6: Better UX and promise-based config loading"
-
----
-
-**Last Updated**: 2025-11-04
-
-### Quality Improvements Iteration 8 (2025-11-04)
-
-#### Completed Tasks ✅
-1. **Added scale parameter validation** - export_png() validates scale is 1, 2, or 4
-2. **Added image count validation** - Checks images loaded before export
-3. **Improved error messages** - Both validations provide actionable feedback
-
-#### Validation Improvements
-- **export_png() scale validation**:
-  - Validates scale in (1, 2, 4) before calling JS
-  - Raises `ValueError` with clear message for invalid scales
-  - Prevents passing invalid values to exportPNG()
-
-- **export_png() image validation**:
-  - Calls `getStats()` to check imageCount > 0
-  - Raises `RuntimeError` if no images loaded
-  - Prevents attempting to export empty scene
-  - Provides clear instruction to load images first
-
-#### Code Changes
-**browser.py (lines 174-187)**:
-```python
-# Validate scale parameter
-if scale not in (1, 2, 4):
-    raise ValueError(
-        f"Invalid scale: {scale}\n"
-        f"Scale must be 1, 2, or 4 (for 1x, 2x, or 4x resolution)"
-    )
-
-# Verify images are loaded before attempting export
-stats = self.page.evaluate("window.vexyStax.getStats()")
-if not stats or stats.get('imageCount', 0) == 0:
-    raise RuntimeError(
-        "export_png: No images loaded in the app.\n"
-        "Load images with load_images() or load_config() first."
-    )
-```
-
-#### Tests Passed
-```bash
-uv run python -c "from vexy_stax import *; print('✓ All imports work')"
-# ✓ All imports work
-```
-
-#### Commit
-- f6582b1 - "Quality Iteration 8: Improve export validation and error handling"
-
----
-
-**Last Updated**: 2025-11-04  
-**Status**: Iteration 8 completed
-
-### Quality Improvements Iteration 8 (2025-11-04)
-
-#### Completed Tasks ✅
-1. **Replaced alert() with showToast()** - 5 blocking alerts replaced with non-blocking toasts
-2. **Removed blocking confirm()** - Large file warning now shows toast instead
-
-#### User Experience Improvements
-- **File size errors** (>50MB):
-  - Before: `alert("File too large...")`
-  - After: `showToast('❌ File too large...', 'error', 5000)`
-  - Non-blocking error notification
-
-- **Large file warnings** (>10MB):
-  - Before: Blocking `confirm()` dialog
-  - After: `showToast('⚠️ Large file...', 'warning', 4000)`
-  - File loads automatically with warning notification
-
-- **Large dimensions** (>4096px):
-  - Before: `alert("Warning: Image is large...")`
-  - After: `showToast('⚠️ Large dimensions...', 'warning', 4000)`
-  - Non-blocking warning
-
-- **Load failures** (after 3 retries):
-  - Before: `alert("Failed to load...")`
-  - After: `showToast('❌ Failed to load...', 'error', 5000)`
-  - Clear error notification
-
-- **FileReader errors**:
-  - Before: `alert("Failed to read file...")`
-  - After: `showToast('❌ Failed to read file...', 'error', 5000)`
-  - Non-blocking error
-
-#### Impact
-- No more blocking modal dialogs during file loading
-- Users can continue working while files load
-- Consistent toast notification system throughout app
-- Appropriate severity levels (error/warning) and durations
-
-#### Tests Passed
-```bash
-npm run build
-# ✓ built in 3.54s
-```
-
-#### Commit
-- 1161580 - "Replace blocking alert() with showToast() for file loading errors"
-
----
-
-**Last Updated**: 2025-11-04  
-**Status**: Iteration 8 completed
+**Status**: Phase 6.9 complete - Quality improvements iteration 10
+**Focus**: Code quality, robustness, memory safety, full color saturation

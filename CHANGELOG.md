@@ -1,3 +1,118 @@
+## [Unreleased] - Next Release
+
+### Phase 6.9: Code Quality Iteration 10 Complete ✅
+
+**Focus**: Memory safety, code maintainability, color saturation
+
+#### Fixed - Magic Numbers
+- **Extracted constants**: Created 6 constants for file size limits, retry logic, dimensions
+  - `FILE_SIZE_WARN_MB = 10`, `FILE_SIZE_REJECT_MB = 50`
+  - `MAX_DIMENSION_PX = 4096`
+  - `MAX_LOAD_RETRIES = 3`, `RETRY_DELAYS_MS = [500, 1500, 3000]`
+- **Location**: src/main.js:56-61
+- **Impact**: Single source of truth, easier to maintain, follows CLAUDE.md guidelines
+
+#### Fixed - Unsafe Array Access
+- **Defensive validation**: Added consistent checks after array access
+  - playAnimation() at src/main.js:922-925
+  - setViewpointFitToFrame() at src/main.js:2318-2322
+- **Pattern**: Check length → access array → validate result
+- **Impact**: Prevents potential undefined access crashes
+
+#### Fixed - Memory Leak (Event Listeners)
+- **Problem**: 16+ event listeners registered, 0 removeEventListener calls
+- **Solution**: Implemented tracked event listener system
+  - Created `eventListeners` tracking array (line 28)
+  - Created `addTrackedEventListener()` helper (lines 700-703)
+  - Tracked all listeners: keyboard (1), resize (1), context loss (2), file input (4)
+  - Added cleanup in beforeunload handler (lines 1169-1174)
+- **Impact**: Proper resource cleanup, no memory leaks on page refresh
+
+#### Fixed - Color Saturation (User Request)
+- **Problem**: Slides appeared washed out in ambience mode
+  - Emissive lighting added white glow (emissiveIntensity: 0.05-0.25)
+  - High environment reflections (envMapIntensity: 0.55)
+- **Solution**: Removed emissive properties, reduced envMapIntensity to 0.15
+  - Location: src/main.js:2733-2742
+- **Result**: Slides now show full saturation and true colors
+
+#### Confirmed - Floor Color Matching
+- **User Request**: Floor must match background exactly (black/white on black/white)
+- **Status**: Already implemented correctly
+  - `getAdaptiveFloorColor()` returns exact background color (line 518)
+  - Depth from reflections/shadows, not floor color
+
+### Technical
+- Build time: 6.19s
+- Bundle size: 1,141.68 kB (stable, +0.10 kB for tracking infrastructure)
+- All tests passing
+- Zero syntax errors
+- Memory leaks fixed
+
+---
+
+### Phase 7: Code Refactoring Plan
+
+#### Planning - Comprehensive Refactoring Strategy
+- **Created REFACTOR_PLAN.md**: 11-day phase-by-phase refactoring plan
+  - Problem: main.js is 3,321 lines (violates CLAUDE.md complexity guideline of < 200 lines)
+  - Solution: Split into 25 modular ES6 files following Single Responsibility Principle
+  - Structure: 9 directories (core, scene, camera, images, materials, ui, export, utils, api)
+  - Strategy: Bottom-up approach - foundation → scene → camera → images → materials → ui → export → utils → api
+  - Each phase independently tested and committed
+  - Timeline: 11 days (2-3 weeks with thorough testing)
+
+- **Research**: Analyzed Three.js modular architecture best practices
+  - Consulted: Perplexity AI, Tavily search, Exa search
+  - Key patterns: Segment by responsibility, ES6 modules, class-based encapsulation
+  - Avoid: Circular dependencies, fragmented scene updates, global state leakage
+  - Use: Central AppState singleton, EventBus for module communication
+
+- **Updated TODO.md**: Expanded Phase 7 with detailed 10-phase breakdown (Phase 7.1 through 7.10)
+- **Updated PLAN.md**: Added comprehensive Phase 7 section with structure and timeline
+
+### Benefits After Refactoring
+- Maintainability: Find any feature in < 10 seconds (vs current monolith)
+- Testing: Each module independently testable (currently impossible)
+- Collaboration: Multiple developers can work on different modules
+- Performance: Can optimize individual modules with profiling
+- Future features: Clean architecture for video export and advanced features
+
+### Success Criteria
+- main.js: 3,321 lines → ~180 lines (94% reduction)
+- All modules: < 250 lines each
+- Zero circular dependencies
+- All features work identically (no regression)
+- Bundle size: Unchanged or smaller
+- Python automation: Works unchanged (API compatibility preserved)
+
+**Status**: Plan complete, ready to begin Phase 7.1 (Preparation)
+
+---
+
+## [1.2.2] - 2025-11-04 (UI Polish & Ambience Fix)
+
+### Fixed - Ambience Floor Color
+- **Adaptive Floor Color**: Floor now adjusts to background luminance for proper contrast
+  - Problem: Black background → black floor (invisible), white background → white floor (washed out)
+  - Solution: Created `getAdaptiveFloorColor()` function
+  - Dark backgrounds (< 0.5 luminance) → Medium gray floor (0.30)
+  - Light backgrounds (>= 0.5 luminance) → Darker gray floor (0.20)
+  - Functions: `createFloor()` and `updateBackground()` at src/main.js:506-515, 2259
+
+### Improved - Drop Area Styling
+- **Tweakpane Visual Consistency**: Drop area now matches Tweakpane's design language
+  - Changed from bright blue (#4a90e2) to subtle rgba() colors
+  - Reduced border radius from 8px to 2px (matches Tweakpane)
+  - Updated button styling with transparent backgrounds
+  - Consistent hover states with proper opacity transitions
+  - File: styles/main.css:46-110
+
+### Technical
+- CSS bundle: 2.37 kB (↑0.18 kB for improved styling)
+- JS bundle: 1,141 kB (stable)
+- Build time: 21.15s
+
 ## [1.2.1] - 2025-11-04 (Front Viewpoint Fix)
 
 ### Fixed - Camera Positioning

@@ -91,22 +91,78 @@
 
 ## Phase 7: Code Refactoring ⏳
 
-**Goal**: Split main.js (2,600+ lines) into modules per 101.md Task 3
+**Goal**: Split main.js (3,321 lines) into 25 modular files
+**Plan**: See `REFACTOR_PLAN.md` for comprehensive 11-day refactoring strategy
 
-- [ ] Create src/ui/tweakpane.js (~400 lines)
-- [ ] Create src/export/png.js (~100 lines)
-- [ ] Create src/export/json.js (~100 lines)
-- [ ] Create src/materials/presets.js (~150 lines)
-- [ ] Create src/materials/manager.js (~50 lines)
-- [ ] Create src/scene/renderer.js (~50 lines)
-- [ ] Create src/scene/camera.js (~100 lines)
-- [ ] Create src/scene/lights.js (~50 lines)
-- [ ] Create src/images/loader.js (~150 lines)
-- [ ] Create src/images/stack.js (~50 lines)
-- [ ] Create src/api/debug.js (~100 lines)
-- [ ] Reduce main.js to ~200 lines (entry point only)
-- [ ] Test all functionality after refactor
-- [ ] Update build to handle new structure
+### Phase 7.1: Preparation (Foundation)
+- [ ] Create module directory structure (core/, scene/, camera/, images/, materials/, ui/, export/, utils/, api/)
+- [ ] Extract src/core/constants.js (~80 lines)
+- [ ] Create src/core/AppState.js (~120 lines) - Singleton state manager
+- [ ] Create src/core/EventBus.js (~60 lines) - Module communication
+- [ ] Update main.js to import constants
+- [ ] Test: Build succeeds, app works
+
+### Phase 7.2: Scene Management
+- [ ] Extract src/scene/SceneManager.js (~150 lines) - Scene, renderer, render loop
+- [ ] Extract src/scene/LightingManager.js (~100 lines) - Lights, adaptive intensity
+- [ ] Extract src/scene/FloorManager.js (~200 lines) - Floor, reflections, ambience
+- [ ] Update main.js to use scene managers
+- [ ] Test: Scene renders, lights work, ambience works
+
+### Phase 7.3: Camera System
+- [ ] Extract src/camera/CameraManager.js (~180 lines) - Camera modes, FOV, zoom
+- [ ] Extract src/camera/ViewpointPresets.js (~120 lines) - Viewpoint calculations
+- [ ] Extract src/camera/ControlsManager.js (~80 lines) - OrbitControls wrapper
+- [ ] Update main.js to use camera managers
+- [ ] Test: Camera modes, viewpoints, controls work
+
+### Phase 7.4: Image Management
+- [ ] Extract src/images/ImageLoader.js (~180 lines) - File validation, loading
+- [ ] Extract src/images/ImageStack.js (~150 lines) - Stack management
+- [ ] Extract src/images/DragDropHandler.js (~100 lines) - Drag-and-drop
+- [ ] Update main.js
+- [ ] Test: Image loading, stack updates, drag-drop works
+
+### Phase 7.5: Materials
+- [ ] Extract src/materials/presets.js (~80 lines) - Preset definitions
+- [ ] Extract src/materials/MaterialManager.js (~200 lines) - PBR, thickness
+- [ ] Extract src/materials/BorderManager.js (~100 lines) - Border generation
+- [ ] Update main.js
+- [ ] Test: All presets, materials apply correctly
+
+### Phase 7.6: User Interface (Biggest)
+- [ ] Extract src/ui/Toast.js (~80 lines) - Toast notifications
+- [ ] Extract src/ui/ImageListUI.js (~200 lines) - Image list rendering
+- [ ] Extract src/ui/TweakpaneManager.js (~400 lines) - UI initialization
+- [ ] Update main.js
+- [ ] Test: UI works, controls update, image list works
+
+### Phase 7.7: Export/Import
+- [ ] Extract src/export/PNGExporter.js (~120 lines) - PNG export
+- [ ] Extract src/export/JSONExporter.js (~250 lines) - JSON import/export
+- [ ] Update main.js
+- [ ] Test: PNG export, JSON export/import work
+
+### Phase 7.8: Utilities
+- [ ] Extract src/utils/helpers.js (~60 lines) - Color, math utilities
+- [ ] Extract src/utils/HistoryManager.js (~120 lines) - Undo/redo
+- [ ] Extract src/utils/FPSMonitor.js (~100 lines) - FPS tracking
+- [ ] Extract src/utils/MemoryTracker.js (~80 lines) - Memory monitoring
+- [ ] Update main.js
+- [ ] Test: Undo/redo, FPS, memory tracking work
+
+### Phase 7.9: Debug API
+- [ ] Extract src/api/DebugAPI.js (~150 lines) - window.vexyStax interface
+- [ ] Update main.js
+- [ ] Test: window.vexyStax works, Python automation works
+
+### Phase 7.10: Final Cleanup
+- [ ] Rewrite main.js as clean entry point (~180 lines)
+- [ ] Remove duplicate code
+- [ ] Add JSDoc comments to all modules
+- [ ] Full integration test of all features
+- [ ] Test with Python automation
+- [ ] Verify bundle size unchanged or smaller
 
 ## Phase 8: Video Export ⏳
 
@@ -182,17 +238,74 @@
 - [x] Test build succeeds
 **Result**: Front viewpoint now correctly fits studio canvas in frame
 
-### Task 2: Add Event Listener Cleanup ⏳
-- [ ] Track all window/canvas event listeners in array
-- [ ] Remove listeners in beforeunload cleanup handler
-- [ ] Add removeEventListener calls for resize, keydown, context events
-- [ ] Test cleanup happens correctly on page unload
-**Benefit**: Prevents memory leaks, cleaner resource management
+### Task 2: Remove Studio Frame Visualization + Fix Canvas Sizing ✅
+- [x] Remove updateStudioFrame() function that drew blue rectangle in 3D scene
+- [x] Remove removeStudioFrame() function
+- [x] Remove studioFrame global variable
+- [x] Update updateCanvasSize() to resize renderer instead
+- [x] Update camera aspect ratio when canvas size changes
+- [x] Update reflection resolution for ambience mode
+- [x] Test build succeeds (1,141 KB - 5KB smaller!)
+**Result**: Studio size now controls actual canvas/renderer dimensions, no visible frame
 
-### Task 3: Implement Debug Log Levels ⏳
-- [ ] Create logger utility with levels: ERROR, WARN, INFO, DEBUG
-- [ ] Add DEBUG flag (default: false in production)
-- [ ] Replace 138 console.log() calls with appropriate levels
-- [ ] Keep console.error/warn but reduce info/debug noise
-- [ ] Expose window.vexyStax.setLogLevel('DEBUG') API
-**Benefit**: Cleaner console, easier debugging, production-ready logging
+### Task 3: Fix Flickering/Mirroring Artifacts ✅
+- [x] Change slide materials from THREE.DoubleSide to THREE.FrontSide
+- [x] Change border materials from THREE.DoubleSide to THREE.FrontSide
+- [x] Prevents backface rendering that caused mirroring during camera movement
+- [x] Test build succeeds
+**Result**: Smooth camera movement without visual artifacts or mirroring
+
+### Task 4: Style Drop Area to Match Tweakpane ✅
+- [x] Update drop area colors to match Tweakpane's dark theme
+- [x] Use rgba() colors with transparency for consistency
+- [x] Reduce border radius from 8px to 2px (matches Tweakpane)
+- [x] Update button styling with subtle borders
+- [x] Adjust padding and spacing to match Tweakpane controls
+- [x] Test build succeeds (CSS: 2.37 kB)
+**Result**: Drop area now visually cohesive with Tweakpane UI
+
+### Task 5: Fix Ambience Floor Color Adaptation ✅
+- [x] Create getAdaptiveFloorColor() helper function
+- [x] Calculate floor color based on background luminance
+- [x] Dark backgrounds (< 0.5) → Medium gray floor (0.30)
+- [x] Light backgrounds (>= 0.5) → Darker gray floor (0.20)
+- [x] Update createFloor() to use adaptive color
+- [x] Update updateBackground() to use adaptive color
+- [x] Test build succeeds
+**Result**: Floor now has proper contrast on both black and white backgrounds
+
+## Phase 6.9: Code Quality Iteration 10 ✅
+
+**Goal**: Fix memory leaks, unsafe array access, and magic numbers
+
+### Task 1: Extract Magic Numbers to Constants ✅
+- [x] Create FILE_SIZE constants (maxSizeWarn: 10MB, maxSizeReject: 50MB)
+- [x] Create RETRY constants (MAX_RETRIES: 3, RETRY_DELAYS: [500, 1500, 3000])
+- [x] Create DIMENSION constants (maxDimension: 4096)
+- [x] Move to top of file with other constants
+- [x] Replace all hardcoded values in loadImage()
+- [x] Test build succeeds
+**Result**: Single source of truth, easier maintenance, follows CLAUDE.md guidelines
+
+### Task 2: Fix Unsafe Array Access Patterns ✅
+- [x] Add length check before accessing imageStack[imageStack.length - 1] at line 914
+- [x] Add length check before accessing imageStack[imageStack.length - 1] at line 2305
+- [x] Make check pattern consistent: check length, then access, then check result
+- [x] Test with empty image stack (should show proper error, not crash)
+**Result**: Consistent validation pattern, prevents undefined access crashes
+
+### Task 3: Add Event Listener Cleanup ✅
+- [x] Create eventListeners array to track all registered listeners
+- [x] Track listeners in setupKeyboardShortcuts() (window keydown)
+- [x] Track listeners in setupDebouncedResize() (window resize)
+- [x] Track listeners in setupContextLossRecovery() (canvas events)
+- [x] Track listeners in setupFileInput() (fileInput, dropZone)
+- [x] Add removeEventListener calls in beforeunload cleanup handler
+- [x] Test cleanup happens correctly on page unload/refresh
+**Result**: All event listeners properly cleaned up, no memory leaks
+
+### Additional Fix: Full Color Saturation ✅
+- [x] Remove emissive properties from ambience materials
+- [x] Reduce envMapIntensity from 0.55 to 0.15
+- [x] Test slides show full saturation
+**Result**: Slides now show true colors without washing out

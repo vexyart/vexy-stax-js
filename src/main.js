@@ -24,6 +24,9 @@ let environmentTexture = null;
 // Image stack management
 let imageStack = [];
 
+// Event listener tracking for proper cleanup
+let eventListeners = [];
+
 // History management for undo/redo
 let historyStack = [];
 let historyIndex = -1;
@@ -52,6 +55,13 @@ const REFLECTION_MIN_RESOLUTION = 512;
 const REFLECTION_OPACITY = 0.32;
 const REFLECTION_BLUR_RADIUS = 0.003;
 const REFLECTION_FADE_STRENGTH = 2.7;
+
+// Image loading constants
+const FILE_SIZE_WARN_MB = 10; // 10MB warning threshold
+const FILE_SIZE_REJECT_MB = 50; // 50MB rejection threshold
+const MAX_DIMENSION_PX = 4096; // Maximum recommended image dimension
+const MAX_LOAD_RETRIES = 3; // Number of retry attempts for failed texture loads
+const RETRY_DELAYS_MS = [500, 1500, 3000]; // Exponential backoff delays in ms
 
 const SoftReflectorShader = {
     name: 'SoftReflectorShader',
@@ -325,9 +335,6 @@ function init() {
     // Setup Tweakpane UI
     setupTweakpane();
 
-    // Initialize studio frame visual indicator
-    updateStudioFrame();
-
     console.log('Initialization complete - UI should be visible');
 
     // Handle window resize with debouncing
@@ -502,6 +509,15 @@ function updateReflectionSettings() {
  * Create realistic floor with reflections and shadows
  * Floor is positioned below the images
  */
+/**
+ * Floor color should MATCH background exactly for seamless ambience
+ * Depth comes from shadows and reflections, not floor color contrast
+ */
+function getAdaptiveFloorColor(bgColor) {
+    // Return the exact background color - floor blends seamlessly
+    return new THREE.Color(bgColor);
+}
+
 function createFloor() {
     if (floorGroup) return; // Already exists
 
@@ -511,8 +527,9 @@ function createFloor() {
     floorGroup.name = 'ambience-floor';
 
     const baseGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
+    const floorColor = getAdaptiveFloorColor(params.bgColor);
     const baseMaterial = new THREE.MeshStandardMaterial({
-        color: params.bgColor,
+        color: floorColor,
         roughness: 0.45,
         metalness: 0.08,
         envMapIntensity: 0.35,
@@ -535,7 +552,7 @@ function createFloor() {
     floorReflector.position.y = FLOOR_Y + 0.1; // Prevent z-fighting with more separation
     floorReflector.material.transparent = true;
     floorReflector.material.depthWrite = false;
-    floorReflector.material.uniforms.color.value.set(params.bgColor);
+    floorReflector.material.uniforms.color.value.copy(floorColor);
     floorReflector.material.uniforms.opacity.value = REFLECTION_OPACITY;
     floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
     floorReflector.material.uniforms.fadeStrength.value = REFLECTION_FADE_STRENGTH;
@@ -673,6 +690,18 @@ function toggleAmbience(enabled) {
     }
 }
 
+/**
+ * Helper function to add event listener and track it for cleanup
+ * @param {EventTarget} target - DOM element or window
+ * @param {string} event - Event name
+ * @param {Function} handler - Event handler function
+ * @param {Object} options - Event listener options
+ */
+function addTrackedEventListener(target, event, handler, options = {}) {
+    target.addEventListener(event, handler, options);
+    eventListeners.push({ target, event, handler, options });
+}
+
 function setupKeyboardShortcuts() {
     let helpOverlay = null;
 
@@ -728,7 +757,7 @@ function setupKeyboardShortcuts() {
     }
 
     // Keyboard event handler
-    window.addEventListener('keydown', (e) => {
+    const keydownHandler = (e) => {
         // Show help with ? key
         if (e.key === '?' || e.key === '/') {
             e.preventDefault();
@@ -789,8 +818,9 @@ function setupKeyboardShortcuts() {
             }
             return;
         }
-    });
+    };
 
+    addTrackedEventListener(window, 'keydown', keydownHandler);
     console.log('Keyboard shortcuts enabled (Ctrl/Cmd+E, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Delete, ?)');
 }
 
@@ -905,6 +935,11 @@ function exposeDebugAPI() {
             }
 
             const topSlide = imageStack[imageStack.length - 1];
+            if (!topSlide) {
+                console.error('[API] No top slide found');
+                return;
+            }
+
             const duration = config.duration || params.animDuration;
             const easing = config.easing || params.animEasing;
 
@@ -1131,6 +1166,13 @@ function setupCleanup() {
                 environmentTexture = null;
             }
 
+            // Remove all tracked event listeners
+            eventListeners.forEach(({ target, event, handler, options }) => {
+                target.removeEventListener(event, handler, options);
+            });
+            eventListeners = [];
+            console.log('[Cleanup] Removed all event listeners');
+
             console.log('[Cleanup] All resources disposed successfully');
         } catch (error) {
             console.error('[Cleanup] Error during cleanup:', error);
@@ -1161,7 +1203,7 @@ function setupDebouncedResize() {
         }, DEBOUNCE_DELAY);
     };
 
-    window.addEventListener('resize', debouncedResize);
+    addTrackedEventListener(window, 'resize', debouncedResize);
     console.log(`[Resize] Debounced resize handler registered (${DEBOUNCE_DELAY}ms delay)`);
 }
 
@@ -1171,7 +1213,7 @@ function setupDebouncedResize() {
 function setupContextLossRecovery() {
     const canvas = renderer.domElement;
 
-    canvas.addEventListener('webglcontextlost', (event) => {
+    const contextLostHandler = (event) => {
         event.preventDefault(); // Allows context restoration
         console.warn('[WebGL] Context lost - GPU reset detected');
 
@@ -1193,9 +1235,9 @@ function setupContextLossRecovery() {
         `;
         message.textContent = '⚠️ Graphics context lost - recovering...';
         document.body.appendChild(message);
-    });
+    };
 
-    canvas.addEventListener('webglcontextrestored', () => {
+    const contextRestoredHandler = () => {
         console.log('[WebGL] Context restored - reinitializing renderer');
 
         // Remove message
@@ -1243,8 +1285,10 @@ function setupContextLossRecovery() {
         setTimeout(() => {
             successMessage.remove();
         }, 3000);
-    });
+    };
 
+    addTrackedEventListener(canvas, 'webglcontextlost', contextLostHandler);
+    addTrackedEventListener(canvas, 'webglcontextrestored', contextRestoredHandler);
     console.log('[WebGL] Context loss/restore handlers registered');
 }
 
@@ -2133,53 +2177,32 @@ function updateZoom(zoomValue) {
 
 function updateCanvasSize(size) {
     params.canvasSize = size;
-    console.log(`Studio size updated to ${size.x}x${size.y}`);
 
-    // Update the visual frame indicator if it exists
-    updateStudioFrame();
-}
+    // Resize the actual renderer/canvas to match studio size
+    renderer.setSize(size.x, size.y);
 
-// Global variable for studio frame helper
-let studioFrame = null;
-
-/**
- * Create or update visual frame indicator showing studio bounds
- */
-function updateStudioFrame() {
-    // Remove existing frame
-    if (studioFrame) {
-        scene.remove(studioFrame);
-        studioFrame.geometry.dispose();
-        studioFrame.material.dispose();
+    // Update camera aspect ratio
+    if (cameraMode === 'perspective' || cameraMode === 'telephoto') {
+        camera.aspect = size.x / size.y;
+        camera.updateProjectionMatrix();
+    } else if (cameraMode === 'orthographic' || cameraMode === 'isometric') {
+        const aspect = size.x / size.y;
+        orthoCamera.left = -400 * aspect;
+        orthoCamera.right = 400 * aspect;
+        orthoCamera.top = 400;
+        orthoCamera.bottom = -400;
+        orthoCamera.updateProjectionMatrix();
     }
 
-    // Create frame geometry
-    const aspect = params.canvasSize.x / params.canvasSize.y;
-    const height = 500; // Base height
-    const width = height * aspect;
-
-    const geometry = new THREE.EdgesGeometry(
-        new THREE.PlaneGeometry(width, height)
-    );
-    const material = new THREE.LineBasicMaterial({
-        color: 0x4a90e2,
-        opacity: 0.3,
-        transparent: true
-    });
-
-    studioFrame = new THREE.LineSegments(geometry, material);
-    studioFrame.position.z = -50; // Slightly behind front
-    scene.add(studioFrame);
-}
-
-function removeStudioFrame() {
-    if (studioFrame) {
-        scene.remove(studioFrame);
-        studioFrame.geometry.dispose();
-        studioFrame.material.dispose();
-        studioFrame = null;
+    // Update reflection resolution if ambience is enabled
+    if (params.ambience) {
+        updateReflectionSettings();
     }
+
+    console.log(`Canvas resized to ${size.x}x${size.y}`);
 }
+
+// Studio frame visualization removed - canvas size now controls renderer dimensions directly
 
 function centerViewOnContent() {
     if (imageStack.length === 0) {
@@ -2262,14 +2285,15 @@ function updateBackground() {
     // Update lighting to adapt to new background color
     updateLighting();
 
-    // Update floor color to match background if ambience is enabled
+    // Update floor color adaptively based on background luminance
     if (params.ambience) {
+        const floorColor = getAdaptiveFloorColor(params.bgColor);
         if (floorBase) {
-            floorBase.material.color.set(params.bgColor);
+            floorBase.material.color.copy(floorColor);
             floorBase.material.needsUpdate = true;
         }
         if (floorReflector) {
-            floorReflector.material.uniforms.color.value.set(params.bgColor);
+            floorReflector.material.uniforms.color.value.copy(floorColor);
         }
         console.log(`Floor color updated to ${params.bgColor}`);
     }
@@ -2316,6 +2340,11 @@ function setViewpointFitToFrame() {
 
     // Get frontmost slide (last in stack)
     const frontSlide = imageStack[imageStack.length - 1];
+    if (!frontSlide) {
+        console.error('No front slide found despite non-empty imageStack');
+        setViewpoint(0, 0, 800);
+        return;
+    }
 
     // Calculate camera distance to fit studio canvas (not slide) in frame
     // The viewport should show the entire studio canvas size at the frontmost slide position
@@ -2378,20 +2407,17 @@ function setupFileInput() {
     const fileInput = document.getElementById('image-input');
     const dropZone = document.getElementById('image-list-container');
 
-    // File input change
-    fileInput.addEventListener('change', handleFileSelect);
-
-    // Drag and drop events
-    dropZone.addEventListener('dragover', (e) => {
+    // Drag and drop event handlers
+    const dragoverHandler = (e) => {
         e.preventDefault();
         dropZone.classList.add('drag-over');
-    });
+    };
 
-    dropZone.addEventListener('dragleave', () => {
+    const dragleaveHandler = () => {
         dropZone.classList.remove('drag-over');
-    });
+    };
 
-    dropZone.addEventListener('drop', (e) => {
+    const dropHandler = (e) => {
         e.preventDefault();
         dropZone.classList.remove('drag-over');
 
@@ -2399,7 +2425,13 @@ function setupFileInput() {
         if (files.length > 0) {
             handleFileDrop(files);
         }
-    });
+    };
+
+    // Register tracked event listeners
+    addTrackedEventListener(fileInput, 'change', handleFileSelect);
+    addTrackedEventListener(dropZone, 'dragover', dragoverHandler);
+    addTrackedEventListener(dropZone, 'dragleave', dragleaveHandler);
+    addTrackedEventListener(dropZone, 'drop', dropHandler);
 }
 
 function handleFileDrop(files) {
@@ -2574,13 +2606,13 @@ function applyMaterialPreset(preset) {
 
 function loadImage(file) {
     // Validate file size before loading
-    const maxSizeWarn = 10 * 1024 * 1024; // 10MB warning threshold
-    const maxSizeReject = 50 * 1024 * 1024; // 50MB rejection threshold
+    const maxSizeWarn = FILE_SIZE_WARN_MB * 1024 * 1024;
+    const maxSizeReject = FILE_SIZE_REJECT_MB * 1024 * 1024;
 
     if (file.size > maxSizeReject) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        console.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is 50MB.`);
-        showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: 50MB`, 'error', 5000);
+        console.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is ${FILE_SIZE_REJECT_MB}MB.`);
+        showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: ${FILE_SIZE_REJECT_MB}MB`, 'error', 5000);
         return;
     }
 
@@ -2606,9 +2638,6 @@ function loadImage(file) {
      * @param {number} attempt - Current attempt number (0-based)
      */
     function loadTextureWithRetry(dataURL, filename, attempt) {
-        const MAX_RETRIES = 3;
-        const RETRY_DELAYS = [500, 1500, 3000]; // Exponential backoff in ms
-
         const textureLoader = new THREE.TextureLoader();
         textureLoader.load(
             dataURL,
@@ -2616,10 +2645,9 @@ function loadImage(file) {
                 // Success callback
                 // Validate image dimensions
                 const img = texture.image;
-                const maxDimension = 4096;
 
-                if (img.width > maxDimension || img.height > maxDimension) {
-                    console.warn(`Warning: Image ${filename} has large dimensions (${img.width}x${img.height}). Max recommended: ${maxDimension}px.`);
+                if (img.width > MAX_DIMENSION_PX || img.height > MAX_DIMENSION_PX) {
+                    console.warn(`Warning: Image ${filename} has large dimensions (${img.width}x${img.height}). Max recommended: ${MAX_DIMENSION_PX}px.`);
                     showToast(`⚠️ Large dimensions: ${filename} (${img.width}x${img.height}px). May render slowly`, 'warning', 4000);
                 }
 
@@ -2632,16 +2660,16 @@ function loadImage(file) {
             undefined,
             function(error) {
                 // Error callback - retry or fail
-                if (attempt < MAX_RETRIES) {
-                    const delay = RETRY_DELAYS[attempt];
-                    console.warn(`[Retry] Failed to load ${filename} (attempt ${attempt + 1}/${MAX_RETRIES + 1}). Retrying in ${delay}ms...`, error);
+                if (attempt < MAX_LOAD_RETRIES) {
+                    const delay = RETRY_DELAYS_MS[attempt];
+                    console.warn(`[Retry] Failed to load ${filename} (attempt ${attempt + 1}/${MAX_LOAD_RETRIES + 1}). Retrying in ${delay}ms...`, error);
 
                     setTimeout(() => {
                         loadTextureWithRetry(dataURL, filename, attempt + 1);
                     }, delay);
                 } else {
                     // All retries exhausted
-                    console.error(`[Retry] Failed to load ${filename} after ${MAX_RETRIES + 1} attempts:`, error);
+                    console.error(`[Retry] Failed to load ${filename} after ${MAX_LOAD_RETRIES + 1} attempts:`, error);
                     showToast(`❌ Failed to load: ${filename}. Check file is valid`, 'error', 5000);
                 }
             }
@@ -2700,30 +2728,24 @@ function addImageToStack(texture, filename) {
     }
 
     // Create material based on ambience mode
-    // Calculate adaptive emissive for background contrast
-    const bgLuminance = calculateLuminance(params.bgColor);
-    const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
-
     let material;
     if (params.ambience) {
-        // Use MeshStandardMaterial for realistic lighting
+        // Use MeshStandardMaterial with FULL saturation - no emissive washout
         material = new THREE.MeshStandardMaterial({
             map: texture,
-            side: THREE.DoubleSide,
+            side: THREE.FrontSide,  // Only render front face to prevent mirroring artifacts
             transparent: true,
             roughness: params.materialRoughness,
             metalness: params.materialMetalness,
-            emissive: new THREE.Color(0xffffff),
-            emissiveMap: texture,
-            emissiveIntensity: emissiveIntensity
+            // NO emissive - keeps full color saturation
+            envMapIntensity: 0.15  // Reduced for less washing out
         });
-        material.envMapIntensity = 0.55;
         material.needsUpdate = true;
     } else {
         // Use MeshBasicMaterial to show true colors without lighting effects
         material = new THREE.MeshBasicMaterial({
             map: texture,
-            side: THREE.DoubleSide,
+            side: THREE.FrontSide,  // Only render front face
             transparent: true
         });
     }
@@ -2744,7 +2766,7 @@ function addImageToStack(texture, filename) {
         const borderGeometry = new THREE.PlaneGeometry(borderWidth, borderHeight);
         const borderMaterial = new THREE.MeshStandardMaterial({
             color: params.materialBorderColor,
-            side: THREE.DoubleSide,
+            side: THREE.FrontSide,  // Only render front face
             roughness: params.materialRoughness,
             metalness: params.materialMetalness
         });
