@@ -114,3 +114,39 @@ wc -l src/main.js
 **Last Updated**: 2025-11-04
 **Status**: Quality improvements complete, ready for refactoring
 **Focus**: Memory safety, user experience, error handling
+
+---
+
+## Quality Improvements Iteration 5 (2025-11-04)
+
+### Completed Tasks ✅
+
+1. **Fixed event listener memory leak** - updateImageList() now uses proper DOM removal
+2. **Refactored duplicated code** - Extracted _load_images() helper in cli.py
+3. **Added empty folder validation** - Now checks if folder contains PNG files
+
+### Event Listener Memory Leak Fix
+
+**Issue**: updateImageList() used innerHTML = '' to clear list
+**Impact**: Event listeners remained in memory after DOM elements destroyed
+**Details**: Each image list item has 6 event listeners (drag + keyboard events)
+
+**Fix**: Changed to proper DOM removal with removeChild() loop
+**Result**: Event listeners properly garbage collected with DOM nodes
+
+### Python CLI Refactoring
+
+**Issue**: Image loading logic duplicated in launch() and animate() (14 lines)
+**Fix**: Extracted _load_images() helper method with validation
+**Added**: Empty folder check - "Error: No PNG files found in {folder}"
+**Benefits**: DRY principle, easier maintenance, better error handling
+
+### Tests Passed
+
+```bash
+# JS: ✓ built in 1.95s
+# Python: ✓ All imports working
+# Image generation: ✓ Test images created
+```
+
+**Status**: All 5 quality improvement iterations complete
