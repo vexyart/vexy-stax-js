@@ -13,19 +13,22 @@ Vexy Stax JS is a production-ready web application for arranging images along th
 
 ---
 
-## 🚀 Quick Start
+## 1. 🚀 Quick Start
 
-### Try Online
+### 1.1. Try Online
+
 Visit the live demo at **https://vexyart.github.io/vexy-stax-js/**
 
-### Run Locally
+### 1.2. Run Locally
+
 ```bash
 npm install
 npm run dev
 # Open http://localhost:5173
 ```
 
-### Build for Production
+### 1.3. Build for Production
+
 ```bash
 npm run build
 # Output in docs/ folder, ready for GitHub Pages
@@ -33,7 +36,7 @@ npm run build
 
 ---
 
-## 📖 Table of Contents
+## 2. 📖 Table of Contents
 
 - [What It Does](#what-it-does)
 - [How It Works](#how-it-works)
@@ -47,14 +50,16 @@ npm run build
 
 ---
 
-## What It Does
+## 3. What It Does
 
 Vexy Stax JS creates **3D visualizations of image stacks** where multiple images are arranged along the Z-axis (depth). Think of it as:
+
 - **Layered cards** in 3D space (like trading cards displayed with depth)
 - **Photo stack viewer** with interactive 3D camera controls
 - **Image compositor** with depth-based layering and export
 
-### Use Cases
+### 3.1. Use Cases
+
 - Visualize layered designs in 3D (UI mockups, artwork layers)
 - Create depth-effect renders from multiple images
 - Export high-resolution composites with Z-spacing control
@@ -62,23 +67,25 @@ Vexy Stax JS creates **3D visualizations of image stacks** where multiple images
 
 ---
 
-## How It Works
+## 4. How It Works
 
-### Core Workflow
+### 4.1. Core Workflow
 
 ```
 [Load Images] → [Position in 3D] → [Adjust Settings] → [Export PNG/JSON]
 ```
 
-#### 1. Image Loading
+#### 4.1.1. Image Loading
+
 - **Drag & drop** or **browse** for PNG/JPG/GIF/WebP images
 - Images are loaded as **Three.js textures** on transparent planes
 - Each image becomes a **mesh** in the 3D scene
 - Positioned sequentially along Z-axis (configurable spacing)
 
-####  2. 3D Rendering Engine
+#### 4.1.2. 3D Rendering Engine
 
 **Three.js Scene Graph**:
+
 ```
 Scene
 ├── Cameras
@@ -95,15 +102,17 @@ Scene
 ```
 
 **Rendering Pipeline**:
+
 1. WebGL context initialization with antialiasing + transparency
 2. Shadow mapping enabled (PCFSoftShadowMap, 2048×2048)
 3. Orbit controls for interactive camera manipulation
 4. RequestAnimationFrame loop (60 FPS target)
 5. Pixel ratio scaling for high-DPI displays
 
-#### 3. Material System
+#### 4.1.3. Material System
 
 Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
+
 - `roughness` (0-1): Surface microsurface detail
   - 0 = mirror-like (glossy photo)
   - 1 = completely diffuse (matte print)
@@ -114,6 +123,7 @@ Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
 - `borderWidth`: Frame/border around image (pixels)
 
 **Material Presets**:
+
 | Preset | Roughness | Metalness | Thickness | Use Case |
 |--------|-----------|-----------|-----------|----------|
 | Flat Matte | 1.0 | 0.0 | 1 | Uncoated paper prints |
@@ -124,31 +134,36 @@ Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
 | Glass Slide | 0.05 | 0.0 | 1 | Transparent slides |
 | 3D Box | 0.6 | 0.0 | 15 | Deep physical object |
 
-#### 4. Camera Modes
+#### 4.1.4. Camera Modes
 
 **Perspective** (default):
+
 - Natural 3D view with depth perspective
 - FOV adjustable (15°-120°, default 75°)
 - Best for realistic visualization
 
 **Orthographic**:
+
 - Parallel projection (no perspective distortion)
 - Front-facing view
 - Best for technical drawings, flat layouts
 
 **Isometric**:
+
 - Orthographic at 45° angle
 - Classic isometric game view
 - Best for showing depth without perspective
 
 **Telephoto**:
+
 - Perspective with narrow FOV (30°)
 - Camera positioned far back
 - Minimal distortion, "flattened" depth
 
-#### 5. Export System
+#### 4.1.5. Export System
 
 **PNG Export**:
+
 ```javascript
 // Rendering pipeline for export
 1. Store original pixel ratio
@@ -160,11 +175,13 @@ Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
 ```
 
 **Supported resolutions**:
+
 - **1x**: Standard viewport resolution
 - **2x**: Double resolution (retina displays)
 - **4x**: Quadruple resolution (print quality)
 
 **JSON Export**:
+
 ```json
 {
   "version": "1.0",
@@ -191,16 +208,18 @@ Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
 
 ---
 
-## Features
+## 5. Features
 
-### Image Management
+### 5.1. Image Management
+
 - **Load**: Drag-and-drop or file browser (PNG/JPG/GIF/WebP/SVG)
 - **Reorder**: Drag items in list to change Z-stack order
 - **Delete**: Remove individual images from stack
 - **Memory monitoring**: Warns at 500MB, critical at 1000MB
 - **File validation**: Type checking, size limits (50MB max)
 
-### 3D Controls
+### 5.2. 3D Controls
+
 - **Z-Spacing**: 0-500px distance between layers
 - **Camera Zoom**: 0.1x - 3.0x (unified for all modes)
 - **Background**: Color picker + transparent background toggle
@@ -212,14 +231,16 @@ Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
   - 3D Stack View (400, 300, 600)
   - Center on Content (auto-fit)
 
-### Performance Features
+### 5.3. Performance Features
+
 - **FPS Monitor**: Real-time performance tracking (via `vexyStax.showFPS(true)`)
 - **WebGL Context Recovery**: Automatic GPU reset handling
 - **Debounced Resize**: 150ms delay prevents excessive recalculations
 - **Resource Cleanup**: Proper disposal on page unload
 - **Retry Logic**: 3 attempts with exponential backoff for texture loading
 
-### Developer Features
+### 5.4. Developer Features
+
 - **Undo/Redo**: 10-state history (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z)
 - **Keyboard Shortcuts**:
   - `?` - Show help
@@ -232,24 +253,28 @@ Uses **PBR (Physically-Based Rendering)** with MeshStandardMaterial:
 
 ---
 
-## Integration with vexy-stax-py
+## 6. Integration with vexy-stax-py
 
 Vexy Stax JS works standalone but integrates with the **vexy-stax-py** Python CLI for testing and validation:
 
-### Python Tool Capabilities
+### 6.1. Python Tool Capabilities
+
 1. **Generate Test Images**: Create colored layers for testing
+
    ```bash
    vexy-stax-create-test
    # Creates test-img/layer1.png, layer2.png, layer3.png
    ```
 
 2. **Validate PNG Exports**: Verify exported images
+
    ```bash
    vexy-stax-validate
    # Checks format, dimensions, content validity
    ```
 
-### Integration Workflow
+### 6.2. Integration Workflow
+
 ```
                   ┌─────────────────────────┐
                   │   vexy-stax-create-test  │
@@ -276,7 +301,8 @@ Vexy Stax JS works standalone but integrates with the **vexy-stax-py** Python CL
 └─────────────────────────────┘
 ```
 
-### Why This Architecture?
+### 6.3. Why This Architecture?
+
 - **Separation of Concerns**: Web app handles visualization, Python handles validation
 - **Cross-Platform Testing**: Browser-independent test image generation
 - **Automated QA**: Python can validate exports in CI/CD pipelines
@@ -284,7 +310,7 @@ Vexy Stax JS works standalone but integrates with the **vexy-stax-py** Python CL
 
 ---
 
-## Code Structure
+## 7. Code Structure
 
 - `src/main.js` – central entry point (~3.3k LOC) that bootstraps Three.js, OrbitControls, materials, history, exporters, drag-and-drop, and the Tweakpane UI. Upcoming refactors will gradually decompose this file into smaller modules.
 - `src/camera/animation.js` – contains `CameraAnimator`, a GSAP-powered helper for hero-shot animations and camera state snapshots.
@@ -300,15 +326,17 @@ Vexy Stax JS works standalone but integrates with the **vexy-stax-py** Python CL
 - `build.sh` / `dev.sh` – helper scripts for CI-style builds and local development.
 - `vite.config.js`, `package.json`, `package-lock.json` – bundler configuration and dependency manifests.
 
-## Architecture
+## 8. Architecture
 
-### Technology Stack
+### 8.1. Technology Stack
+
 - **Three.js** (r181): 3D rendering engine
 - **Tweakpane** (v4.0.5): Parameter controls UI
 - **Vite** (v7.1.12): Dev server + build tool
 - **Vanilla JavaScript**: No framework overhead, minimal dependencies
 
-### File Structure
+### 8.2. File Structure
+
 ```
 vexy-stax-js/
 ├── src/
@@ -327,43 +355,49 @@ vexy-stax-js/
     └── assets/          # JS + CSS bundles
 ```
 
-### Code Organization (main.js)
+### 8.3. Code Organization (main.js)
 
 **Core Systems** (lines 1-232):
+
 - Initialization, capabilities detection
 - Scene/camera/renderer setup
 - Lighting configuration (ambient + directional)
 - Keyboard shortcuts
 
 **State Management** (lines 233-907):
+
 - History (undo/redo) with 10-state stack
 - Settings persistence (localStorage)
 - Toast notifications
 - FPS monitoring
 
 **UI System** (lines 1076-1263):
+
 - Tweakpane controls initialization
 - Camera mode switcher
 - Material preset buttons
 - Export folder (PNG/JSON)
 
 **Image Management** (lines 1518-1883):
+
 - File input + drag-and-drop handling
 - Image validation (type, size, dimensions)
 - Texture loading with retry logic
 - Memory usage checking
 
 **Export System** (lines 1265-1380, 2101-2394):
+
 - PNG export with scale multiplier
 - JSON export/import (with embedded base64)
 - Clipboard copy/paste
 
 **3D Interaction** (lines 1884-2074):
+
 - Image list UI (with drag-to-reorder)
 - Keyboard navigation (arrows, delete, enter)
 - Mesh deletion with resource cleanup
 
-### Performance Optimizations
+### 8.4. Performance Optimizations
 
 1. **Debounced Window Resize** (line 538):
    - 150ms delay prevents excessive recalculations
@@ -386,9 +420,9 @@ vexy-stax-js/
 
 ---
 
-## API Reference
+## 9. API Reference
 
-### Console Debug API
+### 9.1. Console Debug API
 
 All functions accessible via `window.vexyStax`:
 
@@ -417,7 +451,8 @@ vexyStax.showFPS(enabled)        // Toggle FPS counter (boolean)
 vexyStax.help()                  // Show all available commands
 ```
 
-### Example Usage
+### 9.2. Example Usage
+
 ```javascript
 // Enable FPS monitor
 vexyStax.showFPS(true);
@@ -435,13 +470,15 @@ vexyStax.undo();
 
 ---
 
-## Development
+## 10. Development
 
-### Prerequisites
+### 10.1. Prerequisites
+
 - Node.js 20+ (for Vite 7)
 - npm or yarn
 
-### Setup
+### 10.2. Setup
+
 ```bash
 # Install dependencies
 npm install
@@ -456,13 +493,15 @@ npm run build
 npm run preview
 ```
 
-### Development Workflow
+### 10.3. Development Workflow
+
 1. Make changes to `src/main.js` or `styles/main.css`
 2. Vite automatically reloads browser
 3. Test in browser console using `vexyStax.*` API
 4. Build with `npm run build` to verify production output
 
-### Testing
+### 10.4. Testing
+
 ```bash
 # The vexy-stax-py package provides validation tools
 pip install vexy-stax
@@ -479,13 +518,14 @@ vexy-stax-validate
 
 ---
 
-## Deployment
+## 11. Deployment
 
-### GitHub Pages (Automatic)
+### 11.1. GitHub Pages (Automatic)
 
 This repository is configured for automatic deployment:
 
 1. **Trigger**: Push a git tag starting with `v` (e.g., `v0.1.0`)
+
    ```bash
    git tag v0.1.0
    git push origin v0.1.0
@@ -498,7 +538,7 @@ This repository is configured for automatic deployment:
 
 3. **Access**: https://vexyart.github.io/vexy-stax-js/
 
-### Manual Deployment
+### 11.2. Manual Deployment
 
 ```bash
 # Build
@@ -508,14 +548,16 @@ npm run build
 # Copy docs/ contents to your web server
 ```
 
-### Configuration
+### 11.3. Configuration
 
 **GitHub Pages Settings**:
+
 - Source: Deploy from branch
 - Branch: `main`
 - Folder: `/docs`
 
 **vite.config.js**:
+
 ```javascript
 export default defineConfig({
   base: '/vexy-stax-js/',  // Match your repo name
@@ -528,7 +570,7 @@ export default defineConfig({
 
 ---
 
-## Browser Support
+## 12. Browser Support
 
 | Browser | Status | Notes |
 |---------|--------|-------|
@@ -538,19 +580,21 @@ export default defineConfig({
 | Safari 14+ | ✅ Fully supported | macOS + iOS |
 
 **Requirements**:
+
 - WebGL 1.0 support
 - FileReader API (for image loading)
 - Canvas.toDataURL (for PNG export)
 - ES6+ JavaScript (async/await, modules)
 
 **Recommended**:
+
 - 4GB+ RAM (for handling multiple high-res images)
 - Dedicated GPU (for smooth 60 FPS rendering)
 - 1920×1080+ display (optimal UI layout)
 
 ---
 
-## Limitations
+## 13. Limitations
 
 - **Maximum images**: ~50 images (performance may degrade beyond this)
 - **Maximum image size**: 50MB per file, 4096×4096px recommended
@@ -559,9 +603,10 @@ export default defineConfig({
 
 ---
 
-## Future Enhancements
+## 14. Future Enhancements
 
 Potential v2.0 features:
+
 - Animation timeline for Z-spacing/rotation
 - Per-image opacity/blending modes
 - Custom image alignment (left/right/center)
@@ -571,13 +616,13 @@ Potential v2.0 features:
 
 ---
 
-## License
+## 15. License
 
 ISC License - See [LICENSE](LICENSE) file for details
 
 ---
 
-## Author
+## 16. Author
 
 **Adam Twardoch**
 [adam+npm@twardoch.com](mailto:adam+npm@twardoch.com)
@@ -585,26 +630,28 @@ ISC License - See [LICENSE](LICENSE) file for details
 
 ---
 
-## Related Projects
+## 17. Related Projects
 
 - **[vexy-stax-py](https://github.com/vexyart/vexy-stax-py)**: Python CLI for test image generation and PNG validation
 - Workflow: Python creates test images → Web app visualizes → Python validates exports
 
 ---
 
-## Contributing
+## 18. Contributing
 
 This is a production tool. For bug reports or feature requests, please open an issue on GitHub.
 
 ---
 
 **Made with Three.js and excessive attention to detail.**
+
 # <!-- this_file: README.md -->
+
 # Vexy Stax JS
 
 Browser-based 3D image stacking studio built with Three.js, Tweakpane, and GSAP. Load layered artwork, position slides in depth, tweak materials, animate cameras, and export PNG/JSON artefacts ready for handoff to the Python automation toolchain.
 
-## What It Does Today
+## 19. What It Does Today
 
 - Imports PNG/JPG/WebP images via file picker or drag-and-drop and arranges them along the Z-axis with adjustable spacing.
 - Renders in real time with adaptive lighting, reflective floor ambience, and OrbitControls camera navigation.
@@ -612,13 +659,13 @@ Browser-based 3D image stacking studio built with Three.js, Tweakpane, and GSAP.
 - Provides PNG export at 1×–4× scale and full-scene JSON round-trip (including embedded textures).
 - Exposes the runtime through `window.vexyStax` for automation (used by `vexy-stax-py`).
 
-## Current Architecture Snapshot
+## 20. Current Architecture Snapshot
 
 - `src/main.js` (~3,300 lines) owns bootstrapping, scene management, UI wiring, loaders, history, exporters, diagnostics, and the global debug API.
 - `src/camera/animation.js` houses the `CameraAnimator`; every other concern is still inside the monolith.
 - HTML shell lives in `index.html`; CSS in `styles/`. Vite handles dev/build (`npm run dev`, `npm run build`).
 
-## Refactor Roadmap (Phase 7)
+## 21. Refactor Roadmap (Phase 7)
 
 We are migrating to a modular ES module architecture described in `REFACTOR_PLAN.md`. The high-level milestones:
 
@@ -631,7 +678,7 @@ We are migrating to a modular ES module architecture described in `REFACTOR_PLAN
 
 Each milestone concludes with recorded results in `WORK.md`, TODO/PLAN updates, and a CHANGELOG entry.
 
-## Quick Start
+## 22. Quick Start
 
 ```bash
 npm install
@@ -639,19 +686,19 @@ npm run dev          # http://localhost:5173
 npm run build        # Outputs static site to docs/
 ```
 
-## Testing & Quality Gates
+## 23. Testing & Quality Gates
 
 - `npm test` (to be introduced in Phase 0) will run Node’s test runner over pure modules.
 - `npm run build` stays the integration safety net after every refactor increment.
 - Manual smoke checklist: load sample stack, tweak materials, toggle ambience, play hero shot, export PNG/JSON, exercise undo/redo, paste/load JSON.
 
-## Contributing Notes
+## 24. Contributing Notes
 
 - Keep files under 200 lines where practical and ensure each new module starts with a `this_file` comment.
 - Prefer incremental refactors with passing tests/builds per phase; avoid bundling unrelated enhancements.
 - Documentation touchpoints: `PLAN.md` (high-level), `REFACTOR_PLAN.md` (detailed design), `TODO.md` (actionable checklist), `WORK.md` (progress log), and `CHANGELOG.md` (shipped changes).
 
-## Licensing & Credits
+## 25. Licensing & Credits
 
 - Licensed under Apache-2.0.
 - Includes Three.js (MIT), GSAP (WhatWG-friendly), and Tweakpane (MIT) along with Colour Plus and Essentials plugins.
