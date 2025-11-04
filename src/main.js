@@ -43,6 +43,8 @@ import {
 import { appState } from './core/AppState.js';
 import { eventBus } from './core/EventBus.js';
 import { storeSharedRef, SHARED_STATE_KEYS } from './core/sharedState.js';
+import { computeRetinaDimensions } from './core/studioSizing.js';
+import { reorderList } from './core/ordering.js';
 
 // Scene, Camera, Renderer
 let scene, camera, orthoCamera, renderer, controls;
@@ -94,6 +96,47 @@ appState.set('memoryState', { lastMemoryWarning });
 
 // UI
 let pane;
+
+function emitBackgroundChanged(reason) {
+    eventBus.emit(EVENTS.backgroundChanged, {
+        reason,
+        color: params.bgColor,
+        transparent: params.transparentBg,
+        ambience: params.ambience
+    });
+}
+
+function emitStackUpdated(reason) {
+    eventBus.emit(EVENTS.stackUpdated, {
+        reason,
+        count: imageStack.length,
+        filenames: imageStack.map((image) => image.filename)
+    });
+}
+
+function emitCameraUpdated(reason) {
+    const activeCamera = (controls && controls.object) ? controls.object : camera;
+    if (!activeCamera) {
+        return;
+    }
+
+    const payload = {
+        reason,
+        mode: cameraMode,
+        position: {
+            x: activeCamera.position.x,
+            y: activeCamera.position.y,
+            z: activeCamera.position.z
+        },
+        zoom: activeCamera.zoom
+    };
+
+    if (typeof activeCamera.fov === 'number') {
+        payload.fov = activeCamera.fov;
+    }
+
+    eventBus.emit(EVENTS.cameraUpdated, payload);
+}
 
 /**
  * Detect browser capabilities and display error if requirements not met
@@ -203,8 +246,7 @@ function init() {
         powerPreference: "high-performance"  // Use dedicated GPU if available
     });
     storeSharedRef(SHARED_STATE_KEYS.renderer, renderer);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setPixelRatio(window.devicePixelRatio);
+    syncRendererDimensions(params.canvasSize, window.devicePixelRatio);
 
     // Enable high-quality shadows with soft edges
     renderer.shadowMap.enabled = true;
@@ -1065,6 +1107,7 @@ function setupCleanup() {
             // Clear image stack
             imageStack = [];
             storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
+            emitStackUpdated('disposed');
 
             // Dispose controls
             if (controls) {
@@ -1383,6 +1426,9 @@ function saveHistory() {
             filename: img.filename,
             width: img.width,
             height: img.height,
+            originalWidth: img.originalWidth,
+            originalHeight: img.originalHeight,
+            thumbnailSrc: img.thumbnailSrc,
             position: { ...img.mesh.position },
             texture: img.texture,
             mesh: img.mesh
@@ -1439,6 +1485,9 @@ function undo() {
             filename: img.filename,
             width: img.width,
             height: img.height,
+            originalWidth: img.originalWidth,
+            originalHeight: img.originalHeight,
+            thumbnailSrc: img.thumbnailSrc,
             texture: img.texture,
             mesh: img.mesh
         });
@@ -1448,6 +1497,7 @@ function undo() {
 
     updateImageList();
     console.log(`[History] Undo to state ${historyIndex + 1}/${historyStack.length}`);
+    emitStackUpdated('undo');
     showToast('↶ Undo applied', 'success');
 }
 
@@ -1485,6 +1535,9 @@ function redo() {
             filename: img.filename,
             width: img.width,
             height: img.height,
+            originalWidth: img.originalWidth,
+            originalHeight: img.originalHeight,
+            thumbnailSrc: img.thumbnailSrc,
             texture: img.texture,
             mesh: img.mesh
         });
@@ -1494,6 +1547,7 @@ function redo() {
 
     updateImageList();
     console.log(`[History] Redo to state ${historyIndex + 1}/${historyStack.length}`);
+    emitStackUpdated('redo');
     showToast('↷ Redo applied', 'success');
 }
 
@@ -2105,24 +2159,39 @@ function updateZoom(zoomValue) {
     orthoCamera.updateProjectionMatrix();
 
     console.log(`Zoom updated to ${zoomValue.toFixed(1)}x`);
+    emitCameraUpdated('zoom');
+}
+
+function syncRendererDimensions(size, pixelRatioOverride) {
+    if (!renderer || !canvas) {
+        return;
+    }
+
+    const dimensions = computeRetinaDimensions(size, pixelRatioOverride);
+    renderer.setPixelRatio(dimensions.pixelRatio);
+    renderer.setSize(dimensions.cssWidth, dimensions.cssHeight, false);
+    canvas.style.width = `${dimensions.cssWidth}px`;
+    canvas.style.height = `${dimensions.cssHeight}px`;
+    return dimensions;
 }
 
 function updateCanvasSize(size) {
     params.canvasSize = size;
 
     // Resize the actual renderer/canvas to match studio size
-    renderer.setSize(size.x, size.y);
+    const dimensions = syncRendererDimensions(size, window.devicePixelRatio);
 
     // Update camera aspect ratio
+    const aspect = size.x / size.y;
     if (cameraMode === 'perspective' || cameraMode === 'telephoto') {
-        camera.aspect = size.x / size.y;
+        camera.aspect = aspect;
         camera.updateProjectionMatrix();
     } else if (cameraMode === 'orthographic' || cameraMode === 'isometric') {
-        const aspect = size.x / size.y;
-        orthoCamera.left = -400 * aspect;
-        orthoCamera.right = 400 * aspect;
-        orthoCamera.top = 400;
-        orthoCamera.bottom = -400;
+        const frustumSize = ORTHO_FRUSTUM_SIZE;
+        orthoCamera.left = (frustumSize * aspect) / -2;
+        orthoCamera.right = (frustumSize * aspect) / 2;
+        orthoCamera.top = frustumSize / 2;
+        orthoCamera.bottom = frustumSize / -2;
         orthoCamera.updateProjectionMatrix();
     }
 
@@ -2131,7 +2200,11 @@ function updateCanvasSize(size) {
         updateReflectionSettings();
     }
 
-    console.log(`Canvas resized to ${size.x}x${size.y}`);
+    if (dimensions) {
+        console.log(`Canvas resized to ${dimensions.cssWidth}x${dimensions.cssHeight} (pixel ratio ${dimensions.pixelRatio})`);
+    } else {
+        console.log(`Canvas resized to ${size.x}x${size.y}`);
+    }
 }
 
 // Studio frame visualization removed - canvas size now controls renderer dimensions directly
@@ -2163,6 +2236,7 @@ function centerViewOnContent() {
 
     controls.update();
     console.log(`Centered view on content at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)})`);
+    emitCameraUpdated('center');
 }
 
 function switchCameraMode(mode) {
@@ -2203,6 +2277,7 @@ function switchCameraMode(mode) {
     }
 
     controls.update();
+    emitCameraUpdated('mode-change');
 }
 
 function updateBackground() {
@@ -2243,6 +2318,8 @@ function updateBackground() {
         });
         console.log(`Slides emissive updated (luminance: ${bgLuminance.toFixed(2)}, emissive: ${emissiveIntensity.toFixed(2)})`);
     }
+
+    emitBackgroundChanged('update');
 }
 
 function updateZSpacing(newSpacing) {
@@ -2258,6 +2335,7 @@ function setViewpoint(x, y, z) {
     camera.lookAt(0, 0, 0);
     controls.update();
     console.log(`Viewpoint set to (${x}, ${y}, ${z})`);
+    emitCameraUpdated('viewpoint');
 }
 
 /**
@@ -2333,38 +2411,93 @@ function clearAll() {
     updateImageList();
 
     console.log('All images cleared');
+    emitStackUpdated('cleared');
     showToast('🗑️ All images cleared', 'info');
 }
 
 function setupFileInput() {
     const fileInput = document.getElementById('image-input');
-    const dropZone = document.getElementById('image-list-container');
+    const browseButton = document.getElementById('browse-button');
+    const dropOverlay = document.getElementById('drop-overlay');
+    const slidesPanel = document.getElementById('slides-panel');
 
-    // Drag and drop event handlers
-    const dragoverHandler = (e) => {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
+    if (!fileInput) {
+        console.error('File input element not found');
+        return;
+    }
+
+    if (browseButton) {
+        addTrackedEventListener(browseButton, 'click', () => fileInput.click());
+    }
+
+    addTrackedEventListener(fileInput, 'change', handleFileSelect);
+
+    let dragDepth = 0;
+
+    const eventHasFiles = (event) => {
+        if (!event.dataTransfer) {
+            return false;
+        }
+        if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+            return true;
+        }
+        const types = Array.from(event.dataTransfer.types || []);
+        return types.includes('Files');
     };
 
-    const dragleaveHandler = () => {
-        dropZone.classList.remove('drag-over');
+    const showOverlay = () => {
+        dropOverlay?.classList.add('visible');
+        slidesPanel?.classList.add('drag-active');
     };
 
-    const dropHandler = (e) => {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
+    const hideOverlay = () => {
+        dropOverlay?.classList.remove('visible');
+        slidesPanel?.classList.remove('drag-active');
+        dragDepth = 0;
+    };
 
-        const files = e.dataTransfer.files;
-        if (files.length > 0) {
+    addTrackedEventListener(window, 'dragenter', (event) => {
+        if (!eventHasFiles(event)) {
+            return;
+        }
+        dragDepth += 1;
+        showOverlay();
+    });
+
+    addTrackedEventListener(window, 'dragleave', (event) => {
+        if (!eventHasFiles(event)) {
+            return;
+        }
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) {
+            hideOverlay();
+        }
+    });
+
+    addTrackedEventListener(window, 'dragover', (event) => {
+        if (!eventHasFiles(event)) {
+            return;
+        }
+        event.preventDefault();
+        showOverlay();
+    });
+
+    addTrackedEventListener(window, 'drop', (event) => {
+        if (!eventHasFiles(event)) {
+            hideOverlay();
+            return;
+        }
+
+        event.preventDefault();
+        const { files } = event.dataTransfer;
+        hideOverlay();
+
+        if (files && files.length > 0) {
             handleFileDrop(files);
         }
-    };
+    });
 
-    // Register tracked event listeners
-    addTrackedEventListener(fileInput, 'change', handleFileSelect);
-    addTrackedEventListener(dropZone, 'dragover', dragoverHandler);
-    addTrackedEventListener(dropZone, 'dragleave', dragleaveHandler);
-    addTrackedEventListener(dropZone, 'drop', dropHandler);
+    addTrackedEventListener(window, 'dragend', hideOverlay);
 }
 
 function handleFileDrop(files) {
@@ -2733,7 +2866,8 @@ function addImageToStack(texture, filename) {
         height: planeHeight,
         originalWidth: width,
         originalHeight: height,
-        id: Date.now() + Math.random() // Unique ID
+        id: Date.now() + Math.random(), // Unique ID
+        thumbnailSrc: texture.image?.currentSrc || texture.image?.src || ''
     };
     imageStack.push(imageData);
 
@@ -2744,45 +2878,70 @@ function addImageToStack(texture, filename) {
     updateImageList();
 
     console.log(`Added ${filename} to stack at Z=${zPosition} (${imageStack.length} images total)`);
+    emitStackUpdated('added');
 }
 
 function updateImageList() {
     const listContainer = document.getElementById('image-list');
-    const dropZoneContainer = document.getElementById('image-list-container');
+    const emptyMessage = document.getElementById('slides-empty-message');
+    const slidesPanel = document.getElementById('slides-panel');
 
-    // Toggle has-images class based on whether images are loaded
-    if (imageStack.length > 0) {
-        dropZoneContainer.classList.add('has-images');
-    } else {
-        dropZoneContainer.classList.remove('has-images');
+    if (!listContainer) {
+        return;
     }
 
-    // Remove existing items properly to prevent memory leaks
-    while (listContainer.firstChild) {
-        listContainer.removeChild(listContainer.firstChild);
+    listContainer.setAttribute('role', 'list');
+    listContainer.innerHTML = '';
+
+    const hasImages = imageStack.length > 0;
+    slidesPanel?.classList.toggle('is-empty', !hasImages);
+    if (emptyMessage) {
+        emptyMessage.classList.toggle('hidden', hasImages);
     }
 
     imageStack.forEach((imageData, index) => {
         const item = document.createElement('div');
-        item.className = 'image-item';
+        item.className = 'slide-thumb';
         item.draggable = true;
         item.dataset.index = index;
         item.dataset.id = imageData.id;
-
-        // Keyboard navigation support
-        item.tabIndex = 0; // Make focusable
+        item.tabIndex = 0;
         item.setAttribute('role', 'listitem');
-        item.setAttribute('aria-label', `Image ${index + 1}: ${imageData.filename}, ${imageData.originalWidth} by ${imageData.originalHeight} pixels`);
+        item.setAttribute(
+            'aria-label',
+            `Slide ${index + 1}: ${imageData.filename}, ${imageData.originalWidth} by ${imageData.originalHeight} pixels`
+        );
+        item.title = `${imageData.filename} — ${imageData.originalWidth}×${imageData.originalHeight}px`;
 
-        item.innerHTML = `
-            <div class="image-item-info">
-                <div class="image-item-name">${index + 1}. ${imageData.filename}</div>
-                <div>${imageData.originalWidth}×${imageData.originalHeight}px</div>
-            </div>
-            <div class="image-item-controls">
-                <button class="image-item-btn delete" onclick="deleteImage(${index})">✕</button>
-            </div>
-        `;
+        const image = document.createElement('img');
+        image.src =
+            imageData.thumbnailSrc ||
+            imageData.texture?.image?.currentSrc ||
+            imageData.texture?.image?.src ||
+            '';
+        image.alt = '';
+        image.draggable = false;
+        item.appendChild(image);
+
+        const indexBadge = document.createElement('span');
+        indexBadge.className = 'slide-thumb-index';
+        indexBadge.textContent = index + 1;
+        item.appendChild(indexBadge);
+
+        const deleteButton = document.createElement('button');
+        deleteButton.type = 'button';
+        deleteButton.className = 'slide-thumb-delete';
+        deleteButton.setAttribute('aria-label', `Delete ${imageData.filename}`);
+        deleteButton.textContent = '✕';
+        deleteButton.addEventListener('click', (event) => {
+            event.stopPropagation();
+            deleteImage(index);
+        });
+        item.appendChild(deleteButton);
+
+        item.addEventListener('click', () => {
+            item.focus();
+        });
 
         // Drag events for reordering
         item.addEventListener('dragstart', handleDragStart);
@@ -2793,11 +2952,10 @@ function updateImageList() {
         // Keyboard navigation events
         item.addEventListener('keydown', handleImageListKeydown);
         item.addEventListener('focus', () => {
-            item.style.outline = '2px solid #4CAF50';
-            item.style.outlineOffset = '2px';
+            item.classList.add('focused');
         });
         item.addEventListener('blur', () => {
-            item.style.outline = 'none';
+            item.classList.remove('focused');
         });
 
         listContainer.appendChild(item);
@@ -2874,25 +3032,34 @@ let draggedElement = null;
 let draggedIndex = null;
 
 function handleDragStart(e) {
-    draggedElement = e.target;
-    draggedIndex = parseInt(e.target.dataset.index);
-    e.target.classList.add('dragging');
+    const item = e.currentTarget;
+    draggedElement = item;
+    draggedIndex = parseInt(item.dataset.index, 10);
+    item.classList.add('dragging');
+
+    if (e.dataTransfer) {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', String(draggedIndex));
+    }
 }
 
 function handleDragOver(e) {
     e.preventDefault();
+    if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+    }
     return false;
 }
 
 function handleDrop(e) {
     e.preventDefault();
 
-    const dropIndex = parseInt(e.currentTarget.dataset.index);
+    const dropIndex = parseInt(e.currentTarget.dataset.index, 10);
 
     if (draggedIndex !== null && draggedIndex !== dropIndex) {
         // Reorder the array
-        const [movedItem] = imageStack.splice(draggedIndex, 1);
-        imageStack.splice(dropIndex, 0, movedItem);
+        reorderList(imageStack, draggedIndex, dropIndex);
+        storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
         // Update Z positions
         imageStack.forEach((imageData, index) => {
@@ -2903,13 +3070,14 @@ function handleDrop(e) {
         updateImageList();
 
         console.log(`Reordered: moved ${draggedIndex} to ${dropIndex}`);
+        emitStackUpdated('reordered');
     }
 
     return false;
 }
 
 function handleDragEnd(e) {
-    e.target.classList.remove('dragging');
+    e.currentTarget.classList.remove('dragging');
     draggedElement = null;
     draggedIndex = null;
 }
@@ -2943,6 +3111,7 @@ window.deleteImage = function(index) {
     updateImageList();
 
     console.log(`Deleted image at index ${index}`);
+    emitStackUpdated('removed');
     showToast(`🗑️ Deleted ${imageData.filename}`, 'info');
 
     // Check memory after deletion
@@ -2950,21 +3119,21 @@ window.deleteImage = function(index) {
 };
 
 function onWindowResize() {
-    const aspect = window.innerWidth / window.innerHeight;
+    const aspect = params.canvasSize.x / params.canvasSize.y;
 
     // Update perspective camera
     camera.aspect = aspect;
     camera.updateProjectionMatrix();
 
     // Update orthographic camera
-    const frustumSize = 600;
+    const frustumSize = ORTHO_FRUSTUM_SIZE;
     orthoCamera.left = frustumSize * aspect / -2;
     orthoCamera.right = frustumSize * aspect / 2;
     orthoCamera.top = frustumSize / 2;
     orthoCamera.bottom = frustumSize / -2;
     orthoCamera.updateProjectionMatrix();
 
-    renderer.setSize(window.innerWidth, window.innerHeight);
+    syncRendererDimensions(params.canvasSize, window.devicePixelRatio);
     updateReflectionSettings();
 }
 
@@ -3266,6 +3435,7 @@ function pasteJSON() {
                     scene.add(mesh);
                     updateImageList();
                     console.log(`Loaded ${imageConfig.filename} from clipboard`);
+                    emitStackUpdated('imported');
                 });
             });
 

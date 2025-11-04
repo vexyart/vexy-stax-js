@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+<!-- this_file: index.html -->
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,22 +9,25 @@
 </head>
 <body>
     <div id="app">
-        <canvas id="canvas"></canvas>
-        <div id="ui">
-            <div id="controls"></div>
-            <div id="image-manager">
-                <div id="image-list-container">
-                    <div id="drop-prompt">
-                        <p>Drag & Drop Images Here</p>
-                        <p class="or">or</p>
-                        <label for="image-input" class="file-label">Browse Files</label>
-                        <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg" multiple style="display: none;">
-                    </div>
-                    <div id="image-list"></div>
-                </div>
+        <aside id="slides-panel" class="slides-panel is-empty">
+            <div class="slides-header">
+                <button id="browse-button" type="button" class="browse-button">Browse Files</button>
+                <p class="slides-hint">Drop images anywhere in the window</p>
             </div>
-        </div>
+            <div id="slides-empty-message" class="slides-empty">No slides yet. Drop images or browse files to start building your stack.</div>
+            <div id="image-list" role="list" aria-label="Slide thumbnails"></div>
+        </aside>
+        <main id="studio-panel">
+            <div id="studio-frame">
+                <canvas id="canvas"></canvas>
+            </div>
+        </main>
+        <aside id="controls-panel">
+            <div id="controls"></div>
+        </aside>
     </div>
+    <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml" multiple style="display: none;">
+    <div id="drop-overlay" aria-hidden="true">Drop images to load</div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>

@@ -1,5 +1,96 @@
 ## [Unreleased] - Next Release
 
+### Quality Improvements Round 3 - 2025-11-04
+- **Added CameraAnimator unit tests** (+10 tests)
+  - saveState/restoreState state management validation
+  - calculateFrontViewpoint position calculation tests
+  - Cleanup and error handling coverage
+  - Independent clone behavior verification
+  - Fills critical test coverage gap (was 0% coverage)
+- **Added error recovery tests** (+23 tests)
+  - SceneManager: validates errors for missing canvas, params, canvasSize
+  - LightingManager: validates errors for missing scene, params, bgColor
+  - FloorManager: validates errors for missing scene, params, bgColor
+  - CameraAnimator: validates safe handling of missing state, non-animating state
+  - Idempotent dispose() testing across all managers
+  - Module cleanup order safety verification
+- **Console noise reduction**: Deferred to refactoring phase
+  - Analysis completed: 143 console statements (95 log, 31 error, 17 warn)
+  - Task scope too large for quality iteration (95+ call sites)
+  - Better suited for main.js refactoring phase
+- **Test results**: 93/93 tests passing (+55% increase from Round 2)
+- **Build stability**: Bundle size stable at 1,149.47 kB
+- **New test files**: `tests/camera_animation.test.js` (247 lines), `tests/error_recovery.test.js` (294 lines)
+
+### Verification Cycle - 2025-11-04 (Post Quality Round 2)
+- **Test results**: `npm run test:unit` → 60/60 tests passing in ~822ms ✅
+- **Build stability**: `npm run build` → Bundle 1,149.47 kB, zero errors ✅
+- **Coverage breakdown**: 32 core + 8 scene manager + 20 helper utility tests
+- **Status**: All Quality Round 1 & 2 improvements verified with no regressions
+
+### Quality Improvements Round 2 - 2025-11-04
+- **Enhanced input validation** (+3 tests)
+  - clamp(): TypeErrors for invalid inputs, RangeError when min > max
+  - lerp(): TypeErrors for non-numeric inputs
+  - calculateLuminance(): TypeError for invalid hex colors
+  - Prevents edge case failures with clear error messages
+- **Added JSDoc type annotations** (+65 annotations)
+  - Complete type documentation for SceneManager, LightingManager, FloorManager
+  - Annotated all constructor parameters and class properties
+  - Improves IDE autocomplete and type checking
+- **Test results**: 60/60 tests passing (+5% from Round 1)
+- **Build stability**: Bundle size stable at 1,149.47 kB
+
+### Quality Improvements Round 1 - 2025-11-04
+- **Added unit tests for scene managers** (+8 tests)
+  - Tests for SceneManager, LightingManager, FloorManager class structure
+  - Export validation, dispose method verification
+  - getAdaptiveEmissiveIntensity logic testing with luminance ranges
+- **Extracted helper utilities** (`src/utils/helpers.js`, +17 tests)
+  - Color calculations (calculateLuminance)
+  - Validation helpers (isValidHexColor, isValidNumber, isValidImageFile)
+  - Common utilities (clamp, lerp, formatFileSize, generateId, deepClone, debounce)
+  - Comprehensive test coverage for all helpers
+- **Added defensive null checks** to scene modules
+  - SceneManager.init(): Validates canvas and params.canvasSize
+  - LightingManager.setup(): Validates scene and params.bgColor
+  - FloorManager.create(): Validates scene and params.bgColor
+  - Clear error messages prevent silent failures
+- **Test results**: 57/57 tests passing (+78% increase from 32 tests)
+- **Build stability**: Bundle size unchanged at 1,149.47 kB
+
+### Refactoring - 2025-11-04 (Phase 1: Scene Module Extraction)
+- **Objective**: Begin refactoring monolithic main.js (3,459 lines) into modular architecture per REFACTOR_PLAN.md
+- **Modules Extracted**:
+  - `src/scene/SceneManager.js` (335 lines): Manages Three.js scene, WebGLRenderer, canvas sizing, render loop, window resize, context loss recovery, environment texture setup
+  - `src/scene/LightingManager.js` (190 lines): Creates and configures ambient/directional/hemisphere lights, calculates adaptive lighting based on background luminance, provides emissive intensity for materials
+  - `src/scene/FloorManager.js` (210 lines): Manages reflective floor with soft shader, handles ambience mode toggle, updates floor color to match background, manages reflection resolution
+- **Total Extracted**: 735 lines into 3 focused modules
+- **Testing**:
+  - Build successful: 1,149.47 kB bundle, 2.61s, zero syntax errors
+  - Unit tests: 32/32 passing in ~188ms
+  - Sanity checks: All modules have proper exports, `this_file` markers, no circular deps
+- **Status**: Phase 1 Complete ✅
+- **Next Phase**: Phase 2 - Integrate modules into main.js, update imports, verify runtime functionality
+
+### Verification - 2025-11-04 (/test + /report)
+- `/test` workflow (`fd -e py -x uvx autoflake -i {}`, `fd -e py -x uvx pyupgrade --py312-plus {}`, `fd -e py -x uvx ruff check --output-format=github --fix --unsafe-fixes {}`, `fd -e py -x uvx ruff format --respect-gitignore --target-version py312 {}`, `uvx hatch test`) completed; Python tooling found no `.py` files so no edits, and `uvx hatch test` exited 5 after collecting zero suites (expected while no Python modules ship).
+- `/report` verification repeated `uvx hatch test` (exit 5, no suites) and `npm run test` (node --test) yielding 32/32 passing specs in ~0.19s, confirming retina sizing and ordering helpers still behave as recorded previously.
+
+### Verification - 2025-11-05
+- `/test` workflow (`fd` + `uvx hatch test`) rerun; pytest exits with code 5 after collecting zero suites, which remains expected while Python modules are absent.
+- `npm run test` (node --test) validates 32/32 specs in ~0.24s, covering new retina sizing and ordering helpers alongside existing AppState/EventBus/constants/sharedState suites.
+
+### Verification - 2025-11-04 (Report Cycle)
+- `npm run test` (node --test) re-run while executing `/report`; 32/32 specs still green (~0.19s) with no code changes since the prior verification.
+
+### Added - Retina Studio Layout (2025-11-05)
+- Introduced `src/core/studioSizing.js` with `computeRetinaDimensions`; renderer init, canvas resizing, and resize handlers now apply device-pixel-ratio aware sizing, keeping CSS dimensions literal (e.g., 1920×1080) while rendering at high DPI.
+- Rebuilt DOM shell (`index.html`) into a three-column flex layout: thumbnail strip docked left, studio frame centred, Tweakpane docked right; added global drop overlay and simplified browse trigger.
+- Replaced UI styling with new `styles/main.css`, providing centred studio frame, minimal thumbnail chrome, responsive fallbacks, and overlay feedback; preserved toast animations.
+- Added `src/core/ordering.js` (`reorderList`) and corresponding Node tests to guarantee deterministic reordering behaviour used by the thumbnail strip.
+- Updated `src/main.js` to emit thumbnail tooltips, persist thumbnails across history, promote drag/drop listeners to window scope, and reuse the new helpers; reorganised image list rendering for accessibility and keyboard support.
+
 ### Phase 6.9: Code Quality Iteration 10 Complete ✅
 
 **Focus**: Memory safety, code maintainability, color saturation
@@ -60,6 +151,11 @@
 - Centralised ambient/emissive intensity ranges, orthographic frustum size, and lighting/floor material tuning into `src/core/constants.js`.
 - Updated `src/main.js` to consume the new imports for directional/hemisphere lights and ambience floor setup.
 - Extended `tests/core_constants.test.js` with coverage for the new constants to guarantee immutability and legacy value preservation (node --test now runs 23 specs).
+
+### Added - EventBus Placeholders (2025-11-04)
+- Declared `EVENTS` registry in `src/core/constants.js` for background, stack, and camera topics.
+- Added lightweight emit helpers in `src/main.js` to broadcast background changes, stack mutations (add/remove/undo/redo/import), and camera movements (mode/viewpoint/zoom/centering).
+- `tests/core_constants.test.js` now exercises the frozen event registry; node --test covers 24 specs verifying the wiring.
 
 #### Added - Shared AppState Registry
 - Introduced `src/core/sharedState.js` with a curated key registry and helpers to synchronise runtime singletons (scene, cameras, renderer, controls, history, listeners) via `AppState`.

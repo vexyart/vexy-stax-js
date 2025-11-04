@@ -1,3 +1,7 @@
+---
+this_file: README.md
+---
+
 # Vexy Stax JS
 
 **Browser-based 3D image stacking visualizer and export tool**
@@ -35,6 +39,7 @@ npm run build
 - [How It Works](#how-it-works)
 - [Features](#features)
 - [Integration with vexy-stax-py](#integration-with-vexy-stax-py)
+- [Code Structure](#code-structure)
 - [Architecture](#architecture)
 - [API Reference](#api-reference)
 - [Development](#development)
@@ -278,6 +283,22 @@ Vexy Stax JS works standalone but integrates with the **vexy-stax-py** Python CL
 - **Developer Workflow**: Create test assets → visualize → verify output quality
 
 ---
+
+## Code Structure
+
+- `src/main.js` – central entry point (~3.3k LOC) that bootstraps Three.js, OrbitControls, materials, history, exporters, drag-and-drop, and the Tweakpane UI. Upcoming refactors will gradually decompose this file into smaller modules.
+- `src/camera/animation.js` – contains `CameraAnimator`, a GSAP-powered helper for hero-shot animations and camera state snapshots.
+- `src/core/` – foundational utilities:
+  - `AppState.js` memoises shared singletons with reset/merge helpers.
+  - `constants.js` freezes tuning parameters, material presets, and shader definitions.
+  - `EventBus.js` provides a minimal emitter for background/stack/camera notifications.
+  - `sharedState.js` validates shared runtime references behind a curated key registry.
+- `styles/` – global CSS for the overlay UI, including drop-zone styling and toast animations.
+- `index.html` – DOM skeleton containing the Three.js canvas, Tweakpane mount (`#controls`), and the stacked drop panel.
+- `tests/` – Node `node:test` suites covering the core modules (AppState, constants, event bus, shared state).
+- `docs/` – Vite build artefacts emitted by `npm run build`.
+- `build.sh` / `dev.sh` – helper scripts for CI-style builds and local development.
+- `vite.config.js`, `package.json`, `package-lock.json` – bundler configuration and dependency manifests.
 
 ## Architecture
 
