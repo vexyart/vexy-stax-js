@@ -74,80 +74,126 @@ export class CameraAnimator {
    * @param {number} params.duration - Tween duration in seconds (default: 1.5)
    * @param {number} params.holdTime - Hold time at hero position (default: 1.0)
    * @param {string} params.easing - GSAP easing function (default: "power2.inOut")
-   * @returns {Promise} Resolves when animation completes
+   * @returns {Promise} Resolves when animation completes, rejects on error
    */
   async playHeroShot({ topSlide, duration = 1.5, holdTime = 1.0, easing = "power2.inOut" }) {
-    if (this.isAnimating) {
-      console.warn('Animation already in progress');
-      return;
-    }
+    // Return promise with proper error handling
+    return new Promise((resolve, reject) => {
+      try {
+        // Validation checks
+        if (this.isAnimating) {
+          console.warn('Animation already in progress');
+          reject(new Error('Animation already in progress'));
+          return;
+        }
 
-    if (!topSlide) {
-      console.error('No top slide provided for hero shot');
-      return;
-    }
+        if (!topSlide) {
+          console.error('No top slide provided for hero shot');
+          reject(new Error('No top slide provided'));
+          return;
+        }
 
-    this.isAnimating = true;
-    this.controls.enabled = false;
+        if (!topSlide.mesh) {
+          console.error('Top slide has no mesh property');
+          reject(new Error('Invalid top slide object'));
+          return;
+        }
 
-    // Save current state
-    this.saveState();
+        // Mark animation as started
+        this.isAnimating = true;
+        this.controls.enabled = false;
 
-    // Calculate hero position
-    const heroPos = this.calculateHeroPosition(topSlide);
+        // Save current state
+        this.saveState();
 
-    // Create animation timeline
-    const timeline = gsap.timeline();
+        // Calculate hero position (wrap in try-catch for calculation errors)
+        let heroPos;
+        try {
+          heroPos = this.calculateHeroPosition(topSlide.mesh || topSlide);
+        } catch (calcError) {
+          console.error('Failed to calculate hero position:', calcError);
+          this.cleanup();
+          reject(new Error('Failed to calculate camera position'));
+          return;
+        }
 
-    // Tween to hero position
-    timeline.to(this.camera.position, {
-      x: heroPos.position.x,
-      y: heroPos.position.y,
-      z: heroPos.position.z,
-      duration: duration,
-      ease: easing,
-    });
+        // Create animation timeline
+        const timeline = gsap.timeline();
 
-    timeline.to(this.controls.target, {
-      x: heroPos.target.x,
-      y: heroPos.target.y,
-      z: heroPos.target.z,
-      duration: duration,
-      ease: easing,
-    }, "<"); // Start at same time as camera position
+        // Tween to hero position
+        timeline.to(this.camera.position, {
+          x: heroPos.position.x,
+          y: heroPos.position.y,
+          z: heroPos.position.z,
+          duration: duration,
+          ease: easing,
+        });
 
-    // Hold at hero position
-    timeline.to({}, { duration: holdTime });
+        timeline.to(this.controls.target, {
+          x: heroPos.target.x,
+          y: heroPos.target.y,
+          z: heroPos.target.z,
+          duration: duration,
+          ease: easing,
+        }, "<"); // Start at same time as camera position
 
-    // Get restored state
-    const restored = this.restoreState();
+        // Hold at hero position
+        timeline.to({}, { duration: holdTime });
 
-    // Tween back to original
-    timeline.to(this.camera.position, {
-      x: restored.position.x,
-      y: restored.position.y,
-      z: restored.position.z,
-      duration: duration,
-      ease: easing,
-    });
+        // Get restored state
+        const restored = this.restoreState();
 
-    timeline.to(this.controls.target, {
-      x: restored.target.x,
-      y: restored.target.y,
-      z: restored.target.z,
-      duration: duration,
-      ease: easing,
-      onComplete: () => {
-        // Re-enable controls after animation
-        this.controls.enabled = true;
-        this.isAnimating = false;
+        if (!restored) {
+          console.error('Failed to restore camera state');
+          this.cleanup();
+          reject(new Error('Failed to restore camera state'));
+          return;
+        }
+
+        // Tween back to original
+        timeline.to(this.camera.position, {
+          x: restored.position.x,
+          y: restored.position.y,
+          z: restored.position.z,
+          duration: duration,
+          ease: easing,
+        });
+
+        timeline.to(this.controls.target, {
+          x: restored.target.x,
+          y: restored.target.y,
+          z: restored.target.z,
+          duration: duration,
+          ease: easing,
+        }, "<");
+
+        // Set up completion and error handlers
+        timeline.eventCallback('onComplete', () => {
+          this.cleanup();
+          resolve();
+        });
+
+        timeline.eventCallback('onInterrupt', () => {
+          console.log('Animation interrupted');
+          this.cleanup();
+          reject(new Error('Animation interrupted'));
+        });
+
+      } catch (error) {
+        console.error('Unexpected error in playHeroShot:', error);
+        this.cleanup();
+        reject(error);
       }
-    }, "<");
-
-    // Return promise that resolves when animation completes
-    return new Promise((resolve) => {
-      timeline.eventCallback('onComplete', resolve);
     });
+  }
+
+  /**
+   * Cleanup animation state (always re-enable controls)
+   * @private
+   */
+  cleanup() {
+    this.controls.enabled = true;
+    this.isAnimating = false;
   }
 
   /**
@@ -156,16 +202,22 @@ export class CameraAnimator {
   cancel() {
     if (!this.isAnimating) return;
 
-    gsap.killTweensOf(this.camera.position);
-    gsap.killTweensOf(this.controls.target);
+    try {
+      // Kill all active tweens
+      gsap.killTweensOf(this.camera.position);
+      gsap.killTweensOf(this.controls.target);
 
-    const restored = this.restoreState();
-    if (restored) {
-      this.camera.position.copy(restored.position);
-      this.controls.target.copy(restored.target);
+      // Restore camera state
+      const restored = this.restoreState();
+      if (restored) {
+        this.camera.position.copy(restored.position);
+        this.controls.target.copy(restored.target);
+      }
+    } catch (error) {
+      console.error('Error during animation cancellation:', error);
+    } finally {
+      // Always cleanup, even if errors occur
+      this.cleanup();
     }
-
-    this.controls.enabled = true;
-    this.isAnimating = false;
   }
 }
