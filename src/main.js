@@ -990,6 +990,10 @@ function undo() {
         scene.remove(img.mesh);
         img.mesh.geometry.dispose();
         img.mesh.material.dispose();
+        // Dispose texture to prevent memory leak
+        if (img.mesh.material.map) {
+            img.mesh.material.map.dispose();
+        }
     });
     imageStack = [];
 
@@ -1030,6 +1034,10 @@ function redo() {
         scene.remove(img.mesh);
         img.mesh.geometry.dispose();
         img.mesh.material.dispose();
+        // Dispose texture to prevent memory leak
+        if (img.mesh.material.map) {
+            img.mesh.material.map.dispose();
+        }
     });
     imageStack = [];
 
@@ -1469,6 +1477,13 @@ function setupTweakpane() {
 }
 
 function exportPNG(scale = 1) {
+    // Check if images are loaded
+    if (imageStack.length === 0) {
+        console.warn('[Export] No images loaded - cannot export empty scene');
+        showToast('⚠️ Load images first', 'warning');
+        return;
+    }
+
     // Validate scale parameter (1-4 range for reasonable export sizes)
     if (typeof scale !== 'number' || scale < 1 || scale > 4) {
         console.warn(`Invalid scale parameter: ${scale}. Using 1x instead.`);
@@ -2306,6 +2321,13 @@ function animate() {
 }
 
 function exportJSON() {
+    // Check if images are loaded
+    if (imageStack.length === 0) {
+        console.warn('[Export] No images loaded - cannot export empty configuration');
+        showToast('⚠️ Load images first', 'warning');
+        return;
+    }
+
     console.log('Exporting JSON configuration...');
 
     // Collect configuration
@@ -2458,6 +2480,13 @@ function importJSON(file) {
 }
 
 function copyJSON() {
+    // Check if images are loaded
+    if (imageStack.length === 0) {
+        console.warn('[Export] No images loaded - cannot copy empty configuration');
+        showToast('⚠️ Load images first', 'warning');
+        return;
+    }
+
     console.log('Copying JSON configuration to clipboard...');
 
     // Build config object (same as exportJSON)
