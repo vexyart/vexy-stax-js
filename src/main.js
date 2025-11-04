@@ -2069,6 +2069,7 @@ function addImageToStack(texture, filename) {
     // Store in stack
     const imageData = {
         mesh: mesh,
+        texture: texture,
         filename: filename,
         width: planeWidth,
         height: planeHeight,
@@ -2426,6 +2427,7 @@ function importJSON(file) {
                     // Store and add to scene
                     imageStack.push({
                         mesh: mesh,
+                        texture: texture,
                         filename: imageConfig.filename,
                         width: imageConfig.width,
                         height: imageConfig.height
@@ -2569,6 +2571,7 @@ function pasteJSON() {
 
                     imageStack.push({
                         mesh: mesh,
+                        texture: texture,
                         filename: imageConfig.filename,
                         width: imageConfig.width,
                         height: imageConfig.height,
