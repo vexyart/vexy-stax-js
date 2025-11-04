@@ -1,0 +1,21 @@
+{
+  "name": "vexy-stax-js",
+  "version": "0.1.0",
+  "description": "Browser-based tool for arranging PNG images along Z-axis in 3D space with Three.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build --outDir docs",
+    "preview": "vite preview"
+  },
+  "keywords": ["threejs", "3d", "image-stack", "visualization"],
+  "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
+  "license": "ISC",
+  "dependencies": {
+    "three": "^0.181.0",
+    "tweakpane": "^4.0.5"
+  },
+  "devDependencies": {
+    "vite": "^7.1.12"
+  }
+}
