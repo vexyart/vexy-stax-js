@@ -1,203 +1,30 @@
-# Vexy Stax JS - TODO
+# <!-- this_file: TODO.md -->
+# Vexy Stax JS – TODO
 
-## Phase 1: Core 3D Visualization ✅
+## Workstream A – Modular Refactor
+- [ ] Phase 0: Replace inline literals in `main.js` with imports from `core/constants.js`.
+- [ ] Phase 0: Route shared objects (scene, cameras, renderer, history, listeners) through `appState`.
+- [ ] Phase 0: Integrate `EventBus` placeholders for background, stack, and camera events.
+- [ ] Phase 0: Extend unit tests to cover constants, AppState flows, and EventBus helpers; record results in `WORK.md`.
+- [ ] Phase 1: Create `scene/SceneManager.js` and migrate renderer/loop initialisation.
+- [ ] Phase 1: Move lighting and floor logic into `scene/LightingManager.js` and `scene/FloorManager.js`.
+- [ ] Phase 2: Implement camera managers (`CameraManager`, `ControlsManager`, `ViewpointService`) and port fit-to-frame maths.
+- [ ] Phase 3: Introduce `images/ImageLoader.js`, `images/ImageStack.js`, and `materials` modules with unit tests.
+- [ ] Phase 4: Extract UI components (`ui/TweakpaneManager.js`, `ui/ImageListView.js`, `ui/Toast.js`) and centralise DOM listener utilities.
+- [ ] Phase 5: Split exporters, history, monitoring, and rebuild `api/DebugAPI.js`.
+- [ ] Phase 6: Trim `main.js` to orchestration, run full regression (`npm test`, `npm run build`), and document outcomes.
 
-- [x] Set up Three.js renderer
-- [x] Create perspective/orthographic/isometric cameras
-- [x] Add OrbitControls
-- [x] Implement image loading via file input
-- [x] Create image stacking along Z-axis
-- [x] Build Tweakpane UI
-- [x] Add camera mode controls
-- [x] Add Z-spacing slider
-- [x] Add background color picker
-- [x] Add transparent background toggle
-
-## Phase 2: Animation System ✅
-
-- [x] Add GSAP dependency (^3.13.0)
-- [x] Create src/camera/animation.js
-- [x] Implement CameraAnimator class
-- [x] Implement playHeroShot() method
-- [x] Add duration/holdTime/easing parameters
-- [x] Integrate with Tweakpane UI
-- [x] Add Play button for animation
-- [x] Implement ESC key cancellation
-- [x] Disable controls during animation
-- [x] Add toast notifications
-- [x] Expose window.vexyStax.playAnimation()
-- [x] Expose window.vexyStax.cancelAnimation()
-
-## Phase 3: Material System ✅
-
-- [x] Implement PBR materials with roughness/metalness
-- [x] Add 9 material presets
-- [x] Create Materials folder in Tweakpane
-- [x] Add roughness slider (0-1)
-- [x] Add metalness slider (0-1)
-- [x] Add thickness control
-- [x] Add border width control
-- [x] Add border color picker
-- [x] Add preset buttons to UI
-
-## Phase 4: Export/Import System ✅
-
-- [x] Implement JSON export with base64 images
-- [x] Add copy to clipboard functionality
-- [x] Add download JSON file
-- [x] Implement JSON import from clipboard
-- [x] Implement JSON import from file
-- [x] Implement PNG export (1x, 2x, 3x, 4x)
-- [x] Add Export folder to Tweakpane
-- [x] Expose window.vexyStax.exportPNG()
-
-## Phase 5: Debug API ✅
-
-- [x] Create window.vexyStax object
-- [x] Expose exportPNG(scale)
-- [x] Expose clearAll()
-- [x] Expose getImageStack()
-- [x] Expose undo() / redo()
-- [x] Expose showFPS(enabled)
-- [x] Expose loadSettings() / saveSettings() / resetSettings()
-- [x] Expose getStats()
-- [x] Expose playAnimation(config)
-- [x] Expose cancelAnimation()
-- [x] Expose help()
-- [x] Add loadConfig(config) method
-- [x] Update help text
-
-## Phase 6: Quality Improvements ✅
-
-- [x] Add loadConfig() API for Python automation
-- [x] Fix missing texture property (3 locations)
-- [x] Update help text with loadConfig
-- [x] Add CSS keyframes for toast animations
-- [x] Build successful (3-4s)
-- [x] Create PLAN.md
-- [x] Create TODO.md (this file)
-
-## Phase 6.5: Code Quality Iteration 4 ✅
-
-- [x] Fix memory leak in undo/redo - add texture disposal
-- [x] Add imageStack empty checks to prevent errors
-- [x] Standardize error messaging to use showToast consistently
-
-## Phase 6.6: Code Quality Iteration 5 ✅
-
-- [x] Fix event listener memory leak in updateImageList()
-- [x] Refactor duplicated image loading logic in cli.py (Python)
-- [x] Add error handling for empty folders in cli.py (Python)
-
-## Phase 7: Code Refactoring ⏳
-
-**Goal**: Split main.js (3,321 lines) into 25 modular files
-**Plan**: See `REFACTOR_PLAN.md` for comprehensive 11-day refactoring strategy
-
-### Phase 7.1: Preparation (Foundation)
-- [ ] Create module directory structure (core/, scene/, camera/, images/, materials/, ui/, export/, utils/, api/)
-- [ ] Extract src/core/constants.js (~80 lines)
-- [ ] Create src/core/AppState.js (~120 lines) - Singleton state manager
-- [ ] Create src/core/EventBus.js (~60 lines) - Module communication
-- [ ] Update main.js to import constants
-- [ ] Test: Build succeeds, app works
-
-### Phase 7.2: Scene Management
-- [ ] Extract src/scene/SceneManager.js (~150 lines) - Scene, renderer, render loop
-- [ ] Extract src/scene/LightingManager.js (~100 lines) - Lights, adaptive intensity
-- [ ] Extract src/scene/FloorManager.js (~200 lines) - Floor, reflections, ambience
-- [ ] Update main.js to use scene managers
-- [ ] Test: Scene renders, lights work, ambience works
-
-### Phase 7.3: Camera System
-- [ ] Extract src/camera/CameraManager.js (~180 lines) - Camera modes, FOV, zoom
-- [ ] Extract src/camera/ViewpointPresets.js (~120 lines) - Viewpoint calculations
-- [ ] Extract src/camera/ControlsManager.js (~80 lines) - OrbitControls wrapper
-- [ ] Update main.js to use camera managers
-- [ ] Test: Camera modes, viewpoints, controls work
-
-### Phase 7.4: Image Management
-- [ ] Extract src/images/ImageLoader.js (~180 lines) - File validation, loading
-- [ ] Extract src/images/ImageStack.js (~150 lines) - Stack management
-- [ ] Extract src/images/DragDropHandler.js (~100 lines) - Drag-and-drop
-- [ ] Update main.js
-- [ ] Test: Image loading, stack updates, drag-drop works
-
-### Phase 7.5: Materials
-- [ ] Extract src/materials/presets.js (~80 lines) - Preset definitions
-- [ ] Extract src/materials/MaterialManager.js (~200 lines) - PBR, thickness
-- [ ] Extract src/materials/BorderManager.js (~100 lines) - Border generation
-- [ ] Update main.js
-- [ ] Test: All presets, materials apply correctly
-
-### Phase 7.6: User Interface (Biggest)
-- [ ] Extract src/ui/Toast.js (~80 lines) - Toast notifications
-- [ ] Extract src/ui/ImageListUI.js (~200 lines) - Image list rendering
-- [ ] Extract src/ui/TweakpaneManager.js (~400 lines) - UI initialization
-- [ ] Update main.js
-- [ ] Test: UI works, controls update, image list works
-
-### Phase 7.7: Export/Import
-- [ ] Extract src/export/PNGExporter.js (~120 lines) - PNG export
-- [ ] Extract src/export/JSONExporter.js (~250 lines) - JSON import/export
-- [ ] Update main.js
-- [ ] Test: PNG export, JSON export/import work
-
-### Phase 7.8: Utilities
-- [ ] Extract src/utils/helpers.js (~60 lines) - Color, math utilities
-- [ ] Extract src/utils/HistoryManager.js (~120 lines) - Undo/redo
-- [ ] Extract src/utils/FPSMonitor.js (~100 lines) - FPS tracking
-- [ ] Extract src/utils/MemoryTracker.js (~80 lines) - Memory monitoring
-- [ ] Update main.js
-- [ ] Test: Undo/redo, FPS, memory tracking work
-
-### Phase 7.9: Debug API
-- [ ] Extract src/api/DebugAPI.js (~150 lines) - window.vexyStax interface
-- [ ] Update main.js
-- [ ] Test: window.vexyStax works, Python automation works
-
-### Phase 7.10: Final Cleanup
-- [ ] Rewrite main.js as clean entry point (~180 lines)
-- [ ] Remove duplicate code
-- [ ] Add JSDoc comments to all modules
-- [ ] Full integration test of all features
-- [ ] Test with Python automation
-- [ ] Verify bundle size unchanged or smaller
-
-## Phase 8: Video Export ⏳
-
-- [ ] Research MediaRecorder API
-- [ ] Implement canvas.captureStream(60)
-- [ ] Create video recording module
-- [ ] Add "Record Video" button to UI
-- [ ] Test video recording with animation
-- [ ] Add codec selection (VP9, H264)
-- [ ] Expose window.vexyStax.recordAnimation()
-- [ ] Handle browser compatibility
-
-## Build & Deployment 🔄
-
-- [x] Configure Vite for production build
-- [x] Set up docs/ directory for GitHub Pages
-- [x] Create dev.sh helper script
-- [x] Create build.sh helper script
-- [ ] Test production build
-- [ ] Deploy to GitHub Pages
-- [ ] Verify all features work in production
-
-## Documentation ⏳
-
-- [ ] Update README.md if needed
-- [ ] Document window.vexyStax API
-- [ ] Add code comments for complex sections
-- [ ] Create usage examples
-- [ ] Document keyboard shortcuts
-
-## Testing ⏳
-
-- [ ] Test with Python automation
-- [ ] Test all material presets
-- [ ] Test JSON export/import round-trip
+## Workstream B – Layout & UX Overhaul
+- [ ] Phase L1: Build flex-based layout with left slide strip, centred studio panel, and right Tweakpane.
+- [ ] Phase L1: Ensure studio panel is vertically centred and accounts for fixed side-panel widths.
+- [ ] Phase L2: Implement retina-aware studio sizing helpers and hook them into resize/UI flows.
+- [ ] Phase L2: Surface UI messaging explaining retina (“logical pixels”) vs device pixels.
+- [ ] Phase L3: Redesign slide thumbnails as a minimal docked strip with tooltip metadata on hover/focus.
+- [ ] Phase L3: Add auto-scroll behaviour when dragging near strip edges.
+- [ ] Phase L4: Promote drag/drop listeners to window scope so files can be dropped anywhere.
+- [ ] Phase L4: Enable thumbnail drag reordering with `ImageStack` updates and EventBus notifications.
+- [ ] Phase L4: Validate keyboard accessibility for reordering or provide explicit fallback controls.
+- [ ] Phase L4: Run manual smoke checks (drop anywhere, reorder, retina clarity) and capture results in `WORK.md`.
 - [ ] Test PNG export at all resolutions
 - [ ] Test animation system
 - [ ] Test on multiple browsers (Chrome, Firefox, Safari)

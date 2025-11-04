@@ -1,203 +1,77 @@
-# Vexy Stax JS - Implementation Plan
+# <!-- this_file: PLAN.md -->
+# Vexy Stax JS – Implementation Plan
 
-**One-sentence scope**: Browser-based 3D image stack visualization with GSAP animations, PBR materials, and JSON export/import.
+## One-Sentence Scope
+Maintainable Three.js studio for stacking 2D artwork, animating cameras, and exporting PNG/JSON assets to support the vexy-stax toolchain.
 
-## Core Objectives
+## Active Workstreams
 
-1. **3D Visualization**: Three.js-based image stacking with camera controls
-2. **Animation System**: GSAP-powered hero shot animations  
-3. **Material Presets**: 9 PBR material presets for different looks
-4. **JSON Export/Import**: Save and load complete configurations
-5. **Debug API**: Automation-friendly window.vexyStax interface
+### Workstream A – Modular Refactor of `src/main.js`
+- **Goal**: Replace the monolith with cohesive ES modules while keeping feature parity and enabling targeted testing.
+- **Phase 0 – Foundation (remaining)**:
+  - Finalise use of `src/core/constants.js` everywhere; delete duplicate literals in `main.js`.
+  - Replace ad-hoc globals with `appState` accessors and persist shared objects (scene, cameras, renderer, history) through the singleton.
+  - Introduce `EventBus` wiring points for inter-module communication (background updates, image stack changes, camera events).
+  - Expand unit coverage (`tests/`) to guard `constants`, `AppState`, and `EventBus` helpers.
+  - Deliverable: `npm test`, `npm run build`, documentation updates (`WORK.md`, `CHANGELOG.md`).
+- **Phase 1 – Scene & Loop**:
+  - Extract renderer/scene bootstrap and animation loop into `scene/SceneManager.js`.
+  - Move lighting and ambience toggles into `scene/LightingManager.js`/`scene/FloorManager.js`.
+  - Provide pure helpers (luminance, reflector sizing) that can be unit tested.
+  - Ensure resize/context-loss logic references AppState rather than file-level variables.
+- **Phase 2 – Camera System**:
+  - Create `camera/CameraManager.js`, `camera/ControlsManager.js`, `camera/ViewpointService.js`.
+  - Port zoom/FOV syncing, fit-to-frame maths, and hero-shot hooks; design pure functions for camera positioning to test with Node.
+- **Phase 3 – Assets & Materials**:
+  - Implement `images/ImageLoader.js` (validation + retry) and `images/ImageStack.js` (mesh lifecycle).
+  - Extract material presets to `materials/presets.js` and application logic to `materials/MaterialManager.js`.
+  - Add tests for ordering, preset defaults, and retry fallbacks.
+- **Phase 4 – UI & Interaction**:
+  - Move Tweakpane wiring into `ui/TweakpaneManager.js`.
+  - Build dockable image list view and toast manager modules ready for upcoming UX overhaul.
+  - Centralise tracked listeners in `utils/dom.js`.
+- **Phase 5 – Export, History, Monitoring, API**:
+  - Split history handling, monitoring, and exporters into dedicated modules.
+  - Rebuild `api/DebugAPI.js` to compose the public surface from module instances.
+- **Phase 6 – Entry Orchestration**:
+  - Reduce `main.js` to instantiation + wiring.
+  - Run full regression (`npm test`, `npm run build`, manual smoke checklist) and document results.
 
-## Architecture
+### Workstream B – Layout & UX Overhaul (Retina Studio + Docked Panels)
+- **Requirement Summary**: Retina-aware studio sizing, studio frame centered between a left-aligned slide strip and right-aligned Tweakpane, full-window drag-and-drop, minimalist thumbnail list with hover tooltips, and draggable reordering.
+- **Research Recap** (Perplexity 2025-11-04): Flexbox three-column layouts best center content between fixed panels; global drag-and-drop needs window-level listeners; retina canvases must size the drawing buffer to CSS size × `devicePixelRatio`.
+- **Phase L1 – Layout Scaffold**:
+  - Create `layout.css` (or extend existing) to implement a `display:flex` root with `slides-panel`, `studio-panel`, and `controls-panel`.
+  - Move the slides list DOM to the left edge; ensure panels respect min-widths and allow vertical centering via `align-items:center`.
+  - Update HTML structure (`index.html`) to wrap canvas + overlays inside a flex container.
+  - Success criteria: Studio panel is vertically centered, horizontal centering accounts for left/right panel widths.
+- **Phase L2 – Retina Studio Sizing**:
+  - Define studio dimensions in logical pixels; compute rendering resolution as `cssSize * devicePixelRatio`.
+  - Update resize handler to map UI inputs (e.g., 1920×1080) to CSS width/height while creating a `renderer.setSize(width * dpr, height * dpr, false)`.
+  - Provide UI feedback (e.g., label) explaining retina scaling.
+  - Add tests for helper functions translating logical to physical pixels.
+- **Phase L3 – Slide Tray Redesign**:
+  - Rebuild slide list markup as a single-column docked strip with minimal chrome (no nested frames).
+  - Render thumbnails at reduced size (configurable constant); defer heavy details to tooltip content using native title or a custom tooltip component.
+  - Integrate auto-scroll when dragging near list edges.
+- **Phase L4 – Drag-and-Drop & Drop Targets**:
+  - Expand drop handlers to listen on `window` (or a transparent overlay) so files can be dropped anywhere.
+  - Implement draggable thumbnails via pointer events or an accessible drag-drop library while keeping ordering synced with `ImageStack`.
+  - Ensure keyboard accessibility (focus + arrow drag) remains possible or provide fallback buttons.
+  - Wire change events through EventBus so scene/order updates remain decoupled.
+- **Testing & Validation**:
+  - Automated: node tests for pixel conversion helpers and ordering logic.
+  - Manual smoke: verify drag-drop anywhere, reorder via drag, tooltip details, retina clarity at 1920×1080, centering with varying window sizes.
+  - Regression: `npm test`, `npm run build`, cross-browser check (Chromium/WebKit) for pointer/drag events.
+- **Risks & Mitigations**:
+  - Retina rendering may increase GPU load → expose toggle or cap max resolution.
+  - Drag-and-drop conflicts with browser default behaviors → prevent default on `dragover`/`drop` for document.
+  - Tooltip accessibility → ensure hover + focus both reveal metadata.
 
-```
-User Interface (Tweakpane)
-    ↓
-Main Application (main.js)
-    ↓
-Three.js Scene → GSAP Animation → Export System
-    ↓
-window.vexyStax API (for Python automation)
-```
-
-## Implementation Status
-
-### ✅ Phase 1: Core 3D Visualization (COMPLETE)
-
-**Scene Setup**:
-- Three.js renderer with WebGL
-- Perspective/Orthographic/Isometric camera modes
-- OrbitControls for user interaction
-- Image stacking along Z-axis
-
-**Image Loading**:
-- File input for PNG upload
-- Multiple image support
-- Maintains imageStack array
-- Texture management with Three.js
-
-**UI Controls** (Tweakpane):
-- Camera mode selector
-- FOV/Zoom controls
-- Z-spacing slider
-- Background color picker
-- Transparent background toggle
-
-### ✅ Phase 2: Animation System (COMPLETE)
-
-**GSAP Integration** (`src/camera/animation.js`):
-- CameraAnimator class
-- playHeroShot() method
-- Tween to hero position → Hold → Return
-- Duration/holdTime/easing parameters
-- ESC key cancellation
-
-**UI Integration**:
-- Animation folder in Tweakpane
-- Play button triggers animation
-- Disable controls during playback
-- Toast notifications for feedback
-
-**Debug API**:
-- `window.vexyStax.playAnimation(config)`
-- `window.vexyStax.cancelAnimation()`
-
-### ✅ Phase 3: Material System (COMPLETE)
-
-**PBR Materials** (9 presets):
-1. Flat Matte (roughness: 1.0, metalness: 0)
-2. Soft Satin (roughness: 0.7, metalness: 0)
-3. Glossy Photo (roughness: 0.3, metalness: 0)
-4. Glass Clear (roughness: 0.1, metalness: 0)
-5. Brushed Metal (roughness: 0.5, metalness: 0.9)
-6. Polished Metal (roughness: 0.2, metalness: 1.0)
-7. Thick Card (thickness: 20, border: 2px)
-8. Thin Film (thickness: 1, border: 0)
-9. Framed Print (thickness: 10, border: 5px)
-
-**Material Controls**:
-- Roughness slider (0-1)
-- Metalness slider (0-1)
-- Thickness slider
-- Border width/color
-- Preset buttons for quick apply
-
-### ✅ Phase 4: Export/Import System (COMPLETE)
-
-**JSON Export**:
-- Includes all images (base64 embedded)
-- Camera position
-- Material settings
-- App parameters
-- Copy to clipboard or download
-
-**JSON Import**:
-- Paste from clipboard
-- Load from file
-- Restores full state
-
-**PNG Export**:
-- 1x, 2x, 3x, 4x resolution options
-- Preserves transparency
-- Canvas-based rendering
-
-**Debug API**:
-- `window.vexyStax.exportPNG(scale)`
-- `window.vexyStax.loadConfig(config)`
-
-### ✅ Phase 5: Debug API (COMPLETE)
-
-**Exposed Methods**:
-- `exportPNG(scale)` - Export PNG at scale
-- `clearAll()` - Remove all images
-- `getImageStack()` - Get image info
-- `undo()` / `redo()` - History navigation
-- `showFPS(enabled)` - Toggle FPS counter
-- `loadSettings()` / `saveSettings()` / `resetSettings()`
-- `getStats()` - Memory and image statistics
-- `loadConfig(config)` - Load JSON config programmatically
-- `playAnimation(config)` - Play hero shot
-- `cancelAnimation()` - Stop animation
-- `help()` - Show API documentation
-
-### 🔄 Phase 6: Quality Improvements (CURRENT)
-
-**Completed**:
-- ✅ Added loadConfig() API method for Python automation
-- ✅ Fixed missing texture property in imageStack (3 locations)
-- ✅ Updated help text with new API method
-
-**In Progress**:
-- 🔄 Create PLAN.md (this file)
-- 🔄 Create TODO.md (next)
-
-### ⏳ Phase 7: Code Refactoring (READY TO START)
-
-**Issue**: main.js is 3,321 lines - violates CLAUDE.md complexity guidelines (files > 200 lines)
-
-**Solution**: Split into 25 modular ES6 files following Single Responsibility Principle
-
-**Comprehensive Plan**: See `REFACTOR_PLAN.md` for detailed 11-day refactoring strategy
-
-**High-Level Structure**:
-```
-src/
-├── main.js (~180 lines - entry point)
-├── core/ (AppState, constants, EventBus)
-├── scene/ (SceneManager, LightingManager, FloorManager)
-├── camera/ (CameraManager, ViewpointPresets, ControlsManager, animation.js✅)
-├── images/ (ImageLoader, ImageStack, DragDropHandler)
-├── materials/ (presets, MaterialManager, BorderManager)
-├── ui/ (TweakpaneManager, ImageListUI, Toast)
-├── export/ (PNGExporter, JSONExporter)
-├── utils/ (helpers, HistoryManager, FPSMonitor, MemoryTracker)
-└── api/ (DebugAPI)
-```
-
-**Benefits**:
-- Maintainability: Find any feature in <10 seconds
-- Testing: Each module unit-testable
-- Collaboration: Work on modules independently
-- Performance: Optimize individual modules
-- Future: Clean place to add video export
-
-**Strategy**: Phase-by-phase (10 phases), each phase tested and committed separately
-
-**Timeline**: 11 days (2-3 weeks with testing)
-
-### ⏳ Phase 8: Video Export (FUTURE)
-
-**Goal**: Export 60fps video of animation
-
-**Approach**: MediaRecorder API
-```javascript
-async function recordAnimation() {
-  const stream = canvas.captureStream(60);
-  const recorder = new MediaRecorder(stream, {
-    mimeType: 'video/webm;codecs=vp9',
-    videoBitsPerSecond: 5000000
-  });
-  
-  // Trigger animation
-  await cameraAnimator.playHeroShot(...);
-  
-  // Download video
-  recorder.stop();
-}
-```
-
-**UI**: Add "Record Video" button in Animation folder
-
-**Debug API**: `window.vexyStax.recordAnimation(config)`
-
-## Dependencies
-
-| Package | Version | Purpose | Status |
-|---------|---------|---------|--------|
-| three | ^0.181.0 | 3D rendering | ✅ Added |
-| gsap | ^3.13.0 | Animation | ✅ Added |
+## Testing Strategy
+- `npm test` (Node test runner) after each phase shift.
+- `npm run build` to validate Vite bundling.
+- Manual checklist covering image import, undo/redo, animation, exports, and new layout interactions.
 | tweakpane | ^4.0.5 | UI controls | ✅ Added |
 | vite | ^7.1.12 | Build tool | ✅ Configured |
 
