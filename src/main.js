@@ -501,6 +501,86 @@ function exposeDebugAPI() {
             cameraAnimator.cancel();
         },
 
+        // JSON configuration
+        loadConfig: (config) => {
+            console.log('[API] Loading configuration from object');
+
+            try {
+                // Validate config
+                if (!config.version || !config.params || !config.images) {
+                    throw new Error('Invalid config format');
+                }
+
+                // Clear existing
+                clearAll();
+
+                // Apply params
+                params.zSpacing = config.params.zSpacing;
+                params.bgColor = config.params.bgColor;
+                if (config.params.cameraMode) params.cameraMode = config.params.cameraMode;
+                if (config.params.cameraFOV) params.cameraFOV = config.params.cameraFOV;
+
+                // Update scene background
+                scene.background = new THREE.Color(params.bgColor);
+
+                // Update camera
+                if (config.camera && config.camera.position) {
+                    camera.position.set(
+                        config.camera.position.x,
+                        config.camera.position.y,
+                        config.camera.position.z
+                    );
+                    camera.lookAt(0, 0, 0);
+                    controls.update();
+                }
+
+                // Load images
+                const textureLoader = new THREE.TextureLoader();
+                config.images.forEach((imageConfig, index) => {
+                    textureLoader.load(imageConfig.dataURL, (texture) => {
+                        // Create geometry with saved dimensions
+                        const geometry = new THREE.PlaneGeometry(
+                            imageConfig.width,
+                            imageConfig.height
+                        );
+
+                        // Create material
+                        const material = new THREE.MeshBasicMaterial({
+                            map: texture,
+                            side: THREE.DoubleSide,
+                            transparent: true
+                        });
+
+                        // Create mesh
+                        const mesh = new THREE.Mesh(geometry, material);
+                        mesh.position.z = index * params.zSpacing;
+
+                        // Store and add to scene
+                        imageStack.push({
+                            mesh: mesh,
+                            texture: texture,
+                            filename: imageConfig.filename,
+                            width: imageConfig.width,
+                            height: imageConfig.height
+                        });
+
+                        scene.add(mesh);
+
+                        console.log(`[API] Loaded ${imageConfig.filename} from config`);
+                    });
+                });
+
+                // Refresh Tweakpane
+                pane.refresh();
+
+                console.log('[API] Configuration loaded successfully');
+
+            } catch (error) {
+                console.error('[API] Failed to load configuration:', error);
+                throw error;
+            }
+        },
+
         // Help
         help: () => {
             console.log(`
@@ -517,6 +597,7 @@ Available commands:
   vexyStax.saveSettings()    - Save current settings
   vexyStax.resetSettings()   - Reset to default settings
   vexyStax.getStats()        - Get memory and image statistics
+  vexyStax.loadConfig(config) - Load JSON configuration object
   vexyStax.playAnimation(config) - Play hero shot animation (config: { duration, holdTime, easing })
   vexyStax.cancelAnimation() - Cancel current animation
   vexyStax.help()            - Show this help
@@ -526,6 +607,7 @@ Example usage:
   vexyStax.showFPS(true)     // Enable FPS counter
   vexyStax.undo()            // Undo last action
   vexyStax.getStats()        // Check current state
+  vexyStax.loadConfig(config) // Load config from JSON object
   vexyStax.playAnimation({ duration: 2, holdTime: 1.5 }) // Custom animation
   vexyStax.cancelAnimation() // Stop current animation
             `,
