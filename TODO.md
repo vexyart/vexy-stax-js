@@ -77,11 +77,11 @@
 - [x] Create PLAN.md
 - [x] Create TODO.md (this file)
 
-## Phase 6.5: Code Quality Iteration 4 🔄
+## Phase 6.5: Code Quality Iteration 4 ✅
 
-- [ ] Fix memory leak in undo/redo - add texture disposal
-- [ ] Add imageStack empty checks to prevent errors
-- [ ] Standardize error messaging to use showToast consistently
+- [x] Fix memory leak in undo/redo - add texture disposal
+- [x] Add imageStack empty checks to prevent errors
+- [x] Standardize error messaging to use showToast consistently
 
 ## Phase 7: Code Refactoring ⏳
 
