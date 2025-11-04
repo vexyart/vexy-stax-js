@@ -10,7 +10,7 @@
   },
   "keywords": ["threejs", "3d", "image-stack", "visualization"],
   "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "dependencies": {
     "gsap": "^3.13.0",
     "three": "^0.181.0",
