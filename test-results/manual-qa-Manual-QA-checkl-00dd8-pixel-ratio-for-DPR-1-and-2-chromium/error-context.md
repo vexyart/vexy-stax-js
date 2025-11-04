@@ -1,0 +1,139 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - complementary [ref=e3]:
+      - button "+" [ref=e5] [cursor=pointer]
+    - main [ref=e6]
+    - complementary [ref=e9]:
+      - generic [ref=e11]:
+        - button "Vexy-Stax Controls" [ref=e12] [cursor=pointer]:
+          - generic [ref=e13]: Vexy-Stax Controls
+        - generic [ref=e15]:
+          - generic [ref=e16]:
+            - button "Studio" [ref=e17] [cursor=pointer]:
+              - generic [ref=e18]: Studio
+            - generic [ref=e21]:
+              - generic [ref=e22]:
+                - generic [ref=e23]: Size
+                - generic [ref=e26]:
+                  - button [ref=e27] [cursor=pointer]:
+                    - img [ref=e28]
+                  - generic [ref=e31]:
+                    - textbox [ref=e34]: "1920"
+                    - textbox [ref=e38]: "1080"
+              - generic [ref=e40]:
+                - generic [ref=e41]: Color
+                - generic [ref=e43]:
+                  - generic [ref=e44]:
+                    - button [ref=e48] [cursor=pointer]
+                    - textbox [ref=e51]: "#000000"
+                  - generic [ref=e62]:
+                    - generic [ref=e63]:
+                      - combobox [ref=e64] [cursor=pointer]:
+                        - option "RGB" [selected]
+                        - option "HSL"
+                        - option "HSV"
+                        - option "HEX"
+                      - generic:
+                        - img
+                    - generic [ref=e65]:
+                      - textbox [ref=e68]: "0"
+                      - textbox [ref=e72]: "0"
+                      - textbox [ref=e76]: "0"
+              - generic [ref=e78]:
+                - generic [ref=e79]: Transparent
+                - generic [ref=e82]:
+                  - checkbox
+                  - img [ref=e84] [cursor=pointer]
+              - generic [ref=e86]:
+                - generic [ref=e87]: Ambience
+                - generic [ref=e90]:
+                  - checkbox
+                  - img [ref=e92] [cursor=pointer]
+          - generic [ref=e94]:
+            - button "Camera" [ref=e95] [cursor=pointer]:
+              - generic [ref=e96]: Camera
+            - generic [ref=e99]:
+              - generic [ref=e100]:
+                - generic [ref=e101]: Viewpoint
+                - generic [ref=e103]:
+                  - combobox [ref=e104] [cursor=pointer]:
+                    - option "Beauty"
+                    - option "Center"
+                    - option "Front" [selected]
+                    - option "Top"
+                    - option "Isometric"
+                    - option "3D Stack"
+                    - option "Side"
+                  - generic:
+                    - img
+              - generic [ref=e105]:
+                - generic [ref=e106]: Mode
+                - generic [ref=e108]:
+                  - combobox [ref=e109] [cursor=pointer]:
+                    - option "Perspective" [selected]
+                    - option "Orthographic"
+                    - option "Isometric"
+                    - option "Telephoto"
+                  - generic:
+                    - img
+              - generic [ref=e110]:
+                - generic [ref=e111]: Zoom
+                - textbox [ref=e120]: "1.0"
+              - generic [ref=e122]:
+                - generic [ref=e123]: FOV
+                - textbox [ref=e132]: "75"
+          - generic [ref=e134]:
+            - button "Slides" [ref=e135] [cursor=pointer]:
+              - generic [ref=e136]: Slides
+            - generic [ref=e139]:
+              - generic [ref=e140]:
+                - generic [ref=e141]: Material
+                - generic [ref=e143]:
+                  - combobox [ref=e144] [cursor=pointer]:
+                    - option "Metallic Card" [selected]
+                    - option "Flat Matte"
+                    - option "Glossy Photo"
+                    - option "Plastic Card"
+                    - option "Thick Board"
+                    - option "Metal Sheet"
+                    - option "Glass Slide"
+                    - option "Matte Print"
+                    - option "Bordered"
+                    - option "3D Box"
+                  - generic:
+                    - img
+              - generic [ref=e145]:
+                - generic [ref=e146]: Distance
+                - textbox [ref=e155]: "100"
+          - generic [ref=e157]:
+            - generic [ref=e158]:
+              - button "File" [ref=e160]:
+                - generic [ref=e161]: File
+              - button "Image" [ref=e163]:
+                - generic [ref=e164]: Image
+              - button "Video" [ref=e166]:
+                - generic [ref=e167]: Video
+            - generic [ref=e171]:
+              - generic [ref=e172]:
+                - generic [ref=e173]: JSON
+                - generic [ref=e175]:
+                  - button "Open" [ref=e177] [cursor=pointer]:
+                    - generic [ref=e178]: Open
+                  - button "Paste" [ref=e180] [cursor=pointer]:
+                    - generic [ref=e181]: Paste
+                  - button "Save" [ref=e183] [cursor=pointer]:
+                    - generic [ref=e184]: Save
+                  - button "Copy" [ref=e186] [cursor=pointer]:
+                    - generic [ref=e187]: Copy
+              - generic [ref=e188]:
+                - generic [ref=e189]: Tools
+                - generic [ref=e191]:
+                  - button "Defaults" [ref=e193] [cursor=pointer]:
+                    - generic [ref=e194]: Defaults
+                  - button "Clear" [ref=e196] [cursor=pointer]:
+                    - generic [ref=e197]: Clear
+  - generic: Drop images to load
+```
