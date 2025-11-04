@@ -1,521 +1,302 @@
 # Vexy Stax JS - Implementation Plan
 
-**Purpose**: Browser-based 3D image stacking visualizer with animation and export
-
----
+**One-sentence scope**: Browser-based 3D image stack visualization with GSAP animations, PBR materials, and JSON export/import.
 
 ## Core Objectives
 
-1. **3D Visualization**: Interactive Three.js-based image stacking in 3D space
-2. **Animation System**: GSAP-driven camera animations with "hero shot" feature
-3. **Video Export**: Capture animations as WebM/MP4 video files
-4. **Modular Architecture**: Refactor 2,400-line monolith into maintainable modules
-5. **Material System**: Already implemented ✅ (9 presets)
+1. **3D Visualization**: Three.js-based image stacking with camera controls
+2. **Animation System**: GSAP-powered hero shot animations  
+3. **Material Presets**: 9 PBR material presets for different looks
+4. **JSON Export/Import**: Save and load complete configurations
+5. **Debug API**: Automation-friendly window.vexyStax interface
 
----
+## Architecture
 
-## Current State Analysis
-
-### ✅ Already Implemented
-- Three.js 3D rendering with PBR materials
-- 4 camera modes (Perspective, Orthographic, Isometric, Telephoto)
-- 9 material presets (Flat Matte, Glossy Photo, Plastic Card, etc.)
-- Image loading (drag-and-drop, file browser)
-- PNG export (1x, 2x, 4x resolution)
-- JSON config export/import
-- Undo/redo system (10-state history)
-- Keyboard shortcuts
-- FPS monitoring
-- Memory management
-- WebGL context recovery
-
-### ❌ Needs Implementation
-- Animation system (GSAP-based camera tweens)
-- Video export (MediaRecorder API)
-- Modular code structure (break up 2,400-line main.js)
-- Build scripts (build.sh)
-
----
-
-## Architecture Refactoring
-
-### Current Structure (Monolithic)
 ```
-src/
-└── main.js  # 2,400 lines - everything in one file
+User Interface (Tweakpane)
+    ↓
+Main Application (main.js)
+    ↓
+Three.js Scene → GSAP Animation → Export System
+    ↓
+window.vexyStax API (for Python automation)
 ```
 
-### Target Structure (Modular)
-```
-src/
-├── main.js                  # 200 lines - entry point + initialization
-├── core/
-│   ├── scene.js             # Scene, camera, renderer setup
-│   ├── lighting.js          # Lighting configuration
-│   └── controls.js          # Orbit controls setup
-├── ui/
-│   ├── tweakpane.js         # Tweakpane UI initialization
-│   ├── shortcuts.js         # Keyboard shortcuts
-│   └── toasts.js            # Toast notification system
-├── image/
-│   ├── loader.js            # Image loading (drag-drop, file input)
-│   ├── stack.js             # Image stack management
-│   └── materials.js         # Material presets + application
-├── camera/
-│   ├── modes.js             # Camera mode switching
-│   ├── viewpoints.js        # Preset viewpoints
-│   └── animation.js         # GSAP-based camera animations
-├── export/
-│   ├── png.js               # PNG export functionality
-│   ├── json.js              # JSON config export/import
-│   └── video.js             # Video capture + encoding
-├── state/
-│   ├── history.js           # Undo/redo system
-│   ├── settings.js          # localStorage persistence
-│   └── params.js            # Global parameters
-└── utils/
-    ├── performance.js       # FPS monitoring, memory checks
-    ├── recovery.js          # WebGL context loss recovery
-    └── validation.js        # File/image validation
-```
+## Implementation Status
 
-**Total Estimated Lines**: ~2,400 split into 23 focused modules (~100 lines each)
+### ✅ Phase 1: Core 3D Visualization (COMPLETE)
 
----
+**Scene Setup**:
+- Three.js renderer with WebGL
+- Perspective/Orthographic/Isometric camera modes
+- OrbitControls for user interaction
+- Image stacking along Z-axis
 
-## Phase 1: Animation System
+**Image Loading**:
+- File input for PNG upload
+- Multiple image support
+- Maintains imageStack array
+- Texture management with Three.js
 
-### 1.1 GSAP Integration
+**UI Controls** (Tweakpane):
+- Camera mode selector
+- FOV/Zoom controls
+- Z-spacing slider
+- Background color picker
+- Transparent background toggle
 
-**Goal**: Smooth camera animations with easing
+### ✅ Phase 2: Animation System (COMPLETE)
 
-**Dependencies**:
-- `gsap@3.13.0` (animation library)
-
-**Implementation**:
-```javascript
-// src/camera/animation.js
-import gsap from 'gsap';
-
-class CameraAnimator {
-    constructor(camera, controls) {
-        this.camera = camera;
-        this.controls = controls;
-        this.isAnimating = false;
-    }
-
-    async playHeroShot(params = {}) {
-        const {
-            duration = 1.5,
-            holdTime = 1.0,
-            ease = 'power2.inOut',
-            topSlidePosition = null
-        } = params;
-
-        if (this.isAnimating) return;
-
-        // Save current state
-        const savedState = this.saveState();
-
-        // Disable manual controls
-        this.controls.enabled = false;
-        this.isAnimating = true;
-
-        // Calculate hero shot camera position
-        const heroPosition = this.calculateHeroPosition(topSlidePosition);
-
-        // Animate to hero shot
-        await gsap.to(this.camera.position, {
-            ...heroPosition,
-            duration,
-            ease
-        });
-
-        // Hold at hero shot
-        await new Promise(resolve => setTimeout(resolve, holdTime * 1000));
-
-        // Return to original position
-        await gsap.to(this.camera.position, {
-            ...savedState.position,
-            duration,
-            ease
-        });
-
-        // Re-enable controls
-        this.controls.enabled = true;
-        this.isAnimating = false;
-    }
-
-    calculateHeroPosition(topSlide) {
-        // Position camera to fill viewport with top slide
-        const boundingBox = new THREE.Box3().setFromObject(topSlide);
-        const center = boundingBox.getCenter(new THREE.Vector3());
-        const size = boundingBox.getSize(new THREE.Vector3());
-
-        // Calculate distance for viewport fit
-        const fov = this.camera.fov * (Math.PI / 180);
-        const maxDim = Math.max(size.x, size.y);
-        const distance = maxDim / (2 * Math.tan(fov / 2));
-
-        return {
-            x: center.x,
-            y: center.y,
-            z: center.z + distance * 1.2
-        };
-    }
-
-    saveState() {
-        return {
-            position: { ...this.camera.position },
-            target: { ...this.controls.target },
-            zoom: this.camera.zoom
-        };
-    }
-}
-
-export default CameraAnimator;
-```
+**GSAP Integration** (`src/camera/animation.js`):
+- CameraAnimator class
+- playHeroShot() method
+- Tween to hero position → Hold → Return
+- Duration/holdTime/easing parameters
+- ESC key cancellation
 
 **UI Integration**:
-- Add "Animation" folder to Tweakpane
-- Add "Play Hero Shot" button
-- Add duration slider (0.5s - 5.0s)
-- Add hold time slider (0s - 3.0s)
+- Animation folder in Tweakpane
+- Play button triggers animation
+- Disable controls during playback
+- Toast notifications for feedback
 
----
+**Debug API**:
+- `window.vexyStax.playAnimation(config)`
+- `window.vexyStax.cancelAnimation()`
 
-### 1.2 Animation API
+### ✅ Phase 3: Material System (COMPLETE)
 
-**Expose to Debug API**:
-```javascript
-window.vexyStax.playAnimation = async (config) => {
-    await animator.playHeroShot(config);
-};
+**PBR Materials** (9 presets):
+1. Flat Matte (roughness: 1.0, metalness: 0)
+2. Soft Satin (roughness: 0.7, metalness: 0)
+3. Glossy Photo (roughness: 0.3, metalness: 0)
+4. Glass Clear (roughness: 0.1, metalness: 0)
+5. Brushed Metal (roughness: 0.5, metalness: 0.9)
+6. Polished Metal (roughness: 0.2, metalness: 1.0)
+7. Thick Card (thickness: 20, border: 2px)
+8. Thin Film (thickness: 1, border: 0)
+9. Framed Print (thickness: 10, border: 5px)
+
+**Material Controls**:
+- Roughness slider (0-1)
+- Metalness slider (0-1)
+- Thickness slider
+- Border width/color
+- Preset buttons for quick apply
+
+### ✅ Phase 4: Export/Import System (COMPLETE)
+
+**JSON Export**:
+- Includes all images (base64 embedded)
+- Camera position
+- Material settings
+- App parameters
+- Copy to clipboard or download
+
+**JSON Import**:
+- Paste from clipboard
+- Load from file
+- Restores full state
+
+**PNG Export**:
+- 1x, 2x, 3x, 4x resolution options
+- Preserves transparency
+- Canvas-based rendering
+
+**Debug API**:
+- `window.vexyStax.exportPNG(scale)`
+- `window.vexyStax.loadConfig(config)`
+
+### ✅ Phase 5: Debug API (COMPLETE)
+
+**Exposed Methods**:
+- `exportPNG(scale)` - Export PNG at scale
+- `clearAll()` - Remove all images
+- `getImageStack()` - Get image info
+- `undo()` / `redo()` - History navigation
+- `showFPS(enabled)` - Toggle FPS counter
+- `loadSettings()` / `saveSettings()` / `resetSettings()`
+- `getStats()` - Memory and image statistics
+- `loadConfig(config)` - Load JSON config programmatically
+- `playAnimation(config)` - Play hero shot
+- `cancelAnimation()` - Stop animation
+- `help()` - Show API documentation
+
+### 🔄 Phase 6: Quality Improvements (CURRENT)
+
+**Completed**:
+- ✅ Added loadConfig() API method for Python automation
+- ✅ Fixed missing texture property in imageStack (3 locations)
+- ✅ Updated help text with new API method
+
+**In Progress**:
+- 🔄 Create PLAN.md (this file)
+- 🔄 Create TODO.md (next)
+
+### ⏳ Phase 7: Code Refactoring (PENDING)
+
+**Issue**: main.js is 2,600+ lines (per 101.md Task 3)
+
+**Proposed Structure**:
+```
+src/
+├── main.js (100-200 lines - entry point)
+├── scene/
+│   ├── renderer.js
+│   ├── camera.js  
+│   └── lights.js
+├── images/
+│   ├── loader.js
+│   └── stack.js
+├── camera/
+│   ├── animation.js ✅ (already extracted)
+│   └── controls.js
+├── materials/
+│   ├── presets.js
+│   └── manager.js
+├── ui/
+│   ├── tweakpane.js
+│   └── toast.js
+├── export/
+│   ├── png.js
+│   └── json.js
+└── api/
+    └── debug.js
 ```
 
----
+**Refactoring Priority**:
+1. Extract UI (Tweakpane setup) - ~400 lines
+2. Extract export system - ~200 lines
+3. Extract material system - ~150 lines
+4. Extract scene setup - ~150 lines
+5. Extract image loading - ~100 lines
 
-## Phase 2: Video Export
+### ⏳ Phase 8: Video Export (FUTURE)
 
-### 2.1 Frame Capture
+**Goal**: Export 60fps video of animation
 
-**Goal**: Capture animation frames at 60 FPS
-
-**Implementation**:
+**Approach**: MediaRecorder API
 ```javascript
-// src/export/video.js
-class VideoExporter {
-    constructor(renderer, camera, scene) {
-        this.renderer = renderer;
-        this.camera = camera;
-        this.scene = scene;
-        this.frames = [];
-    }
-
-    async captureAnimation(animationFn, durationSeconds, fps = 60) {
-        this.frames = [];
-        const frameCount = Math.ceil(durationSeconds * fps);
-        const frameDelay = 1000 / fps;
-
-        for (let i = 0; i < frameCount; i++) {
-            // Render frame
-            this.renderer.render(this.scene, this.camera);
-
-            // Capture canvas as blob
-            const blob = await new Promise(resolve => {
-                this.renderer.domElement.toBlob(resolve, 'image/png');
-            });
-
-            this.frames.push(blob);
-
-            // Advance animation
-            await new Promise(resolve => setTimeout(resolve, frameDelay));
-        }
-
-        return this.frames;
-    }
-
-    async encodeToVideo(outputFormat = 'webm') {
-        // Use MediaRecorder API if supported
-        if (MediaRecorder.isTypeSupported('video/webm;codecs=vp9')) {
-            return this.encodeWithMediaRecorder();
-        } else {
-            // Fallback: export frames as ZIP
-            return this.exportFramesAsZip();
-        }
-    }
-
-    async encodeWithMediaRecorder() {
-        const canvas = this.renderer.domElement;
-        const stream = canvas.captureStream(60); // 60 FPS
-
-        const mediaRecorder = new MediaRecorder(stream, {
-            mimeType: 'video/webm;codecs=vp9',
-            videoBitsPerSecond: 8000000 // 8 Mbps
-        });
-
-        const chunks = [];
-        mediaRecorder.ondataavailable = e => chunks.push(e.data);
-
-        mediaRecorder.start();
-
-        // Play animation (triggers stream capture)
-        await animator.playHeroShot();
-
-        mediaRecorder.stop();
-
-        // Wait for all chunks
-        await new Promise(resolve => {
-            mediaRecorder.onstop = resolve;
-        });
-
-        // Create video blob
-        const blob = new Blob(chunks, { type: 'video/webm' });
-        return blob;
-    }
-
-    exportFramesAsZip() {
-        // Fallback for browsers without MediaRecorder
-        // Export frames as individual PNGs in a ZIP file
-        // (Implementation using JSZip library)
-    }
+async function recordAnimation() {
+  const stream = canvas.captureStream(60);
+  const recorder = new MediaRecorder(stream, {
+    mimeType: 'video/webm;codecs=vp9',
+    videoBitsPerSecond: 5000000
+  });
+  
+  // Trigger animation
+  await cameraAnimator.playHeroShot(...);
+  
+  // Download video
+  recorder.stop();
 }
-
-export default VideoExporter;
 ```
 
----
+**UI**: Add "Record Video" button in Animation folder
 
-### 2.2 UI Integration
-
-**Tweakpane Controls**:
-```javascript
-// Add to Export folder
-const videoFolder = exportFolder.addFolder({ title: 'Video', expanded: false });
-
-videoFolder.addButton({ title: 'Record Animation' }).on('click', async () => {
-    showToast('Recording animation...', 'info');
-
-    const exporter = new VideoExporter(renderer, camera, scene);
-
-    // Capture frames while playing animation
-    await exporter.captureAnimation(
-        () => animator.playHeroShot(),
-        4.5, // Total duration
-        60   // FPS
-    );
-
-    // Encode to video
-    const videoBlob = await exporter.encodeToVideo('webm');
-
-    // Download
-    const url = URL.createObjectURL(videoBlob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `vexy-stax-animation-${Date.now()}.webm`;
-    link.click();
-
-    showToast('✓ Video exported', 'success');
-});
-```
-
----
-
-## Phase 3: Code Refactoring
-
-### 3.1 Module Extraction Strategy
-
-**Approach**: Incremental refactoring
-1. Extract standalone utilities first (toasts, validation)
-2. Extract state management (history, settings)
-3. Extract major systems (image, camera, export)
-4. Refactor main.js to orchestrate modules
-
-### 3.2 Module Interfaces
-
-**Example: Image Stack Module**
-```javascript
-// src/image/stack.js
-class ImageStack {
-    constructor(scene) {
-        this.scene = scene;
-        this.images = [];
-    }
-
-    addImage(texture, filename) {
-        // Create mesh, add to scene
-    }
-
-    removeImage(index) {
-        // Remove mesh, dispose resources
-    }
-
-    reorderImages(oldIndex, newIndex) {
-        // Reorder stack, update Z positions
-    }
-
-    updateZSpacing(spacing) {
-        // Update all mesh Z positions
-    }
-
-    getImages() {
-        return this.images;
-    }
-
-    clear() {
-        // Remove all images
-    }
-}
-
-export default ImageStack;
-```
-
----
-
-### 3.3 Migration Plan
-
-**Step-by-step**:
-1. Create new module files
-2. Copy/paste relevant code sections
-3. Convert to class-based or functional modules
-4. Export public interface
-5. Import in main.js
-6. Test functionality unchanged
-7. Remove old code from main.js
-8. Repeat for next module
-
-**No breaking changes**: External API (`window.vexyStax`) remains unchanged
-
----
-
-## Phase 4: Build Scripts
-
-### 4.1 Build Script (`build.sh`)
-
-```bash
-#!/bin/bash
-set -e
-
-echo "Building vexy-stax-js..."
-
-# Install dependencies
-echo "Installing dependencies..."
-npm ci
-
-# Run build
-echo "Building for production..."
-npm run build
-
-# Verify output
-if [ ! -d "docs" ]; then
-    echo "Error: docs/ directory not created"
-    exit 1
-fi
-
-if [ ! -f "docs/index.html" ]; then
-    echo "Error: docs/index.html not found"
-    exit 1
-fi
-
-echo "✓ Build complete!"
-echo "  Output: docs/"
-echo "  Size: $(du -sh docs/ | cut -f1)"
-```
-
-### 4.2 Development Script (`dev.sh`)
-
-```bash
-#!/bin/bash
-
-echo "Starting vexy-stax-js development server..."
-
-# Install dependencies if needed
-if [ ! -d "node_modules" ]; then
-    echo "Installing dependencies..."
-    npm install
-fi
-
-# Start dev server
-npm run dev
-```
-
----
+**Debug API**: `window.vexyStax.recordAnimation(config)`
 
 ## Dependencies
 
-### New Dependencies
-```json
-{
-  "dependencies": {
-    "three": "^0.181.0",
-    "tweakpane": "^4.0.5",
-    "gsap": "^3.13.0"          // NEW: Animation
-  },
-  "devDependencies": {
-    "vite": "^7.1.12"
-  }
-}
+| Package | Version | Purpose | Status |
+|---------|---------|---------|--------|
+| three | ^0.181.0 | 3D rendering | ✅ Added |
+| gsap | ^3.13.0 | Animation | ✅ Added |
+| tweakpane | ^4.0.5 | UI controls | ✅ Added |
+| vite | ^7.1.12 | Build tool | ✅ Configured |
+
+**Why These Packages**:
+- Three.js: Industry standard for WebGL/3D
+- GSAP: Best animation library, deterministic easing
+- Tweakpane: Lightweight, beautiful UI controls
+- Vite: Fast development server, modern build tool
+
+## Build System
+
+**Development**:
+```bash
+npm run dev
+# Starts dev server at http://localhost:5173/vexy-stax-js/
 ```
 
----
+**Production**:
+```bash
+npm run build
+# Builds to docs/ directory for GitHub Pages
+```
 
-## Testing Strategy
+**Scripts**:
+- `dev.sh` - Helper script to start dev server
+- `build.sh` - Helper script to build for production
 
-### Manual Testing Checklist
-- [ ] Hero shot animation plays smoothly
-- [ ] Animation can be interrupted
-- [ ] Video export works in Chrome/Firefox/Safari
-- [ ] All modules load correctly
-- [ ] No regression in existing features
-- [ ] FPS maintains 60 during animation
-- [ ] Memory usage stable during export
+## Success Criteria
 
-### Automated Tests (Future)
-- Playwright E2E tests (via vexy-stax-py)
-- Visual regression testing
-- Performance benchmarks
+**Must Have** (✅ Complete):
+- ✅ 3D image stacking with Three.js
+- ✅ GSAP hero shot animation
+- ✅ 9 PBR material presets
+- ✅ JSON export/import with embedded images
+- ✅ PNG export at multiple resolutions
+- ✅ Debug API for automation
+- ✅ Responsive UI with Tweakpane
 
----
+**Should Have** (Current Focus):
+- 🔄 Comprehensive documentation (PLAN.md, TODO.md)
+- ⏳ Refactored codebase (<200 lines per file)
+- ⏳ Build scripts for easy deployment
 
-## Timeline
+**Nice to Have** (Future):
+- Video recording/export
+- Undo/redo history (partially implemented)
+- Keyboard shortcuts
+- Preset saving/loading
 
-- **Phase 1** (Animation): 1-2 days
-- **Phase 2** (Video Export): 2-3 days
-- **Phase 3** (Refactoring): 3-4 days
-- **Phase 4** (Build Scripts): 0.5 days
+## Non-Goals (RED LIST)
 
-**Total**: ~1.5 weeks for complete implementation
+Per CLAUDE.md guidelines, we **DO NOT** add:
+- ❌ Analytics/tracking
+- ❌ Performance monitoring dashboards
+- ❌ Advanced error recovery
+- ❌ Security hardening beyond basics
+- ❌ Health monitoring
+- ❌ Sophisticated caching
+- ❌ User authentication
+- ❌ Cloud storage integration
 
----
+## Integration with vexy-stax-py
 
-## Priority Order
+**Window API Contract**:
+- Python calls `window.vexyStax.loadConfig(config)`
+- Python calls `window.vexyStax.playAnimation(config)`
+- Python calls `window.vexyStax.exportPNG(scale)`
+- Python calls `window.vexyStax.getStats()`
 
-**Immediate (Week 1)**:
-1. Add GSAP dependency
-2. Implement basic hero shot animation
-3. Add animation UI controls
-4. Create build.sh script
+**Requirements**:
+- Dev server must run at localhost:5173 ✅
+- File input must accept PNG files ✅
+- API must be synchronous (or use Playwright waits) ✅
+- JSON format must match Python's expectations ✅
 
-**Near-term (Week 2)**:
-5. Implement video export
-6. Start code refactoring (utilities first)
-7. Continue refactoring (major systems)
+## Next Steps
 
-**Future**:
-8. Complete refactoring
-9. Add automated tests
-10. Performance optimization
+**Immediate**:
+1. ✅ Add loadConfig() API method
+2. ✅ Fix texture property bugs
+3. 🔄 Create PLAN.md (this file)
+4. 🔄 Create TODO.md
+5. ⏳ Update README.md if needed
 
----
+**Short Term**:
+- Refactor main.js into modules
+- Test with Python automation
+- Document API methods
 
-## Notes
+**Medium Term**:
+- Implement video export
+- Add more keyboard shortcuts
+- Improve material presets
 
-- Materials system already complete (9 presets) ✅
-- Keep existing features intact during refactoring
-- Animation should be interruptible (ESC key)
-- Video export is bonus feature (Phase 2)
-- Refactoring is ongoing (can be gradual)
-
----
-
-**Status**: Planning complete. Ready to start Phase 1 implementation.
+**Long Term**:
+- Deploy to GitHub Pages
+- Create demo videos
+- User documentation
