@@ -2,11 +2,13 @@
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Pane } from 'tweakpane';
+import { CameraAnimator } from './camera/animation.js';
 
 // Scene, Camera, Renderer
 let scene, camera, orthoCamera, renderer, controls;
 let canvas;
 let cameraMode = 'perspective'; // 'perspective', 'orthographic', 'isometric'
+let cameraAnimator; // Camera animation system
 
 // Image stack management
 let imageStack = [];
@@ -44,7 +46,11 @@ const params = {
     materialMetalness: 0.1,
     materialThickness: 1.0,  // Depth multiplier (1.0 = thin plane)
     materialBorderWidth: 0,  // Border width in pixels
-    materialBorderColor: '#ffffff'
+    materialBorderColor: '#ffffff',
+    // Animation properties
+    animDuration: 1.5,  // Tween duration in seconds
+    animHoldTime: 1.0,  // Hold time at hero position
+    animEasing: 'power2.inOut'  // GSAP easing function
 };
 
 // UI
@@ -168,6 +174,9 @@ function init() {
     controls.dampingFactor = 0.05;
     controls.minDistance = 100;
     controls.maxDistance = 3000;
+
+    // Initialize camera animator
+    cameraAnimator = new CameraAnimator(camera, controls);
 
     // Setup file input handler
     setupFileInput();
@@ -294,8 +303,17 @@ function setupKeyboardShortcuts() {
             return;
         }
 
-        // Close help with Esc
+        // Close help or cancel animation with Esc
         if (e.key === 'Escape') {
+            // Cancel animation first if one is playing
+            if (cameraAnimator && cameraAnimator.isAnimating) {
+                cameraAnimator.cancel();
+                showToast('Animation cancelled', 'info');
+                console.log('Animation cancelled via ESC');
+                return;
+            }
+
+            // Otherwise close help overlay
             if (helpOverlay && helpOverlay.style.display === 'block') {
                 helpOverlay.style.display = 'none';
                 console.log('Help closed');
@@ -441,6 +459,48 @@ function exposeDebugAPI() {
             return stats;
         },
 
+        // Animation
+        playAnimation: async (config = {}) => {
+            if (!cameraAnimator) {
+                console.error('[API] Camera animator not initialized');
+                return;
+            }
+
+            if (imageStack.length === 0) {
+                console.error('[API] No images loaded');
+                return;
+            }
+
+            const topSlide = imageStack[imageStack.length - 1];
+            const duration = config.duration || params.animDuration;
+            const holdTime = config.holdTime || params.animHoldTime;
+            const easing = config.easing || params.animEasing;
+
+            console.log(`[API] Playing hero shot animation (duration: ${duration}s, hold: ${holdTime}s, easing: ${easing})`);
+
+            try {
+                await cameraAnimator.playHeroShot({
+                    topSlide,
+                    duration,
+                    holdTime,
+                    easing
+                });
+                console.log('[API] Animation complete');
+            } catch (error) {
+                console.error('[API] Animation failed:', error);
+            }
+        },
+
+        cancelAnimation: () => {
+            if (!cameraAnimator) {
+                console.error('[API] Camera animator not initialized');
+                return;
+            }
+
+            console.log('[API] Cancelling animation');
+            cameraAnimator.cancel();
+        },
+
         // Help
         help: () => {
             console.log(`
@@ -457,6 +517,8 @@ Available commands:
   vexyStax.saveSettings()    - Save current settings
   vexyStax.resetSettings()   - Reset to default settings
   vexyStax.getStats()        - Get memory and image statistics
+  vexyStax.playAnimation(config) - Play hero shot animation (config: { duration, holdTime, easing })
+  vexyStax.cancelAnimation() - Cancel current animation
   vexyStax.help()            - Show this help
 
 Example usage:
@@ -464,6 +526,8 @@ Example usage:
   vexyStax.showFPS(true)     // Enable FPS counter
   vexyStax.undo()            // Undo last action
   vexyStax.getStats()        // Check current state
+  vexyStax.playAnimation({ duration: 2, holdTime: 1.5 }) // Custom animation
+  vexyStax.cancelAnimation() // Stop current animation
             `,
             'color: #00ff00; font-size: 16px; font-weight: bold',
             'color: #ccc'
@@ -1186,6 +1250,66 @@ function setupTweakpane() {
     viewFolder.addButton({ title: 'Side' }).on('click', () => {
         setViewpoint(800, 0, 0);
     });
+
+    // Animation folder
+    const animFolder = pane.addFolder({
+        title: 'Animation',
+        expanded: false
+    });
+
+    animFolder.addButton({ title: 'Play Hero Shot' }).on('click', async () => {
+        if (imageStack.length === 0) {
+            showToast('No images loaded', 'error');
+            return;
+        }
+
+        const topSlide = imageStack[imageStack.length - 1];
+        if (!topSlide) {
+            showToast('No top slide found', 'error');
+            return;
+        }
+
+        showToast('Playing hero shot animation...', 'info');
+
+        try {
+            await cameraAnimator.playHeroShot({
+                topSlide: topSlide,
+                duration: params.animDuration,
+                holdTime: params.animHoldTime,
+                easing: params.animEasing
+            });
+            showToast('Animation complete', 'success');
+        } catch (error) {
+            console.error('Animation error:', error);
+            showToast('Animation failed', 'error');
+        }
+    });
+
+    animFolder.addBinding(params, 'animDuration', {
+        label: 'Duration',
+        min: 0.5,
+        max: 5.0,
+        step: 0.1
+    }).on('change', saveSettings);
+
+    animFolder.addBinding(params, 'animHoldTime', {
+        label: 'Hold Time',
+        min: 0,
+        max: 3.0,
+        step: 0.1
+    }).on('change', saveSettings);
+
+    animFolder.addBinding(params, 'animEasing', {
+        label: 'Easing',
+        options: {
+            'Power In/Out': 'power2.inOut',
+            'Power In': 'power2.in',
+            'Power Out': 'power2.out',
+            'Elastic Out': 'elastic.out',
+            'Back In/Out': 'back.inOut',
+            'Circ In/Out': 'circ.inOut'
+        }
+    }).on('change', saveSettings);
 
     // Export folder with compact layout
     const exportFolder = pane.addFolder({

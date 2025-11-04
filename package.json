@@ -12,6 +12,7 @@
   "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
   "license": "ISC",
   "dependencies": {
+    "gsap": "^3.13.0",
     "three": "^0.181.0",
     "tweakpane": "^4.0.5"
   },
