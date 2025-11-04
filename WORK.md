@@ -205,3 +205,107 @@ npm run build
 ---
 
 **Last Updated**: 2025-11-04
+
+### Quality Improvements Iteration 8 (2025-11-04)
+
+#### Completed Tasks ✅
+1. **Added scale parameter validation** - export_png() validates scale is 1, 2, or 4
+2. **Added image count validation** - Checks images loaded before export
+3. **Improved error messages** - Both validations provide actionable feedback
+
+#### Validation Improvements
+- **export_png() scale validation**:
+  - Validates scale in (1, 2, 4) before calling JS
+  - Raises `ValueError` with clear message for invalid scales
+  - Prevents passing invalid values to exportPNG()
+
+- **export_png() image validation**:
+  - Calls `getStats()` to check imageCount > 0
+  - Raises `RuntimeError` if no images loaded
+  - Prevents attempting to export empty scene
+  - Provides clear instruction to load images first
+
+#### Code Changes
+**browser.py (lines 174-187)**:
+```python
+# Validate scale parameter
+if scale not in (1, 2, 4):
+    raise ValueError(
+        f"Invalid scale: {scale}\n"
+        f"Scale must be 1, 2, or 4 (for 1x, 2x, or 4x resolution)"
+    )
+
+# Verify images are loaded before attempting export
+stats = self.page.evaluate("window.vexyStax.getStats()")
+if not stats or stats.get('imageCount', 0) == 0:
+    raise RuntimeError(
+        "export_png: No images loaded in the app.\n"
+        "Load images with load_images() or load_config() first."
+    )
+```
+
+#### Tests Passed
+```bash
+uv run python -c "from vexy_stax import *; print('✓ All imports work')"
+# ✓ All imports work
+```
+
+#### Commit
+- f6582b1 - "Quality Iteration 8: Improve export validation and error handling"
+
+---
+
+**Last Updated**: 2025-11-04  
+**Status**: Iteration 8 completed
+
+### Quality Improvements Iteration 8 (2025-11-04)
+
+#### Completed Tasks ✅
+1. **Replaced alert() with showToast()** - 5 blocking alerts replaced with non-blocking toasts
+2. **Removed blocking confirm()** - Large file warning now shows toast instead
+
+#### User Experience Improvements
+- **File size errors** (>50MB):
+  - Before: `alert("File too large...")`
+  - After: `showToast('❌ File too large...', 'error', 5000)`
+  - Non-blocking error notification
+
+- **Large file warnings** (>10MB):
+  - Before: Blocking `confirm()` dialog
+  - After: `showToast('⚠️ Large file...', 'warning', 4000)`
+  - File loads automatically with warning notification
+
+- **Large dimensions** (>4096px):
+  - Before: `alert("Warning: Image is large...")`
+  - After: `showToast('⚠️ Large dimensions...', 'warning', 4000)`
+  - Non-blocking warning
+
+- **Load failures** (after 3 retries):
+  - Before: `alert("Failed to load...")`
+  - After: `showToast('❌ Failed to load...', 'error', 5000)`
+  - Clear error notification
+
+- **FileReader errors**:
+  - Before: `alert("Failed to read file...")`
+  - After: `showToast('❌ Failed to read file...', 'error', 5000)`
+  - Non-blocking error
+
+#### Impact
+- No more blocking modal dialogs during file loading
+- Users can continue working while files load
+- Consistent toast notification system throughout app
+- Appropriate severity levels (error/warning) and durations
+
+#### Tests Passed
+```bash
+npm run build
+# ✓ built in 3.54s
+```
+
+#### Commit
+- 1161580 - "Replace blocking alert() with showToast() for file loading errors"
+
+---
+
+**Last Updated**: 2025-11-04  
+**Status**: Iteration 8 completed

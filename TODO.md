@@ -164,3 +164,9 @@
 - [x] Replace alert() with showToast() for better UX in main.js
 - [x] Make loadConfig() return promise for reliable completion
 - [x] Test all changes and verify build succeeds
+
+## Phase 6.7: Code Quality Iteration 8 ✅
+
+- [x] Replace blocking alert() with showToast() for file loading errors
+- [x] Remove blocking confirm() for large file warning
+- [x] Test all changes and verify build succeeds
