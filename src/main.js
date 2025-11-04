@@ -584,22 +584,17 @@ function updateImagesForAmbience(enabled) {
         // Create material based on ambience mode
         let material;
         if (enabled) {
-            // Calculate adaptive emissive for background contrast
-            const bgLuminance = calculateLuminance(params.bgColor);
-            const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
-
-            // Use MeshStandardMaterial for realistic lighting
+            // Use MeshStandardMaterial WITHOUT emissive - preserve original colors
+            // No emissive properties to avoid washing out colors
             material = new THREE.MeshStandardMaterial({
                 map: texture,
                 side: THREE.DoubleSide,
                 transparent: true,
                 roughness: params.materialRoughness,
-                metalness: params.materialMetalness,
-                emissive: new THREE.Color(0xffffff),
-                emissiveMap: texture,
-                emissiveIntensity: emissiveIntensity
+                metalness: params.materialMetalness
             });
-            material.envMapIntensity = 0.55;
+            // Very low envMapIntensity to avoid over-brightening
+            material.envMapIntensity = 0.0;
             material.needsUpdate = true;
         } else {
             // Use MeshBasicMaterial for flat, unlit appearance
@@ -614,13 +609,13 @@ function updateImagesForAmbience(enabled) {
         const mesh = new THREE.Mesh(geometry, material);
 
         if (enabled) {
-            // Enable shadows
+            // Enable shadows (for depth, even without floor)
             mesh.castShadow = true;
             mesh.receiveShadow = true;
 
-            // Position to stand on floor (rotate to be vertical like domino)
-            mesh.rotation.y = 0; // Face forward
-            mesh.position.y = FLOOR_Y + (height / 2); // Bottom edge touches floor
+            // Default positioning (centered, NO floor to stand on)
+            mesh.rotation.y = 0;
+            mesh.position.y = 0;
             mesh.position.z = index * params.zSpacing;
         } else {
             // Default positioning (centered, no rotation)
@@ -644,10 +639,11 @@ function toggleAmbience(enabled) {
     params.ambience = enabled;
 
     if (enabled) {
-        createFloor();
-        showToast('✨ Ambience enabled: Realistic floor & shadows', 'success');
+        // NO FLOOR - just update materials for ambient lighting
+        updateImagesForAmbience(true);
+        showToast('✨ Ambience enabled: Realistic lighting', 'success');
     } else {
-        removeFloor();
+        updateImagesForAmbience(false);
         showToast('Ambience disabled: Flat rendering', 'info');
     }
 }

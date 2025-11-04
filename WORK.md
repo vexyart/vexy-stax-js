@@ -1,6 +1,141 @@
 # Vexy Stax JS - Work Progress
 <!-- this_file: WORK.md -->
 
+## 2025-11-04 – Ambient Mode Refactoring: Floor Removal & Color Accuracy ✅
+
+### Critical Requirements Addressed
+1. **Remove floor completely from Ambient mode** - User explicitly requested NO floor rendering
+2. **Fix color over-lighting** - Slides appeared washed out, pale, over-bright with lost saturation
+
+### Changes Implemented
+
+#### 1. Floor Removal (src/main.js:643-654)
+**Problem**: Ambient mode created visible gray/adaptive floor surface
+**Solution**: Completely bypass floor creation
+- Modified `toggleAmbience()` to skip `createFloor()` call
+- Changed to call only `updateImagesForAmbience(true)` for material updates
+- Updated toast message: "Realistic floor & shadows" → "Realistic lighting"
+- **Result**: NO floor geometry, NO floor reflector, NO visible surface
+
+#### 2. Slide Positioning Update (src/main.js:611-624)
+**Problem**: Slides positioned as if standing on floor (`FLOOR_Y + (height / 2)`)
+**Solution**: Center slides at origin
+- Removed floor-relative Y positioning logic
+- Set `position.y = 0` for all slides (centered)
+- Kept `castShadow/receiveShadow = true` for depth perception
+- **Result**: Slides float in space, centered vertically
+
+#### 3. Color Accuracy Restoration (src/main.js:584-606)
+**Problem**: Four properties were washing out colors:
+- `emissive: new THREE.Color(0xffffff)` - white self-illumination
+- `emissiveMap: texture` - doubled brightness
+- `emissiveIntensity: 0.05-0.25` - adaptive glow intensity
+- `envMapIntensity: 0.55` - environment reflection
+
+**Solution**: Removed ALL emissive properties, zeroed envMapIntensity
+```javascript
+// BEFORE (incorrect - over-lit)
+material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: params.materialRoughness,
+    metalness: params.materialMetalness,
+    emissive: new THREE.Color(0xffffff),      // ← REMOVED
+    emissiveMap: texture,                      // ← REMOVED
+    emissiveIntensity: emissiveIntensity      // ← REMOVED
+});
+material.envMapIntensity = 0.55;              // ← REMOVED
+
+// AFTER (correct - original colors)
+material = new THREE.MeshStandardMaterial({
+    map: texture,
+    roughness: params.materialRoughness,
+    metalness: params.metalMetalness
+    // NO emissive properties
+});
+material.envMapIntensity = 0.0;  // No environment reflection
+```
+
+**Result**: Slides maintain original RGB values, saturation, and luminosity
+
+### Technical Impact
+- **Floor rendering**: ZERO floor geometry created in ambient mode
+- **Color accuracy**: Preserved original texture colors (no washing out)
+- **Brightness**: Identical luminosity whether ambience on or off
+- **Saturation**: Full color saturation maintained
+- **Material system**: Simplified - removed adaptive emissive calculations
+
+### Test Results
+- **Visual verification**: No floor visible ✅
+- **Color sampling**: RGB values match original ✅
+- **Position check**: Slides centered at Y=0 ✅
+- **Build**: `npm run build` successful ✅
+- **Unit tests**: 93/93 passing ✅
+
+### Files Modified
+1. `src/main.js`:
+   - `toggleAmbience()` function (lines 643-654)
+   - `updateImagesForAmbience()` material creation (lines 584-606)
+   - Slide positioning logic (lines 611-624)
+2. `TODO.md`: Complete rewrite - removed all completed tasks, added detailed Phase 1-4 breakdown
+3. `PLAN.md`: Complete rewrite - extensive technical specifications, root cause analysis, testing strategy
+
+### Documentation Updates
+- **TODO.md**: Cleaned of all completed tasks (rounds 1-3), added new Phase 1-4 structure with minute detail
+- **PLAN.md**: Comprehensive technical specifications including:
+  - Problem statements with root cause analysis
+  - Code before/after comparisons
+  - Color science requirements (luminosity, saturation, hue accuracy)
+  - Verification criteria with pixel-level RGB sampling
+  - Risk assessment & mitigations
+  - Testing strategy (unit, integration, visual regression, performance)
+
+### Next Steps (Phase 3: Documentation & Quality)
+- **Task 10**: Add JSDoc annotations to constants.js (currently 0 comments)
+- **Task 11**: Audit event listener memory leaks (11 addEventListener vs 1 removeEventListener)
+- **Task 12**: Add immutability validation tests for all constants
+
+---
+
+## 2025-11-04 – UI Improvements & Visual Polish Complete ✅
+
+### Changes Implemented
+1. **Ambience Floor Transparency** - Reduced to 1% opacity
+   - Changed `REFLECTION_OPACITY` from 0.32 to 0.01 in `src/core/constants.js`
+   - Floor now nearly transparent as requested, providing subtle depth cue only
+2. **Left Slides Panel Redesign** - Narrower, cleaner interface
+   - Reduced width from 240px to 120px
+   - Changed "Browse Files" button to simple "+" symbol
+   - Reduced thumbnail size from 96px to 68px
+   - Removed hint text and empty message for cleaner look
+3. **Background Color Update** - Professional dark theme
+   - Left panel (slides): `#38383d`
+   - Right panel (controls): `#38383d`
+   - Center panel (studio): `#29292e`
+   - Matches user's requested color scheme
+4. **Canvas Rendering Fixed** - Seamless display
+   - Removed all rounded corners (border-radius: 0)
+   - Removed padding and borders from studio-frame
+   - Removed conflicting CSS sizing rules causing aspect ratio distortion
+   - Canvas now renders seamlessly without visual artifacts
+
+### Test Results
+- **JavaScript tests**: 93/93 passing in ~4.9s ✅
+- **Build**: `npm run build` → 1,149.47 kB, 25.6s, zero errors ✅
+- **Visual verification**: All requested UI changes implemented
+
+### Files Modified
+- Modified: `src/core/constants.js` (REFLECTION_OPACITY: 0.32 → 0.01)
+- Modified: `styles/main.css` (panel sizing, colors, canvas styling)
+- Modified: `index.html` (button text, removed hint elements)
+
+### Impact
+- **User Experience**: Cleaner, more professional interface
+- **Visual Quality**: Seamless canvas rendering without borders
+- **Space Efficiency**: Narrower left panel provides more studio space
+- **Design Consistency**: Unified dark theme across all panels
+
+---
+
 ## 2025-11-04 – Quality & Robustness Round 2 Complete ✅
 
 ### Tasks Completed

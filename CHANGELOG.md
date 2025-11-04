@@ -1,5 +1,25 @@
 ## [Unreleased] - Next Release
 
+### UI Improvements & Visual Polish - 2025-11-04
+- **Ambience floor transparency**: Reduced from 32% to 1% opacity
+  - `REFLECTION_OPACITY` constant changed from 0.32 to 0.01
+  - Floor now provides subtle depth cue without visual distraction
+- **Left slides panel redesign**: Narrower, cleaner interface
+  - Width reduced from 240px to 120px for more studio space
+  - "Browse Files" button simplified to "+" symbol
+  - Thumbnail size reduced from 96px to 68px
+  - Removed hint text and empty message
+- **Background color scheme**: Professional dark theme
+  - Side panels (slides/controls): `#38383d`
+  - Center panel (studio): `#29292e`
+  - Unified, cohesive visual design
+- **Canvas rendering fixes**: Seamless display
+  - Removed all rounded corners (border-radius: 0)
+  - Removed padding and borders from studio-frame
+  - Removed conflicting CSS sizing rules
+  - Fixed aspect ratio distortion issues
+- **Test results**: 93/93 tests passing, build stable at 1,149.47 kB
+
 ### Quality Improvements Round 3 - 2025-11-04
 - **Added CameraAnimator unit tests** (+10 tests)
   - saveState/restoreState state management validation
