@@ -11,7 +11,7 @@
 
 **Documentation**:
 - JSDoc: 5 core utilities (AppState, EventBus, sharedState, studioSizing, ordering) with examples
-- Metadata: this_file comments (32/32 files), npm help command (208 tests), package.json metadata, .npmignore
+- Metadata: this_file comments (43/43 files), npm help command (208 tests), package.json metadata, .npmignore
 - README: Compressed from 888→194 lines (-78%, now meets <200 line guideline), comprehensive test guide
 - LICENSE: Added copyright notice "Copyright 2025 Adam Twardoch / VexyArt" (was placeholder)
 - DEPENDENCIES.md: All 8 packages documented (5 prod + 3 dev) with why chosen, key features
@@ -56,8 +56,8 @@
 - Build: 1,143.27 kB (stable across all iterations)
 - Coverage: helpers.js 100%, core 96.41%, utils 97.22%
 - Main.js: 3,367 lines (-88 from original 3,455)
-- Quality iterations: 27 complete
-- File tracking: 32/32 files with this_file comments (30 source + 2 config)
+- Quality iterations: 29 complete
+- File tracking: 43/43 files with this_file comments (all source, test, docs, config)
 - Documentation: README 194 lines (was 888, -78%), LICENSE copyright, all dependencies documented, obsolete/duplicate docs removed (16→9 files, -119K total)
 - Code robustness: WebGL recovery verified, resource cleanup confirmed, input validation audited
 - Constant coverage: All 36 exported constants now have validation tests
