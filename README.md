@@ -140,7 +140,7 @@ vexyStax.showFPS(enabled)        // Toggle FPS counter
 vexyStax.help()                  // Show all commands
 ```
 
-See [detailed API documentation](docs/API.md) for complete reference.
+See [detailed API documentation](API.md) for complete reference.
 
 ---
 

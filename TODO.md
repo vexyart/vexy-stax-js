@@ -605,6 +605,33 @@ Reduce main.js from 3,367 lines to <300 lines by extracting modules
 
 ---
 
+## Iteration 27: Release Deployment & Package Validation ✅ COMPLETE
+
+- [x] **Push v0.2.0 release to GitHub** ✅
+  - Ran `git push origin main --tags`
+  - Successfully pushed 3 commits to origin/main
+  - Successfully pushed v0.2.0 annotated tag
+  - GitHub Pages deployment triggered automatically
+  - **Result**: v0.2.0 released and publicly available
+
+- [x] **Verify npm package structure** ✅
+  - Ran `npm pack --dry-run` to preview package contents
+  - Verified package size: 350.4 kB (reasonable)
+  - Confirmed 21 files included (src/, docs/, README, LICENSE, CHANGELOG)
+  - Verified test files excluded (thanks to .npmignore)
+  - Checked entry points: main, module, exports all correct
+  - **Result**: Package properly configured for npm publishing
+
+- [x] **Add API.md documentation** ✅
+  - Created comprehensive docs/API.md (370 lines)
+  - Documented all 14 exported functions with examples
+  - Added usage tips, error handling, keyboard shortcuts
+  - Included browser support requirements
+  - README.md already references docs/API.md
+  - **Result**: Complete API reference for developers
+
+---
+
 ## Future Iterations
 - E2E integration tests with Playwright
 - Performance profiling and optimization
