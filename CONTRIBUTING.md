@@ -181,6 +181,31 @@ export function clamp(value, min, max) {
 - Create module-specific loggers: `const log = createLogger('ModuleName')`
 - Avoid direct `console.log` calls (except in tests or debug-specific RenderLoop)
 
+## Releasing to npm (Maintainers Only)
+
+The package is configured for npm publishing with automated quality checks.
+
+### Pre-Publish Checklist
+1. **Run all tests**: `npm run test:unit` (218 tests must pass)
+2. **Check coverage**: `npm run test:coverage:check` (80/80/75% thresholds)
+3. **Update version**: `npm version patch|minor|major`
+4. **Update CHANGELOG.md**: Document all changes for the release
+5. **Commit changes**: `git commit -am "Release vX.Y.Z"`
+6. **Create git tag**: `git tag vX.Y.Z`
+7. **Push with tags**: `git push origin main --tags`
+
+### Publishing
+```bash
+npm publish
+```
+
+The `prepublishOnly` script automatically runs tests and build before publishing.
+
+### Package Contents
+The `.npmignore` file ensures only essential files are published:
+- ✅ Included: `src/`, `docs/`, `README.md`, `LICENSE`, `CHANGELOG.md`
+- ❌ Excluded: `tests/`, `coverage/`, development configs, logs
+
 ## License
 
 By contributing to Vexy Stax JS, you agree that your contributions will be licensed under the Apache License 2.0.
