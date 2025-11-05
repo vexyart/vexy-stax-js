@@ -3,17 +3,17 @@
 
 ## Current Status (2025-11-05)
 **Phase**: 4 - Complete ✅ | **Release**: v0.2.0 🎉
-**Tests**: 208/208 passing ✅ (+98 from baseline: 20 RenderLoop + 22 validation + 4 logger + 8 config + 14 helpers + 9 error messages + 5 deep freeze + 5 helpers coverage + 5 new constants + 6 untested constants)
+**Tests**: 218/218 passing ✅ (+108 from baseline: 20 RenderLoop + 22 validation + 4 logger + 8 config + 14 helpers + 9 error messages + 5 deep freeze + 5 helpers coverage + 5 new constants + 6 untested constants + 10 API input validation)
 **Build**: 1,143.27 kB (stable)
 **Progress**: 1/6 modules extracted, 1/6 integrated ✅
 **Main.js**: 3,367 lines (was 3,455, -88 lines)
-**Documentation**: README 194 lines + all 8 dependencies documented + 43/43 files with this_file comments + obsolete docs removed (16→9 files, -119K total)
+**Documentation**: README 194 lines + all 8 dependencies documented + 43/43 files with this_file comments + obsolete docs removed (16→9 files, -119K total) + BROWSER_COMPATIBILITY.md (227 lines) + PERFORMANCE.md (400+ lines)
 **Logging**: 144 console calls migrated to logger (19 loggers, 7 intentional console calls: 1 user-facing + 6 debug)
-**Quality**: 29 quality improvement iterations complete ✅
+**Quality**: 30 quality improvement iterations complete ✅
 **Package**: npm-ready with entry points, .editorconfig, .gitattributes, cleanup script, LICENSE with copyright, comprehensive docs
 **Coverage**: helpers.js 100% (was 94.14%), core 96.41%, utils 97.22%
 **Constants**: 7 new constants added (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), 25 magic numbers eliminated
-**Git**: Commits created, tagged as v0.2.0, ready for push to origin
+**Git**: v0.2.0 deployed to GitHub Pages, Iteration 30 ready for commit
 
 ---
 
@@ -651,6 +651,34 @@ Reduce main.js from 3,367 lines to <300 lines by extracting modules
 **Build**: 1,143.27 kB (stable)
 **Files Updated**: 4 files (CHANGELOG.md, CLAUDE.md, TODO.md, WORK.md)
 **Impact**: Complete file navigation coverage - all 43 files in project now have this_file tracking
+
+---
+
+## Iteration 30: Additional Quality Improvements (IN PROGRESS)
+
+### Task 1: Input Sanitization Tests for User-Facing API ✅
+- [x] Add tests for window.vexyStax.exportPNG() with invalid scale values
+- [x] Add tests for window.vexyStax.showFPS() with non-boolean inputs
+- [x] Add tests for malformed JSON in importJSON()
+- [x] Verify all API functions handle edge cases gracefully
+- **Goal**: Ensure public API is robust against misuse
+- **Result**: +10 tests (218/218 passing), comprehensive API input validation coverage
+
+### Task 2: Browser Compatibility Documentation ✅
+- [x] Document minimum browser versions for WebGL features
+- [x] Verify SharedArrayBuffer requirements (for future)
+- [x] Document performance considerations and known issues
+- [x] Create comprehensive browser compatibility guide
+- **Goal**: Clear browser requirements for users
+- **Result**: BROWSER_COMPATIBILITY.md created (227 lines), documented Chrome 90+, Edge 90+, Firefox 88+, Safari 14+ requirements, WebGL 1.0, ES6+ modules, all required APIs
+
+### Task 3: Performance Monitoring Utilities ✅
+- [x] Verified getRenderStats() exists as getStats() with FPS metrics
+- [x] Verified memory usage tracking exists in getStats()
+- [x] Created comprehensive performance best practices guide
+- [x] Verified performance warning thresholds exist (FPS_WARNING_THRESHOLD=30)
+- **Goal**: Give developers visibility into performance
+- **Result**: PERFORMANCE.md created (400+ lines), documented monitoring tools, optimization techniques, troubleshooting, benchmarks, developer tips, performance checklist
 
 ---
 

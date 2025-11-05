@@ -11,10 +11,12 @@
 
 **Documentation**:
 - JSDoc: 5 core utilities (AppState, EventBus, sharedState, studioSizing, ordering) with examples
-- Metadata: this_file comments (43/43 files), npm help command (208 tests), package.json metadata, .npmignore
+- Metadata: this_file comments (43/43 files), npm help command (218 tests), package.json metadata, .npmignore
 - README: Compressed from 888→194 lines (-78%, now meets <200 line guideline), comprehensive test guide
 - LICENSE: Added copyright notice "Copyright 2025 Adam Twardoch / VexyArt" (was placeholder)
 - DEPENDENCIES.md: All 8 packages documented (5 prod + 3 dev) with why chosen, key features
+- BROWSER_COMPATIBILITY.md: Comprehensive browser requirements (227 lines) - Chrome 90+, Edge 90+, Firefox 88+, Safari 14+, WebGL 1.0, ES6+ modules, all required APIs
+- PERFORMANCE.md: Comprehensive performance guide (400+ lines) - monitoring tools, optimization techniques, troubleshooting, benchmarks, developer tips, performance checklist
 - Cleanup: npm run clean script, removed 21 backup files + 7 obsolete/duplicate docs (-119K total), enhanced .gitignore
   - Obsolete docs removed (Iteration 23): STATUS.md, REFACTOR_PLAN.md, QUICKSTART.md (-51K)
   - Duplicate AI instruction files removed (Iteration 24): AGENTS.md, GEMINI.md, LLXPRT.md, QWEN.md (-68K)
@@ -32,7 +34,7 @@
 - Robustness verification: WebGL context recovery, resource cleanup, input validation (Iteration 19)
 - Package configuration: npm entry points (main, module, exports, files), .editorconfig (Iteration 21)
 
-**Testing** (+98 tests: 110→208):
+**Testing** (+108 tests: 110→218):
 - Validation: +22 tests (AppState/EventBus/sharedState edge cases, null/undefined/empty inputs)
 - Config: +8 tests (material/viewpoint presets, shader constants, lighting ranges)
 - Helpers: +14 edge cases (calculateLuminance, clamp, lerp, formatFileSize, deepClone, generateId)
@@ -42,6 +44,7 @@
 - Logger: +4 tests (prefix validation)
 - New constants: +5 tests (TOAST_DURATION values/types, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB)
 - Untested constants: +6 tests (FILE_SIZE_*, MAX_HISTORY, FPS_WARNING_THRESHOLD, MEMORY_WARNING_COOLDOWN, FLOOR_*, REFLECTION_*, MAX_LOAD_RETRIES, MAX_DIMENSION_PX, DEBOUNCE_DELAY_MS)
+- API input validation: +10 tests (exportPNG scale validation, showFPS boolean handling, importJSON validation, extreme values, string coercion attacks, NaN edge case)
 - Coverage: c8 tool, thresholds 80/80/75%, HTML/text/lcov reports
 
 **Logging** (144 of 145 migrated to logger, 99.3%):
@@ -52,14 +55,14 @@
 - Note: 38 console calls in JSDoc examples (not actual code)
 
 **Build Status**:
-- Tests: 208/208 passing ✅ (+98 from baseline of 110)
+- Tests: 218/218 passing ✅ (+108 from baseline of 110)
 - Build: 1,143.27 kB (stable across all iterations)
 - Coverage: helpers.js 100%, core 96.41%, utils 97.22%
 - Main.js: 3,367 lines (-88 from original 3,455)
-- Quality iterations: 29 complete
+- Quality iterations: 30 complete
 - File tracking: 43/43 files with this_file comments (all source, test, docs, config)
-- Documentation: README 194 lines (was 888, -78%), LICENSE copyright, all dependencies documented, obsolete/duplicate docs removed (16→9 files, -119K total)
-- Code robustness: WebGL recovery verified, resource cleanup confirmed, input validation audited
+- Documentation: README 194 lines (was 888, -78%), LICENSE copyright, all dependencies documented, BROWSER_COMPATIBILITY.md (227 lines), PERFORMANCE.md (400+ lines), obsolete/duplicate docs removed (16→9 files, -119K total)
+- Code robustness: WebGL recovery verified, resource cleanup confirmed, input validation audited, API input validation comprehensive
 - Constant coverage: All 36 exported constants now have validation tests
 - Package ready: npm entry points configured, .editorconfig for code style consistency
 
