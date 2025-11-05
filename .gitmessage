@@ -1,0 +1,60 @@
+# Iteration N: Brief Summary (50 chars max)
+#
+# Detailed Description:
+# - What was changed and why
+# - Key technical decisions
+# - Any breaking changes or important notes
+#
+# Tasks Completed:
+# - Task 1: Description
+# - Task 2: Description
+# - Task 3: Description
+#
+# Test Results: N/N passing ✅ (runtime: Nms)
+#
+# Files Modified:
+# - file1.js (description)
+# - file2.md (description)
+#
+# Files Created:
+# - newfile.md (description)
+#
+# Build: N kB (stable/+N kB/-N kB)
+#
+# Related Issues: #N (if applicable)
+#
+# --- Guidelines for Commit Messages ---
+# 1. First line: "Iteration N: Brief Summary" (50 chars max)
+# 2. Leave blank line after first line
+# 3. Detailed description explains WHAT and WHY (not HOW - code shows that)
+# 4. List all completed tasks with descriptions
+# 5. Include test results (pass count, duration)
+# 6. List modified/created files with context
+# 7. Note bundle size changes (stable, increase, decrease)
+# 8. Reference related issues/PRs if applicable
+# 9. Use imperative mood ("Add feature" not "Added feature")
+# 10. Keep lines under 72 characters for proper display
+#
+# Example commit message:
+#
+# Iteration 60: Quality Refinement & Performance Documentation
+#
+# Created comprehensive test performance benchmarking system to establish
+# baseline and detect regressions. Verified code comment quality across
+# all source files. Enhanced npm script organization with categories.
+#
+# Tasks Completed:
+# - Task 1: Created .test-performance.md with 5-run baseline (627.0ms mean)
+# - Task 2: Verified 610 inline comments, zero outdated references
+# - Task 3: Added 5 script categories to package.json
+#
+# Test Results: 223/223 passing ✅ (649ms runtime, within baseline)
+#
+# Files Modified:
+# - package.json (added category comments for better organization)
+# - TODO.md (marked Iteration 60 complete, updated status)
+#
+# Files Created:
+# - .test-performance.md (comprehensive benchmark documentation)
+#
+# Build: 1,143.27 kB (stable)

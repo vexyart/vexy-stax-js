@@ -65,20 +65,39 @@ Run `npm run test:coverage:check` to verify coverage thresholds before submittin
 
 ### 4. Commit Messages
 
-Use clear, descriptive commit messages:
+Use clear, descriptive commit messages following our template standard:
+
+**Setup Commit Template** (one-time):
+```bash
+git config commit.template .gitmessage
+```
 
 **Format**:
 ```
 Brief summary (50 chars or less)
 
 More detailed explanation if needed. Wrap at 72 characters.
+- List completed tasks
+- Include test results (N/N passing)
+- Note files modified/created
+
 Reference issues: #123
 ```
+
+The `.gitmessage` template provides a structured format for quality iteration commits including:
+- Summary line
+- Detailed description
+- Completed tasks list
+- Test results
+- Files modified/created
+- Bundle size changes
+- Related issues
 
 **Examples**:
 - ✅ "Add JSDoc examples to helper functions"
 - ✅ "Fix memory leak in texture disposal"
 - ✅ "Refactor camera animation for better performance"
+- ✅ "Iteration 60: Quality Refinement & Performance Documentation"
 - ❌ "fixed stuff"
 - ❌ "WIP"
 
