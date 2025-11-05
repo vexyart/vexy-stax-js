@@ -42,7 +42,11 @@ export function calculateLuminance(hexColor) {
  * Get adaptive floor color that matches background exactly
  * Depth comes from shadows and reflections, not floor color contrast
  * @param {string} bgColor - Hex color string
- * @returns {THREE.Color}
+ * @returns {THREE.Color} THREE.Color instance matching background
+ * @example
+ * // Create floor color matching dark background
+ * const floorColor = getAdaptiveFloorColor('#2a2a2a');
+ * // Returns THREE.Color with r=0.165, g=0.165, b=0.165
  */
 export function getAdaptiveFloorColor(bgColor) {
     return new THREE.Color(bgColor);
@@ -52,6 +56,12 @@ export function getAdaptiveFloorColor(bgColor) {
  * Validate if a string is a valid hex color
  * @param {string} color - Color string to validate
  * @returns {boolean} True if valid hex color
+ * @example
+ * isValidHexColor('#fff')      // true (3-digit shorthand)
+ * isValidHexColor('#ffffff')   // true (6-digit full)
+ * isValidHexColor('#ABC123')   // true (case-insensitive)
+ * isValidHexColor('ffffff')    // false (missing #)
+ * isValidHexColor('#gggggg')   // false (invalid characters)
  */
 export function isValidHexColor(color) {
     if (!color || typeof color !== 'string') {
@@ -114,6 +124,12 @@ export function lerp(a, b, t) {
  * Check if a value is a valid number (not NaN, not Infinity)
  * @param {*} value - Value to check
  * @returns {boolean} True if valid number
+ * @example
+ * isValidNumber(42)            // true
+ * isValidNumber(3.14)          // true
+ * isValidNumber(NaN)           // false (not a valid number)
+ * isValidNumber(Infinity)      // false (not finite)
+ * isValidNumber('42')          // false (string, not number)
  */
 export function isValidNumber(value) {
     return typeof value === 'number' && Number.isFinite(value);
@@ -123,6 +139,15 @@ export function isValidNumber(value) {
  * Validate image file type
  * @param {File} file - File object to validate
  * @returns {boolean} True if valid image file
+ * @example
+ * const pngFile = new File([''], 'image.png', { type: 'image/png' });
+ * isValidImageFile(pngFile);  // true
+ *
+ * const svgFile = new File([''], 'icon.svg', { type: 'image/svg+xml' });
+ * isValidImageFile(svgFile);  // true
+ *
+ * const textFile = new File([''], 'doc.txt', { type: 'text/plain' });
+ * isValidImageFile(textFile); // false
  */
 export function isValidImageFile(file) {
     if (!file || !file.type) {
@@ -156,7 +181,10 @@ export function formatFileSize(bytes) {
 
 /**
  * Generate a unique ID string
- * @returns {string} Unique ID
+ * @returns {string} Unique ID combining timestamp and random string
+ * @example
+ * generateId(); // "1730851200000-k3j2h5f7g"
+ * generateId(); // "1730851200001-a9b8c7d6e" (always unique)
  */
 export function generateId() {
     return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
@@ -166,6 +194,16 @@ export function generateId() {
  * Deep clone an object (simple implementation for plain objects)
  * @param {Object} obj - Object to clone
  * @returns {Object} Cloned object
+ * @example
+ * const original = { a: 1, b: { c: 2 } };
+ * const cloned = deepClone(original);
+ * cloned.b.c = 3;
+ * console.log(original.b.c); // 2 (unchanged)
+ *
+ * const arr = [1, [2, 3], { x: 4 }];
+ * const clonedArr = deepClone(arr);
+ * clonedArr[1][0] = 99;
+ * console.log(arr[1][0]); // 2 (unchanged)
  */
 export function deepClone(obj) {
     if (obj === null || typeof obj !== 'object') {
