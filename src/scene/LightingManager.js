@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025 Adam Twardoch / VexyArt
 // src/scene/LightingManager.js
 // this_file: src/scene/LightingManager.js
 

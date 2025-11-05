@@ -9,12 +9,12 @@
 **Main.js**: 3,367 lines (was 3,455, -88 lines)
 **Documentation**: README 194 lines + all 8 dependencies documented + 43/43 files with this_file comments + obsolete docs removed (16→9 files, -119K total) + BROWSER_COMPATIBILITY.md (227 lines) + PERFORMANCE.md (400+ lines) + helpers.js JSDoc complete
 **Logging**: 144 console calls migrated to logger (19 loggers, 7 intentional console calls: 1 user-facing + 6 debug)
-**Quality**: 37 quality improvement iterations complete ✅
-**Package**: npm-ready with entry points, .editorconfig, .gitattributes, cleanup script, LICENSE with copyright, comprehensive docs, audit scripts
+**Quality**: 38 quality improvement iterations complete ✅
+**Package**: npm-ready with entry points, .editorconfig, .gitattributes, .nvmrc, .node-version, cleanup script, LICENSE with copyright + SPDX headers, comprehensive docs, audit scripts, CONTRIBUTING.md
 **Coverage**: helpers.js 100% (was 94.14%), core 96.41%, utils 97.22%
 **Constants**: 7 new constants added (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), 25 magic numbers eliminated
-**Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-37 committed and pushed
-**Current Focus**: Ready for Iteration 38 - continuous quality improvement
+**Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-38 committed and pushed
+**Current Focus**: Ready for Iteration 39 - continuous quality improvement
 
 ---
 
@@ -853,6 +853,36 @@ Reduce main.js from 3,367 lines to <300 lines by extracting modules
 - [x] Tested audit:deps - confirmed 0 vulnerabilities, all dependencies up-to-date
 - **Goal**: Easy dependency and bundle monitoring for maintainers
 - **Result**: New audit commands available, npm run help updated, dependency health verified
+
+---
+
+## Iteration 38: Code Maintainability Improvements ✅ COMPLETE
+
+### Task 1: Add .nvmrc and .node-version files for Node.js version management ✅
+- [x] Created .nvmrc file with minimum Node.js version (18.0.0)
+- [x] Created .node-version file for asdf/nodenv compatibility
+- [x] Tested with current Node.js v24.10.0 - all 218 tests passing
+- [x] Node.js v18+ required for node --test and c8 features
+- **Goal**: Ensure consistent Node.js version across development environments
+- **Result**: Version management files created, tested compatible with v18+
+
+### Task 2: Add LICENSE headers to main source files ✅
+- [x] Reviewed main source files for LICENSE headers (main.js, managers, core modules)
+- [x] Added Apache 2.0 SPDX headers to 7 files: main.js, SceneManager, LightingManager, FloorManager, RenderLoop, AppState, EventBus
+- [x] Copyright notice matches LICENSE file (2025 Adam Twardoch / VexyArt)
+- [x] Verified package.json license field: Apache-2.0 ✅
+- **Goal**: Proper legal attribution in all source files
+- **Result**: All main source files now have SPDX-License-Identifier headers
+
+### Task 3: Create CONTRIBUTING.md guide for external contributors ✅
+- [x] Created CONTRIBUTING.md with comprehensive guidelines (200+ lines)
+- [x] Documented code style conventions (EditorConfig, formatting, LF line endings)
+- [x] Documented testing requirements (80/80/75% coverage thresholds, 218 tests)
+- [x] Documented commit message format and PR workflow
+- [x] Included JSDoc examples, error handling patterns, project structure
+- [x] Referenced all key documentation (README, API, BROWSER_COMPATIBILITY, PERFORMANCE)
+- **Goal**: Clear contribution guidelines for external developers
+- **Result**: Complete contribution guide for open source collaboration
 
 ---
 

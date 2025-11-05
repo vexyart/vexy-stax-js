@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025 Adam Twardoch / VexyArt
 // this_file: src/core/AppState.js
 /**
  * Lightweight mutable state container with a predictable API.
