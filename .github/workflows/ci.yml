@@ -15,8 +15,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version-file: '.nvmrc'
           cache: 'npm'
+
+      - name: Verify Node.js version
+        run: |
+          echo "Required: $(cat .nvmrc)"
+          echo "Actual: $(node --version)"
+          node --version | grep -E "^v(1[89]|[2-9][0-9])\." || (echo "Error: Node.js 18+ required" && exit 1)
 
       - name: Install dependencies
         run: npm ci
