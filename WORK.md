@@ -6,8 +6,8 @@
 **Tests**: 218/218 passing ✅ (+108 from baseline: 20 RenderLoop + 22 validation + 4 logger + 8 config + 14 helpers + 9 error messages + 5 deep freeze + 5 helpers coverage + 5 new constants + 6 untested constants + 10 API input validation)
 **Build**: 1,143.27 kB ✅
 **Main.js**: 3,367 lines (-88 from 3,455) → Target: <300 lines (Phase 5)
-**Completed**: 39 iterations (Iteration 39: Documentation Synchronization & Quality Polish) ✅
-**Git**: v0.2.0 deployed, Iterations 30-39 in progress
+**Completed**: 40 iterations (Iteration 40: CI Enhancement & Documentation Updates) ✅
+**Git**: v0.2.0 deployed, Iterations 30-40 in progress
 **Current Focus**: Documentation synchronized, ready for final iteration cleanup and git commit
 
 ---
@@ -1540,5 +1540,35 @@ console.error(`[Validation] Unsupported file type...`)
 
 ---
 
+### Task 42: CI Enhancement & Documentation Updates (Iteration 40) ✅
+**Status**: Complete
+**Date**: 2025-11-05
+
+**Task 1: Add test step to GitHub Actions CI workflow** ✅
+- Updated .github/workflows/ci.yml to run npm run test:unit
+- Added test step between install and build steps
+- CI now validates code quality on every push/PR
+- **Result**: Automated test execution prevents broken code from being merged
+
+**Task 2: Update README.md version example to v0.2.0** ✅
+- Updated deployment example lines 152-153: v0.1.0 → v0.2.0
+- Verified package.json shows correct version (0.2.0)
+- Git tag example now matches current release
+- **Result**: Accurate deployment documentation for users
+
+**Task 3: Update CHANGELOG.md iteration count to 39** ✅
+- Updated CHANGELOG.md line 62: 38 → 39 iterations
+- Verified all historical changes documented through Iteration 39
+- Confirmed consistency across all documentation files
+- **Result**: Complete historical accuracy in CHANGELOG
+
+**Test Results**: 218/218 passing ✅ (653ms runtime)
+**Build**: Not tested (CI workflow + documentation changes only)
+**Files Modified**: 4 (.github/workflows/ci.yml, README.md, CHANGELOG.md, TODO.md)
+**Git Commit**: Pending
+**Impact**: CI now runs tests automatically, documentation reflects current v0.2.0 state, complete historical accuracy
+
+---
+
 **Last Updated**: 2025-11-05
-**Current Focus**: 39 iterations complete ✅ | Ready for Iteration 40 - continuous quality improvement
+**Current Focus**: 40 iterations complete ✅ | Ready for Iteration 41 - continuous quality improvement

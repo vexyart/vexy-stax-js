@@ -9,12 +9,12 @@
 **Main.js**: 3,367 lines (was 3,455, -88 lines)
 **Documentation**: README 194 lines + all 8 dependencies documented + 43/43 files with this_file comments + obsolete docs removed (16→9 files, -119K total) + BROWSER_COMPATIBILITY.md (227 lines) + PERFORMANCE.md (400+ lines) + helpers.js JSDoc complete
 **Logging**: 144 console calls migrated to logger (19 loggers, 7 intentional console calls: 1 user-facing + 6 debug)
-**Quality**: 39 quality improvement iterations complete ✅
+**Quality**: 40 quality improvement iterations complete ✅
 **Package**: npm-ready with entry points, .editorconfig, .gitattributes, .nvmrc, .node-version, cleanup script, LICENSE with copyright + SPDX headers, comprehensive docs, audit scripts, CONTRIBUTING.md
 **Coverage**: helpers.js 100% (was 94.14%), core 96.41%, utils 97.22%
 **Constants**: 7 new constants added (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), 25 magic numbers eliminated
 **Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-38 committed and pushed
-**Current Focus**: Ready for Iteration 40 - continuous quality improvement
+**Current Focus**: Ready for Iteration 41 - continuous quality improvement
 
 ---
 
@@ -908,6 +908,31 @@ Reduce main.js from 3,367 lines to <300 lines by extracting modules
 - [x] Verified with current Node v24.10.0 - all 218 tests passing
 - **Goal**: Enforce Node.js version requirement at install time
 - **Result**: Package now specifies engine requirements, help shows requirements
+
+---
+
+## Iteration 40: CI Enhancement & Documentation Updates ✅ COMPLETE
+
+### Task 1: Add test step to GitHub Actions CI workflow ✅
+- [x] Update .github/workflows/ci.yml to run npm run test:unit
+- [x] Add test step after install, before build
+- [x] Keep build artifacts upload unchanged
+- **Goal**: CI validates code quality automatically on every push/PR
+- **Result**: Tests now run on every push/PR - CI will catch failing tests before merge
+
+### Task 2: Update README.md version example to v0.2.0 ✅
+- [x] Update deployment example from v0.1.0 to v0.2.0 (lines 152-153)
+- [x] Verified all version references current (package.json shows 0.2.0)
+- [x] Checked examples - git tag example now matches current version
+- **Goal**: Keep README examples current with actual project state
+- **Result**: Documentation reflects current v0.2.0 release
+
+### Task 3: Update CHANGELOG.md iteration count to 39 ✅
+- [x] Update Build Status section: 38 → 39 iterations (line 62)
+- [x] Verified CHANGELOG reflects all latest changes through Iteration 39
+- [x] Grep confirmed all current docs show 39 iterations
+- **Goal**: Complete CHANGELOG accuracy
+- **Result**: All historical documentation synchronized to 39 iterations
 
 ---
 

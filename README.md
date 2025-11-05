@@ -149,8 +149,8 @@ See [detailed API documentation](API.md) for complete reference.
 ### GitHub Pages (Automatic)
 Push a git tag starting with `v`:
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 GitHub Action automatically:
