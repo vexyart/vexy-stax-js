@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025 Adam Twardoch / VexyArt
 // this_file: src/core/studioSizing.js
 /**
  * @fileoverview Studio canvas sizing utilities with retina/high-DPI support.

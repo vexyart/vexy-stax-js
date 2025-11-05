@@ -36,7 +36,10 @@
     "image-stack",
     "visualization",
     "webgl",
-    "image-layers"
+    "image-layers",
+    "3d-graphics",
+    "image-viewer",
+    "browser-based"
   ],
   "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
   "license": "Apache-2.0",
@@ -52,6 +55,7 @@
     "node": ">=18.0.0",
     "npm": ">=9.0.0"
   },
+  "sideEffects": false,
   "dependencies": {
     "@kitschpatrol/tweakpane-plugin-essentials": "^0.2.2-beta.3",
     "gsap": "^3.13.0",

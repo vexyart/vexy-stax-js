@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025 Adam Twardoch / VexyArt
 // this_file: src/core/ordering.js
 /**
  * @fileoverview Array reordering utility for drag-and-drop list management.

@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: Apache-2.0
+// Copyright 2025 Adam Twardoch / VexyArt
 // this_file: vexy-stax-js/src/camera/animation.js
 
 import gsap from 'gsap';
