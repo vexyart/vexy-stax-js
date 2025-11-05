@@ -145,10 +145,15 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Backup files
+# Backup files and editor temp files
 *.bak
 *.bak[0-9]*
 *~
+*.swp
+*.swo
+*.swn
+*~.nib
+*.orig
 
 # OS files
 .DS_Store
@@ -162,3 +167,9 @@ Thumbs.db
 # Playwright test artifacts
 test-results/
 playwright-report/
+
+# Python artifacts (not used in this JS project)
+.pytest_cache/
+__pycache__/
+*.py[cod]
+*$py.class
