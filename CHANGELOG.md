@@ -1,3 +1,4 @@
+# <!-- this_file: CHANGELOG.md -->
 # Changelog
 
 ## [0.2.0] - 2025-11-05

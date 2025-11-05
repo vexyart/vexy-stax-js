@@ -1,3 +1,4 @@
+# <!-- this_file: CLAUDE.md -->
 # Development guidelines
 
 Analyze the entire codebase and the @README.md then /report the recent changes into @CHANGELOG.md and compress @CHANGELOG.md (keep all facts but compress fluff). Then /cleanup @TODO.md and @PLAN.md and @WORK.md (Remove all completed tasks). Then proceed to /work on the refactoring and other priority tasks. 
