@@ -7,13 +7,18 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
 import { Pane } from 'tweakpane';
-import * as EssentialsPlugin from '@kitschpatrol/tweakpane-plugin-essentials';
-import * as ColorPlusPlugin from 'tweakpane-plugin-color-plus';
 import { CameraAnimator } from './camera/animation.js';
+import { CameraController } from './camera/CameraController.js';
 import { RenderLoop } from './core/RenderLoop.js';
 import { SceneComposition } from './core/SceneComposition.js';
+import { MemoryMonitor } from './memory/MemoryMonitor.js';
+import { ExportManager } from './export/ExportManager.js';
 import { createLogger } from './utils/logger.js';
 import { FileHandler } from './files/FileHandler.js';
+import { TweakpaneSetup } from './ui/TweakpaneSetup.js';
+import { setupKeyboardShortcuts } from './ui/KeyboardShortcuts.js';
+import { createToastService } from './ui/ToastService.js';
+import { createSettingsManager } from './settings/SettingsManager.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
@@ -70,10 +75,14 @@ let scene, camera, orthoCamera, renderer, controls;
 let canvas;
 let cameraMode = 'perspective'; // 'perspective', 'orthographic', 'isometric'
 let cameraAnimator; // Camera animation system
+let cameraController; // Handles camera orchestration
+let tweakpaneSetup; // Encapsulates Tweakpane wiring
 
 let renderLoop; // Render animation loop manager
 let sceneComposition; // Manages image stack meshes
 let fileHandler = null; // Handles file intake (browse + drag/drop)
+let exportManager = null; // Manages PNG/JSON exports and imports
+let keyboardShortcuts = null; // Handles keyboard shortcut wiring
 // Lighting and environment
 let ambientLight, mainLight, fillLight;
 let floorGroup = null;
@@ -93,11 +102,7 @@ let historyIndex = -1;
 
 // FPS monitor tracking
 let showFPSEnabled = false;
-let fpsDisplayElement = null;
-
-
-// Memory usage tracking
-let lastMemoryWarning = 0;
+let memoryMonitor = null;
 
 // Parameters
 const params = createDefaultParams();
@@ -122,6 +127,43 @@ const logValidation = createLogger('Validation');
 const logKeyboard = createLogger('Keyboard');
 const logDebugAPI = createLogger('Debug API');
 const logSettings = createLogger('Settings');
+const showToast = createToastService({
+    documentRef: typeof document !== 'undefined' ? document : null,
+    setTimeoutFn: typeof window !== 'undefined' && typeof window.setTimeout === 'function'
+        ? window.setTimeout.bind(window)
+        : (typeof setTimeout === 'function' ? setTimeout : () => {}),
+    fadeDuration: TOAST_FADE_DURATION,
+    zIndex: Z_INDEX_MODAL
+});
+const settingsManager = createSettingsManager({
+    params,
+    storage: typeof window !== 'undefined' ? window.localStorage : null,
+    logger: logSettings,
+    confirm: typeof window !== 'undefined' && typeof window.confirm === 'function'
+        ? (message) => window.confirm(message)
+        : () => true,
+    alert: typeof window !== 'undefined' && typeof window.alert === 'function'
+        ? (message) => window.alert(message)
+        : () => {},
+    refreshPane: () => {
+        if (pane) {
+            pane.refresh();
+        }
+    },
+    switchCameraMode: (mode) => switchCameraMode(mode),
+    updateZoom: (zoom) => updateZoom(zoom),
+    updateBackground: () => updateBackground(),
+    updateZSpacing: (spacing) => updateZSpacing(spacing),
+    updateReflectionSettings: () => updateReflectionSettings(),
+    defaults: {
+        cameraMode: 'perspective',
+        cameraFOV: DEFAULT_CAMERA_FOV,
+        cameraZoom: 1.0,
+        bgColor: DEFAULT_BG_COLOR,
+        transparentBg: false,
+        zSpacing: DEFAULT_Z_SPACING
+    }
+});
 cameraMode = params.cameraMode;
 
 // Persist core state through AppState for upcoming modularisation
@@ -131,7 +173,7 @@ storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
 storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
 storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
 appState.set('cameraMode', cameraMode);
-appState.set('memoryState', { lastMemoryWarning });
+appState.set('memoryState', { lastMemoryWarning: 0 });
 
 // UI
 let pane;
@@ -324,6 +366,67 @@ function init() {
     cameraAnimator = new CameraAnimator(camera, controls);
     storeSharedRef(SHARED_STATE_KEYS.cameraAnimator, cameraAnimator);
 
+    cameraController = new CameraController({
+        camera,
+        orthoCamera,
+        controls,
+        params,
+        imageStack,
+        pane: { refresh: () => {} },
+        logCamera,
+        emitCameraUpdated,
+        onModeChange: (mode) => {
+            cameraMode = mode;
+            appState.set('cameraMode', mode);
+        }
+    });
+    cameraMode = cameraController.getMode();
+    appState.set('cameraMode', cameraMode);
+
+    memoryMonitor = new MemoryMonitor({
+        getImageStack: () => imageStack,
+        logMemory,
+        showToast,
+        confirm: (message) => confirm(message),
+        now: () => Date.now(),
+        thresholds: {
+            warningMB: MEMORY_WARNING_THRESHOLD_MB,
+            criticalMB: MEMORY_CRITICAL_THRESHOLD_MB,
+            cooldownMs: MEMORY_WARNING_COOLDOWN
+        },
+        toastDurations: {
+            warningMs: TOAST_DURATION_WARNING,
+            errorMs: TOAST_DURATION_ERROR
+        },
+        bytesPerMB: BYTES_PER_MB,
+        isFPSEnabled: () => showFPSEnabled,
+        resolveOverlay: () => {
+            if (typeof document === 'undefined') {
+                return null;
+            }
+            return document.getElementById('fps-display') ?? null;
+        },
+        isOverlayAttached: (element) => {
+            if (!element) {
+                return false;
+            }
+            if (typeof element.isConnected === 'boolean') {
+                return element.isConnected;
+            }
+            if (typeof document !== 'undefined') {
+                const { body } = document;
+                if (body && typeof body.contains === 'function') {
+                    return body.contains(element);
+                }
+            }
+            return Boolean(element.parentNode);
+        },
+        onWarningUpdate: (timestamp) => {
+            appState.set('memoryState', { lastMemoryWarning: timestamp });
+        },
+        initialWarningTimestamp: appState.get('memoryState')?.lastMemoryWarning ?? 0
+    });
+
     sceneComposition = new SceneComposition({
         scene,
         params,
@@ -362,6 +465,29 @@ function init() {
 
     // Setup Tweakpane UI
     setupTweakpane();
+    cameraController.attachPane(pane);
+
+    exportManager = new ExportManager({
+        renderer,
+        scene,
+        imageStack,
+        params,
+        camera,
+        orthoCamera,
+        controls,
+        logExport,
+        showToast,
+        clearAll,
+        updateImageList,
+        emitStackUpdated,
+        updateBackground,
+        pane,
+        getActiveCamera: () => getActiveCamera(),
+        document,
+        window,
+        navigator,
+        alert: (message) => alert(message)
+    });
 
     logInit.info('Initialization complete - UI should be visible');
 
@@ -369,7 +495,21 @@ function init() {
     setupDebouncedResize();
 
     // Setup keyboard shortcuts
-    setupKeyboardShortcuts();
+    keyboardShortcuts = setupKeyboardShortcuts({
+        addTrackedEventListener,
+        windowRef: window,
+        document,
+        cameraAnimator,
+        showToast,
+        logUI,
+        logCamera,
+        exportPNG: (scale) => exportPNG(scale),
+        undo,
+        redo,
+        clearAll,
+        imageStack,
+        confirm: (message) => confirm(message)
+    });
 
     // Expose debug API
     exposeDebugAPI();
@@ -736,129 +876,7 @@ function addTrackedEventListener(target, event, handler, options = {}) {
     storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
 }
 
-function setupKeyboardShortcuts() {
-    let helpOverlay = null;
-
-    // Create help overlay element (initially hidden)
-    function createHelpOverlay() {
-        const overlay = document.createElement('div');
-        overlay.id = 'keyboard-help';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.95);
-            color: white;
-            padding: 30px;
-            border-radius: 10px;
-            max-width: 400px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: ' + Z_INDEX_MODAL + ';
-            display: none;
-        `;
-
-        overlay.innerHTML = `
-            <h2 style="margin-top: 0;">Keyboard Shortcuts</h2>
-            <table style="width: 100%; border-collapse: collapse;">
-                <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + E</kbd></td><td>Export PNG</td></tr>
-                <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + Z</kbd></td><td>Undo</td></tr>
-                <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + Shift + Z</kbd></td><td>Redo</td></tr>
-                <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + Delete</kbd></td><td>Clear all images</td></tr>
-                <tr><td style="padding: 8px;"><kbd>?</kbd></td><td>Show this help</td></tr>
-                <tr><td style="padding: 8px;"><kbd>Esc</kbd></td><td>Close help</td></tr>
-            </table>
-            <p style="margin-bottom: 0; margin-top: 20px; text-align: center; font-size: 0.9em; opacity: 0.7;">Press Esc or ? to close</p>
-        `;
-
-        document.body.appendChild(overlay);
-        return overlay;
-    }
-
-    // Toggle help overlay
-    function toggleHelp() {
-        if (!helpOverlay) {
-            helpOverlay = createHelpOverlay();
-        }
-
-        if (helpOverlay.style.display === 'none') {
-            helpOverlay.style.display = 'block';
-            logUI.info('Keyboard shortcuts help shown');
-        } else {
-            helpOverlay.style.display = 'none';
-            logUI.info('Keyboard shortcuts help hidden');
-        }
-    }
-
-    // Keyboard event handler
-    const keydownHandler = (e) => {
-        // Show help with ? key
-        if (e.key === '?' || e.key === '/') {
-            e.preventDefault();
-            toggleHelp();
-            return;
-        }
-
-        // Close help or cancel animation with Esc
-        if (e.key === 'Escape') {
-            // Cancel animation first if one is playing
-            if (cameraAnimator && cameraAnimator.isAnimating) {
-                cameraAnimator.cancel();
-                showToast('Animation cancelled', 'info');
-                logCamera.info('Animation cancelled via ESC');
-                return;
-            }
-
-            // Otherwise close help overlay
-            if (helpOverlay && helpOverlay.style.display === 'block') {
-                helpOverlay.style.display = 'none';
-                logUI.info('Help closed');
-            }
-            return;
-        }
-
-        // Ctrl/Cmd + E: Export PNG
-        if ((e.ctrlKey || e.metaKey) && e.key === 'e' && !e.shiftKey) {
-            e.preventDefault();
-            logUI.info('Keyboard shortcut: Export PNG (Ctrl/Cmd+E)');
-            exportPNG(1);
-            return;
-        }
-
-        // Ctrl/Cmd + Z: Undo
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-            e.preventDefault();
-            logUI.info('Keyboard shortcut: Undo (Ctrl/Cmd+Z)');
-            undo();
-            return;
-        }
-
-        // Ctrl/Cmd + Shift + Z: Redo
-        if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
-            e.preventDefault();
-            logUI.info('Keyboard shortcut: Redo (Ctrl/Cmd+Shift+Z)');
-            redo();
-            return;
-        }
-
-        // Ctrl/Cmd + Delete: Clear all
-        if ((e.ctrlKey || e.metaKey) && (e.key === 'Delete' || e.key === 'Backspace')) {
-            e.preventDefault();
-            if (imageStack.length > 0) {
-                if (confirm('Clear all images? This cannot be undone.')) {
-                    logUI.info('Keyboard shortcut: Clear all (Ctrl/Cmd+Delete)');
-                    clearAll();
-                }
-            }
-            return;
-        }
-    };
-
-    addTrackedEventListener(window, 'keydown', keydownHandler);
-    logUI.info('Keyboard shortcuts enabled (Ctrl/Cmd+E, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Delete, ?)');
-}
-
-/**
+/** 
  * Expose debug API to window for console access and automation
  */
 function exposeDebugAPI() {
@@ -918,7 +936,9 @@ function exposeDebugAPI() {
         showFPS: (enabled) => {
             logAPI.info(` FPS display: ${enabled ? 'enabled' : 'disabled'}`);
             showFPSEnabled = Boolean(enabled);
-            fpsDisplayElement = null;
+            if (memoryMonitor) {
+                memoryMonitor.invalidateOverlay();
+            }
             if (renderLoop) {
                 renderLoop.showFPS(showFPSEnabled);
             }
@@ -1216,6 +1236,11 @@ function setupCleanup() {
                 fileHandler = null;
             }
 
+            if (keyboardShortcuts) {
+                keyboardShortcuts.teardown?.();
+                keyboardShortcuts = null;
+            }
+
             // Remove all tracked event listeners
             eventListeners.forEach(({ target, event, handler, options }) => {
                 target.removeEventListener(event, handler, options);
@@ -1348,98 +1373,11 @@ function setupContextLossRecovery() {
  * Creates FPS display element and tracks rendering performance
  */
 
-/**
- * Calculate estimated memory usage from image stack
- * @returns {number} Estimated memory in MB
- */
-function calculateMemoryUsage() {
-    let totalBytes = 0;
-    imageStack.forEach(img => {
-        if (img.texture && img.texture.image) {
-            const width = img.texture.image.width;
-            const height = img.texture.image.height;
-            // Rough estimate: 4 bytes per pixel (RGBA)
-            totalBytes += width * height * 4;
-        }
-    });
-    return totalBytes / BYTES_PER_MB; // Convert to MB
-}
-
-/**
- * Synchronize memory usage output with the FPS overlay provided by RenderLoop.
- * Guards against missing DOM in test environments and reacquires the element
- * if RenderLoop has recreated it.
- *
- * @param {number} memoryMB - Current estimated memory usage
- */
-function updateFPSMemoryOverlay(memoryMB) {
-    if (!showFPSEnabled) {
-        return;
-    }
-
-    if (typeof document === 'undefined') {
-        return;
-    }
-
-    const body = document.body;
-    const hasBodyContains = Boolean(body && typeof body.contains === 'function');
-    const isDetachedByContains = hasBodyContains && fpsDisplayElement ? !body.contains(fpsDisplayElement) : false;
-    const isDetachedByParent = fpsDisplayElement ? !fpsDisplayElement.parentNode : false;
-
-    if (!fpsDisplayElement || isDetachedByContains || isDetachedByParent) {
-        fpsDisplayElement = document.getElementById('fps-display') || null;
-    }
-
-    if (!fpsDisplayElement) {
-        return;
-    }
-
-    const memoryMarkup = `<br><small data-fps-memory="true" style="opacity: 0.7">${memoryMB.toFixed(0)}MB</small>`;
-    const existingHTML = fpsDisplayElement.innerHTML;
-    const htmlWithoutMemory = existingHTML.replace(/\s*<br><small\s+data-fps-memory="true"[^>]*>.*?<\/small>/, '');
-
-    fpsDisplayElement.innerHTML = `${htmlWithoutMemory}${memoryMarkup}`;
-}
-
-/**
- * Check memory usage and warn if thresholds exceeded
- * @param {boolean} isAdding - Whether this check is before adding a new image
- * @returns {boolean} True if operation should proceed, false if critical threshold reached
- */
 function checkMemoryUsage(isAdding = false) {
-    const memoryMB = calculateMemoryUsage();
-    const now = Date.now();
-
-    // Log memory stats
-    logMemory.info(` Current usage: ${memoryMB.toFixed(2)} MB (${imageStack.length} images)`);
-
-    // Critical threshold - block operation with confirmation
-    if (memoryMB >= MEMORY_CRITICAL_THRESHOLD_MB) {
-        const message = `Critical memory usage: ${memoryMB.toFixed(0)} MB!\n\n` +
-                       `Loading more images may cause browser slowdown or crash.\n\n` +
-                       `Continue anyway?`;
-
-        logMemory.warn(` CRITICAL: ${memoryMB.toFixed(2)} MB >= ${MEMORY_CRITICAL_THRESHOLD_MB} MB`);
-
-        if (isAdding) {
-            return confirm(message);
-        } else {
-            showToast(`⚠️ Critical memory: ${memoryMB.toFixed(0)} MB`, 'error', TOAST_DURATION_ERROR);
-            return true;
-        }
+    if (!memoryMonitor) {
+        return true;
     }
-
-    // Warning threshold - show toast (with cooldown to avoid spam)
-    if (memoryMB >= MEMORY_WARNING_THRESHOLD_MB && now - lastMemoryWarning > MEMORY_WARNING_COOLDOWN) {
-        logMemory.warn(` Warning: ${memoryMB.toFixed(2)} MB >= ${MEMORY_WARNING_THRESHOLD_MB} MB`);
-        showToast(`⚠️ High memory usage: ${memoryMB.toFixed(0)} MB. Consider reducing image count.`, 'warning', TOAST_DURATION_WARNING);
-        lastMemoryWarning = now;
-    }
-
-    // Update FPS display if showing
-    updateFPSMemoryOverlay(memoryMB);
-
-    return true;
+    return memoryMonitor.checkMemoryUsage(isAdding);
 }
 
 /**
@@ -1484,8 +1422,11 @@ function saveHistory() {
 }
 
 /**
- * Undo last image stack change
- * Restores previous state from history
+ * Undo the most recent change in the image stack history.
+ * @returns {void}
+ *
+ * @example
+ * undo();
  */
 function undo() {
     if (historyIndex <= 0) {
@@ -1534,8 +1475,11 @@ function undo() {
 }
 
 /**
- * Redo previously undone change
- * Restores next state from history
+ * Redo the next change in the history stack after an undo.
+ * @returns {void}
+ *
+ * @example
+ * redo();
  */
 function redo() {
     if (historyIndex >= historyStack.length - 1) {
@@ -1584,479 +1528,98 @@ function redo() {
 }
 
 /**
- * Show temporary toast notification
- * @param {string} message - Message to display
- * @param {string} type - 'success', 'error', 'warning', or 'info'
- * @param {number} duration - Duration in milliseconds (default: 3000)
- */
-function showToast(message, type = 'info', duration = 3000) {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        padding: 12px 20px;
-        border-radius: 6px;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 14px;
-        z-index: ' + Z_INDEX_MODAL + ';
-        box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        animation: slideIn 0.3s ease-out;
-    `;
-
-    // Set color based on type
-    const colors = {
-        success: { bg: 'rgba(40, 167, 69, 0.95)', text: 'white' },
-        error: { bg: 'rgba(220, 53, 69, 0.95)', text: 'white' },
-        warning: { bg: 'rgba(255, 193, 7, 0.95)', text: 'black' },
-        info: { bg: 'rgba(23, 162, 184, 0.95)', text: 'white' }
-    };
-
-    const color = colors[type] || colors.info;
-    toast.style.background = color.bg;
-    toast.style.color = color.text;
-    toast.textContent = message;
-
-    document.body.appendChild(toast);
-
-    // Auto-dismiss
-    setTimeout(() => {
-        toast.style.animation = 'slideOut 0.3s ease-in';
-        setTimeout(() => toast.remove(), TOAST_FADE_DURATION);
-    }, duration);
-}
-
-/**
- * Load settings from localStorage
- * @returns {boolean} true if settings were loaded, false otherwise
+ * Load persisted studio settings from `localStorage` into `params`.
+ *
+ * @returns {boolean} `true` when a snapshot was applied successfully.
+ *
+ * @example
+ * if (!loadSettings()) {
+ *   console.info('First run – using defaults');
+ * }
  */
 function loadSettings() {
-    try {
-        if (!window.localStorage) {
-            logSettings.warn('localStorage not available');
-            return false;
-        }
-
-        const saved = localStorage.getItem('vexy-stax-settings');
-        if (!saved) {
-            logSettings.info('No saved settings found');
-            return false;
-        }
-
-        const settings = JSON.parse(saved);
-
-        // Apply saved settings to params
-        if (settings.cameraMode !== undefined) params.cameraMode = settings.cameraMode;
-        if (settings.cameraFOV !== undefined) params.cameraFOV = settings.cameraFOV;
-        if (settings.cameraZoom !== undefined) params.cameraZoom = settings.cameraZoom;
-        if (settings.bgColor !== undefined) params.bgColor = settings.bgColor;
-        if (settings.transparentBg !== undefined) params.transparentBg = settings.transparentBg;
-        if (settings.zSpacing !== undefined) params.zSpacing = settings.zSpacing;
-
-        logSettings.info('Settings loaded from localStorage:', settings);
-        return true;
-    } catch (error) {
-        logSettings.error('Failed to load settings:', error);
-        return false;
-    }
+    return settingsManager.loadSettings();
 }
 
 /**
- * Save settings to localStorage with error recovery
+ * Persist current camera/background/z-spacing preferences to `localStorage`.
+ * Handles quota errors by offering to clear stale data before retrying.
  */
 function saveSettings() {
-    try {
-        if (!window.localStorage) {
-            logSettings.warn('localStorage not available');
-            return;
-        }
-
-        const settings = {
-            cameraMode: params.cameraMode,
-            cameraFOV: params.cameraFOV,
-            cameraZoom: params.cameraZoom,
-            bgColor: params.bgColor,
-            transparentBg: params.transparentBg,
-            zSpacing: params.zSpacing
-        };
-
-        localStorage.setItem('vexy-stax-settings', JSON.stringify(settings));
-        logSettings.info('Settings saved to localStorage');
-    } catch (error) {
-        // Check for quota exceeded error
-        if (error.name === 'QuotaExceededError' || error.code === 22) {
-            logSettings.error('localStorage quota exceeded');
-
-            // Show user-friendly error with option to clear storage
-            const clearStorage = confirm(
-                'Storage quota full!\n\n' +
-                'Cannot save settings because browser storage is full.\n\n' +
-                'Click OK to clear Vexy Stax storage and try again, or Cancel to continue without saving.'
-            );
-
-            if (clearStorage) {
-                try {
-                    // Clear all vexy-stax related storage
-                    localStorage.removeItem('vexy-stax-settings');
-                    logSettings.info('Cleared storage, retrying save...');
-
-                    // Retry save after clearing
-                    localStorage.setItem('vexy-stax-settings', JSON.stringify(settings));
-                    logSettings.info('Settings saved successfully after clearing storage');
-                    alert('Storage cleared and settings saved!');
-                } catch (retryError) {
-                    logSettings.error('Failed to save even after clearing:', retryError);
-                    alert('Still unable to save settings. Try closing other tabs or clearing browser data.');
-                }
-            } else {
-                logSettings.warn('User declined to clear storage - settings not saved');
-            }
-        } else {
-            // Other localStorage errors
-            logSettings.error('Failed to save settings:', error.name, error.message);
-        }
-    }
+    settingsManager.saveSettings();
 }
 
 /**
- * Reset settings to defaults
+ * Restore default studio settings, refresh UI, and clear persisted storage.
+ *
+ * @returns {void}
+ *
+ * @example
+ * // Restore factory defaults
+ * resetSettings();
  */
 function resetSettings() {
-    params.cameraMode = 'perspective';
-    params.cameraFOV = DEFAULT_CAMERA_FOV;
-    params.cameraZoom = 1.0;
-    params.bgColor = DEFAULT_BG_COLOR;
-    params.transparentBg = false;
-    params.zSpacing = DEFAULT_Z_SPACING;
-
-    // Update UI
-    if (pane) {
-        pane.refresh();
-    }
-
-    // Update scene
-    switchCameraMode(params.cameraMode);
-    updateZoom(params.cameraZoom);
-    updateBackground();
-    updateZSpacing(params.zSpacing);
-
-    // Clear localStorage
-    try {
-        if (window.localStorage) {
-            localStorage.removeItem('vexy-stax-settings');
-            logSettings.info('Settings reset to defaults and cleared from localStorage');
-        }
-    } catch (error) {
-        logSettings.error('Failed to clear settings:', error);
-    }
+    settingsManager.resetSettings();
 }
 
+
 function setupTweakpane() {
-    const controlsContainer = document.getElementById('controls');
-    if (!controlsContainer) {
-        logUI.error('Controls container not found!');
-        return;
+    tweakpaneSetup = new TweakpaneSetup({
+        params,
+        materialPresets: MATERIAL_PRESETS,
+        viewpointPresets: VIEWPOINT_PRESETS,
+        callbacks: {
+            updateCanvasSize,
+            updateBackground,
+            toggleAmbience,
+            centerViewOnContent,
+            setViewpoint,
+            setViewpointFitToFrame,
+            switchCameraMode,
+            updateZoom,
+            setCameraFOV: (value) => {
+                if (cameraController) {
+                    cameraController.setFOV(value);
+                } else {
+                    camera.fov = value;
+                    camera.updateProjectionMatrix();
+                }
+            },
+            applyMaterialPreset,
+            updateZSpacing,
+            exportPNG,
+            exportJSON,
+            importJSON,
+            copyJSON,
+            pasteJSON,
+            resetSettings,
+            clearAll,
+            undo,
+            redo,
+            showToast,
+            saveSettings
+        },
+        dependencies: {
+            cameraAnimator,
+            logUI,
+            logCamera,
+            confirm: (message) => confirm(message),
+            document,
+            imageStack
+        }
+    });
+
+    const paneInstance = tweakpaneSetup.setup();
+    if (paneInstance) {
+        pane = paneInstance;
     }
-
-    pane = new Pane({
-        title: 'Vexy-Stax Controls',
-        container: controlsContainer,
-        expanded: true
-    });
-
-    // Register plugins
-    pane.registerPlugin(EssentialsPlugin);
-    pane.registerPlugin(ColorPlusPlugin);
-
-    logUI.info('Tweakpane created successfully');
-
-    // ===== STUDIO SECTION =====
-    const studioFolder = pane.addFolder({
-        title: 'Studio',
-        expanded: true
-    });
-
-    // Canvas size (Point control)
-    studioFolder.addBinding(params, 'canvasSize', {
-        label: 'Size',
-        x: { min: 640, max: 3840, step: 1 },
-        y: { min: 480, max: 2160, step: 1 }
-    }).on('change', (ev) => {
-        updateCanvasSize(ev.value);
-        saveSettings();
-    });
-
-    // Background color (using color-plus plugin)
-    studioFolder.addBinding(params, 'bgColor', {
-        label: 'Color',
-        view: 'color',
-        picker: 'inline',
-        expanded: false
-    }).on('change', (ev) => {
-        updateBackground();
-        saveSettings();
-    });
-
-    // Transparent background toggle
-    studioFolder.addBinding(params, 'transparentBg', {
-        label: 'Transparent'
-    }).on('change', (ev) => {
-        updateBackground();
-        saveSettings();
-    });
-
-    // Ambience toggle (realistic floor with shadows)
-    studioFolder.addBinding(params, 'ambience', {
-        label: 'Ambience'
-    }).on('change', (ev) => {
-        toggleAmbience(ev.value);
-        saveSettings();
-    });
-
-    // ===== CAMERA SECTION =====
-    const cameraFolder = pane.addFolder({
-        title: 'Camera',
-        expanded: true
-    });
-
-    // Viewpoint selector dropdown
-    cameraFolder.addBinding(params, 'viewpointPreset', {
-        label: 'Viewpoint',
-        options: {
-            'Beauty': 'beauty',
-            'Center': 'center',
-            'Front': 'front',
-            'Top': 'top',
-            'Isometric': 'isometric',
-            '3D Stack': '3d-stack',
-            'Side': 'side'
-        }
-    }).on('change', (ev) => {
-        const preset = VIEWPOINT_PRESETS[ev.value];
-        if (preset === null) {
-            // Center is special case
-            centerViewOnContent();
-        } else if (preset === 'fitToFrame') {
-            // Front view - fit frontmost slide to studio frame
-            setViewpointFitToFrame();
-        } else {
-            setViewpoint(preset.x, preset.y, preset.z);
-        }
-        saveSettings();
-    });
-
-    // Camera mode selector
-    cameraFolder.addBinding(params, 'cameraMode', {
-        label: 'Mode',
-        options: {
-            'Perspective': 'perspective',
-            'Orthographic': 'orthographic',
-            'Isometric': 'isometric',
-            'Telephoto': 'telephoto'
-        }
-    }).on('change', (ev) => {
-        switchCameraMode(ev.value);
-        saveSettings();
-    });
-
-    // Zoom slider (works for all camera modes)
-    cameraFolder.addBinding(params, 'cameraZoom', {
-        label: 'Zoom',
-        min: 0.1,
-        max: 3.0,
-        step: 0.1
-    }).on('change', (ev) => {
-        updateZoom(ev.value);
-        saveSettings();
-    });
-
-    // FOV slider (for perspective mode)
-    cameraFolder.addBinding(params, 'cameraFOV', {
-        label: 'FOV',
-        min: 15,
-        max: 120,
-        step: 5
-    }).on('change', (ev) => {
-        if (cameraMode === 'perspective' || cameraMode === 'telephoto') {
-            camera.fov = ev.value;
-            camera.updateProjectionMatrix();
-        }
-        saveSettings();
-    });
-
-    // ===== SLIDES SECTION =====
-    const slidesFolder = pane.addFolder({
-        title: 'Slides',
-        expanded: true
-    });
-
-    // Material selector dropdown
-    slidesFolder.addBinding(params, 'materialPreset', {
-        label: 'Material',
-        options: {
-            'Metallic Card': 'metallic-card',
-            'Flat Matte': 'flat-matte',
-            'Glossy Photo': 'glossy-photo',
-            'Plastic Card': 'plastic-card',
-            'Thick Board': 'thick-board',
-            'Metal Sheet': 'metal-sheet',
-            'Glass Slide': 'glass-slide',
-            'Matte Print': 'matte-print',
-            'Bordered': 'bordered',
-            '3D Box': '3d-box'
-        }
-    }).on('change', (ev) => {
-        applyMaterialPreset(MATERIAL_PRESETS[ev.value]);
-        saveSettings();
-    });
-
-    // Distance slider (renamed from Z-Spacing)
-    slidesFolder.addBinding(params, 'zSpacing', {
-        label: 'Distance',
-        min: 0,
-        max: 500,
-        step: 10
-    }).on('change', (ev) => {
-        updateZSpacing(ev.value);
-        saveSettings();
-    });
-
-    // ===== TABBED INTERFACE =====
-    const tabs = pane.addTab({
-        pages: [
-            { title: 'File' },
-            { title: 'Image' },
-            { title: 'Video' }
-        ]
-    });
-
-    // ===== FILE TAB =====
-    const fileTab = tabs.pages[0];
-
-    // JSON button grid (2x2 grid)
-    fileTab.addBlade({
-        view: 'buttongrid',
-        size: [2, 2],
-        cells: (x, y) => ({
-            title: [
-                ['Open', 'Paste'],
-                ['Save', 'Copy']
-            ][y][x]
-        }),
-        label: 'JSON'
-    }).on('click', (ev) => {
-        const [x, y] = ev.index;
-        if (y === 0 && x === 0) {
-            // Open
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json';
-            input.onchange = (e) => importJSON(e.target.files[0]);
-            input.click();
-        } else if (y === 0 && x === 1) {
-            // Paste
-            pasteJSON();
-        } else if (y === 1 && x === 0) {
-            // Save
-            exportJSON();
-        } else if (y === 1 && x === 1) {
-            // Copy
-            copyJSON();
-        }
-    });
-
-    // Tools button grid (2x1 grid)
-    fileTab.addBlade({
-        view: 'buttongrid',
-        size: [2, 1],
-        cells: (x, y) => ({
-            title: [['Defaults', 'Clear']][y][x]
-        }),
-        label: 'Tools'
-    }).on('click', (ev) => {
-        if (ev.index[0] === 0) {
-            // Defaults
-            if (confirm('Reset all settings to defaults? This will clear saved preferences.')) {
-                resetSettings();
-            }
-        } else {
-            // Clear
-            clearAll();
-        }
-    });
-
-    // ===== IMAGE TAB =====
-    const imageTab = tabs.pages[1];
-
-    // PNG button grid (1x3 grid)
-    imageTab.addBlade({
-        view: 'buttongrid',
-        size: [3, 1],
-        cells: (x, y) => ({
-            title: [['1x', '2x', '4x']][y][x]
-        }),
-        label: 'PNG'
-    }).on('click', (ev) => {
-        const scale = ev.index[0] === 0 ? 1 : ev.index[0] === 1 ? 2 : 4;
-        exportPNG(scale);
-    });
-
-    // ===== VIDEO TAB =====
-    const videoTab = tabs.pages[2];
-
-    videoTab.addButton({ title: 'Play Hero Shot' }).on('click', async () => {
-        if (imageStack.length === 0) {
-            showToast('No images loaded', 'error');
-            return;
-        }
-
-        const topSlide = imageStack[imageStack.length - 1];
-        if (!topSlide) {
-            showToast('No top slide found', 'error');
-            return;
-        }
-
-        showToast('Animating to Front view...', 'info');
-
-        try {
-            await cameraAnimator.playHeroShot({
-                topSlide: topSlide,
-                canvasSize: params.canvasSize,
-                duration: params.animDuration,
-                easing: params.animEasing
-            });
-            showToast('Animation complete', 'success');
-        } catch (error) {
-            logCamera.error('Animation error:', error);
-            showToast('Animation failed', 'error');
-        }
-    });
-
-    videoTab.addBinding(params, 'animDuration', {
-        label: 'Duration',
-        min: 0.5,
-        max: 5.0,
-        step: 0.1
-    }).on('change', saveSettings);
-
-    videoTab.addBinding(params, 'animEasing', {
-        label: 'Easing',
-        options: {
-            'Power In/Out': 'power2.inOut',
-            'Power In': 'power2.in',
-            'Power Out': 'power2.out',
-            'Elastic Out': 'elastic.out',
-            'Back In/Out': 'back.inOut',
-            'Circ In/Out': 'circ.inOut'
-        }
-    }).on('change', saveSettings);
 }
 
 /**
  * Export current 3D scene as PNG image with configurable resolution
  *
  * @param {number} [scale=1] - Resolution multiplier (1x, 2x, or 4x). Values outside 1-4 range default to 1x.
- * @returns {void}
+ * @returns {Promise<void>}
  *
  * @example
  * // Export at standard resolution (window size)
@@ -2075,134 +1638,26 @@ function setupTweakpane() {
  * window.vexyStax.exportPNG();
  */
 function exportPNG(scale = 1) {
-    // Check if images are loaded
-    if (imageStack.length === 0) {
-        logExport.warn(' No images loaded - cannot export empty scene');
-        showToast('⚠️ Load images first', 'warning');
+    if (!exportManager) {
+        logExport.warn('Export manager not initialized');
         return;
     }
-
-    // Validate scale parameter (1-4 range for reasonable export sizes)
-    if (typeof scale !== 'number' || scale < 1 || scale > 4) {
-        logExport.warn(`Invalid scale parameter: ${scale}. Using 1x instead.`);
-        scale = 1;
-    }
-
-    logExport.info(`Exporting PNG at ${scale}x resolution...`);
-
-    // Show loading overlay for high-res exports
-    let loadingOverlay = null;
-    if (scale >= 2) {
-        loadingOverlay = document.createElement('div');
-        loadingOverlay.style.cssText = `
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: ' + Z_INDEX_MODAL + ';
-        `;
-
-        loadingOverlay.innerHTML = `
-            <div style="text-align: center;">
-                <div style="font-size: 24px; margin-bottom: 10px;">Exporting...</div>
-                <div style="font-size: 16px; opacity: 0.7;">Rendering at ${scale}x resolution</div>
-                <div style="margin-top: 20px; font-size: 14px; opacity: 0.5;">Please wait...</div>
-            </div>
-        `;
-
-        document.body.appendChild(loadingOverlay);
-    }
-
-    // Use setTimeout to allow UI update before heavy operation
-    setTimeout(() => {
-        try {
-            // Store original renderer state
-            const originalWidth = window.innerWidth;
-            const originalHeight = window.innerHeight;
-            const originalPixelRatio = renderer.getPixelRatio();
-
-            if (scale > 1) {
-                // Use setPixelRatio to increase resolution without changing view
-                // This renders at higher resolution while maintaining the same view
-                renderer.setPixelRatio(originalPixelRatio * scale);
-            }
-
-            // Render one frame at higher pixel ratio
-            const activeCamera = getActiveCamera();
-            renderer.render(scene, activeCamera);
-
-            // Get data URL (PNG supports transparency)
-            const dataURL = renderer.domElement.toDataURL('image/png');
-
-            // Verify data URL was created successfully
-            if (!dataURL || !dataURL.startsWith('data:image/png')) {
-                throw new Error('exportPNG: failed to generate PNG data URL');
-            }
-
-            // Estimate file size (rough approximation)
-            const base64Length = dataURL.length - 'data:image/png;base64,'.length;
-            const fileSizeBytes = (base64Length * 3) / 4;
-            const fileSizeMB = (fileSizeBytes / BYTES_PER_MB).toFixed(2);
-
-            // Create download link
-            const link = document.createElement('a');
-            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-            const filename = `vexy-stax-${scale}x-${timestamp}.png`;
-            link.download = filename;
-            link.href = dataURL;
-            document.body.appendChild(link);
-
-            // Trigger download
-            let downloadSuccess = false;
-            try {
-                link.click();
-                downloadSuccess = true;
-            } catch (error) {
-                logExport.error(' Download failed:', error);
-                throw new Error('exportPNG: failed to trigger download');
-            } finally {
-                document.body.removeChild(link);
-            }
-
-            // Restore original pixel ratio
-            if (scale > 1) {
-                renderer.setPixelRatio(originalPixelRatio);
-                // Re-render at normal resolution
-                renderer.render(scene, activeCamera);
-            }
-
-            // Log success and show confirmation
-            const dimensions = `${renderer.domElement.width}x${renderer.domElement.height}px`;
-            logExport.info(` PNG exported successfully: ${filename} (${dimensions}, ~${fileSizeMB} MB)`);
-
-            if (downloadSuccess) {
-                showToast(`✓ Exported: ${filename} (${fileSizeMB} MB)`, 'success', TOAST_DURATION_INFO);
-            }
-        } catch (error) {
-            logExport.error(' Export failed:', error);
-            showToast(`❌ Export failed: ${error.message}`, 'error', TOAST_DURATION_ERROR);
-        } finally {
-            // Remove loading overlay
-            if (loadingOverlay) {
-                document.body.removeChild(loadingOverlay);
-            }
-        }
-    }, OVERLAY_RENDER_DELAY);
+    return exportManager.exportPNG(scale);
 }
 
 function getActiveCamera() {
+    if (cameraController) {
+        return cameraController.getActiveCamera();
+    }
     return (cameraMode === 'orthographic' || cameraMode === 'isometric') ? orthoCamera : camera;
 }
 
 function updateZoom(zoomValue) {
+    if (cameraController) {
+        cameraController.setZoom(zoomValue);
+        return;
+    }
+
     params.cameraZoom = zoomValue;
 
     // Apply zoom to both cameras
@@ -2263,26 +1718,39 @@ function updateCanvasSize(size) {
 
 // Studio frame visualization removed - canvas size now controls renderer dimensions directly
 
+/**
+ * Center the active camera on the combined bounds of all loaded slides.
+ *
+ * When the refactored `CameraController` is available the call is delegated,
+ * otherwise falls back to legacy bounding-box logic.
+ *
+ * @returns {void}
+ *
+ * @example
+ * // Reframe camera after dragging slides
+ * centerViewOnContent();
+ */
 function centerViewOnContent() {
+    if (cameraController) {
+        cameraController.centerOnContent();
+        return;
+    }
+
     if (imageStack.length === 0) {
         logCamera.info('No content to center on');
         return;
     }
 
-    // Calculate bounding box of all meshes
     const box = new THREE.Box3();
     imageStack.forEach(imageData => {
         box.expandByObject(imageData.mesh);
     });
 
-    // Get center of bounding box
     const center = new THREE.Vector3();
     box.getCenter(center);
 
-    // Update controls target
     controls.target.copy(center);
 
-    // Keep current camera position relative to new target
     const currentCam = getActiveCamera();
     const offset = new THREE.Vector3().subVectors(currentCam.position, new THREE.Vector3(0, 0, 0));
     currentCam.position.copy(center).add(offset);
@@ -2293,26 +1761,37 @@ function centerViewOnContent() {
     emitCameraUpdated('center');
 }
 
+/**
+ * Switch the active camera configuration between perspective variants.
+ *
+ * @param {string} mode - One of 'perspective', 'orthographic', 'isometric', 'telephoto'.
+ *
+ * @example
+ * switchCameraMode('telephoto');
+ */
 function switchCameraMode(mode) {
+    if (cameraController) {
+        cameraController.switchMode(mode);
+        return;
+    }
+
     cameraMode = mode;
+    params.cameraMode = mode;
     logCamera.info(`Switching to ${mode} camera mode`);
 
     if (mode === 'orthographic') {
-        // Front orthographic view
         orthoCamera.position.set(0, 0, CAMERA_DEFAULT_DISTANCE);
         orthoCamera.lookAt(0, 0, 0);
         orthoCamera.zoom = params.cameraZoom;
         orthoCamera.updateProjectionMatrix();
         controls.object = orthoCamera;
     } else if (mode === 'isometric') {
-        // Isometric view (45° angle)
         orthoCamera.position.set(500, 500, 500);
         orthoCamera.lookAt(0, 0, 0);
         orthoCamera.zoom = params.cameraZoom;
         orthoCamera.updateProjectionMatrix();
         controls.object = orthoCamera;
     } else if (mode === 'telephoto') {
-        // Telephoto: far camera + narrow FOV
         params.cameraFOV = 30;
         camera.fov = 30;
         camera.position.set(0, 0, 1500);
@@ -2320,9 +1799,8 @@ function switchCameraMode(mode) {
         camera.zoom = params.cameraZoom;
         camera.updateProjectionMatrix();
         controls.object = camera;
-        pane.refresh();
+        pane?.refresh?.();
     } else {
-        // Default perspective
         camera.position.set(0, 0, CAMERA_DEFAULT_DISTANCE);
         camera.lookAt(0, 0, 0);
         camera.zoom = params.cameraZoom;
@@ -2376,6 +1854,15 @@ function updateBackground() {
     emitBackgroundChanged('update');
 }
 
+/**
+ * Update the Z-offset applied between consecutive slides in the stack.
+ *
+ * @param {number} newSpacing - Distance in Three.js world units between slides.
+ *
+ * @example
+ * // Increase separation for a thicker stack appearance
+ * updateZSpacing(80);
+ */
 function updateZSpacing(newSpacing) {
     // Update all existing images
     imageStack.forEach((imageData, index) => {
@@ -2385,6 +1872,11 @@ function updateZSpacing(newSpacing) {
 }
 
 function setViewpoint(x, y, z) {
+    if (cameraController) {
+        cameraController.setViewpoint(x, y, z);
+        return;
+    }
+
     camera.position.set(x, y, z);
     camera.lookAt(0, 0, 0);
     controls.update();
@@ -2396,6 +1888,11 @@ function setViewpoint(x, y, z) {
  * Set viewpoint to fit frontmost slide within studio frame
  */
 function setViewpointFitToFrame() {
+    if (cameraController) {
+        cameraController.setViewpointFitToFrame();
+        return;
+    }
+
     if (imageStack.length === 0) {
         // Default front view if no images
         setViewpoint(0, 0, 800);
@@ -2750,70 +2247,24 @@ function onWindowResize() {
     updateReflectionSettings();
 }
 
-
+/**
+ * Export the current scene configuration (camera, materials, stack) as JSON.
+ *
+ * Delegates to `ExportManager` to serialise params, mesh transforms, and
+ * embedded texture data. The resulting file is downloaded immediately.
+ *
+ * @returns {Promise<void>} Resolves once the download has been triggered.
+ *
+ * @example
+ * // Trigger a JSON export from the public API
+ * window.vexyStax.exportJSON();
+ */
 function exportJSON() {
-    // Check if images are loaded
-    if (imageStack.length === 0) {
-        logExport.warn(' No images loaded - cannot export empty configuration');
-        showToast('⚠️ Load images first', 'warning');
+    if (!exportManager) {
+        logExport.warn('Export manager not initialized');
         return;
     }
-
-    logExport.info('Exporting JSON configuration...');
-
-    // Collect configuration
-    const config = {
-        version: '1.0',
-        params: {
-            zSpacing: params.zSpacing,
-            bgColor: params.bgColor
-        },
-        camera: {
-            position: {
-                x: camera.position.x,
-                y: camera.position.y,
-                z: camera.position.z
-            }
-        },
-        images: []
-    };
-
-    // Export each image with embedded base64 data
-    imageStack.forEach(imageData => {
-        // Get canvas from texture
-        const texture = imageData.mesh.material.map;
-        if (texture && texture.image) {
-            // Create temporary canvas to extract image data
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = texture.image.width;
-            tempCanvas.height = texture.image.height;
-            const ctx = tempCanvas.getContext('2d');
-            ctx.drawImage(texture.image, 0, 0);
-            const dataURL = tempCanvas.toDataURL('image/png');
-
-            config.images.push({
-                filename: imageData.filename,
-                dataURL: dataURL,
-                width: imageData.width,
-                height: imageData.height
-            });
-        }
-    });
-
-    // Create download
-    const json = JSON.stringify(config, null, 2);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
-    link.download = `vexy-stax-config-${timestamp}.json`;
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-
-    logExport.info(`JSON exported successfully as ${link.download}`);
+    return exportManager.exportJSON();
 }
 
 /**
@@ -2824,7 +2275,7 @@ function exportJSON() {
  * scene before applying imported configuration.
  *
  * @param {File} file - File object from file input or drag-and-drop event
- * @returns {void}
+ * @returns {Promise<void>}
  *
  * @example
  * // Import from file input
@@ -2856,248 +2307,27 @@ function exportJSON() {
  * }
  */
 function importJSON(file) {
-    if (!file) {
-        logExport.error('No file provided for import');
+    if (!exportManager) {
+        logExport.warn('Export manager not initialized');
         return;
     }
-
-    logExport.info(`Importing JSON configuration from ${file.name}...`);
-
-    const reader = new FileReader();
-
-    reader.onload = function(event) {
-        try {
-            const config = JSON.parse(event.target.result);
-
-            // Validate config
-            if (!config.version || !config.params || !config.images) {
-                throw new Error('Invalid config format');
-            }
-
-            // Clear existing
-            clearAll();
-
-            // Apply params
-            params.zSpacing = config.params.zSpacing;
-            params.bgColor = config.params.bgColor;
-
-            // Update scene background
-            scene.background = new THREE.Color(params.bgColor);
-
-            // Update camera
-            if (config.camera && config.camera.position) {
-                camera.position.set(
-                    config.camera.position.x,
-                    config.camera.position.y,
-                    config.camera.position.z
-                );
-                camera.lookAt(0, 0, 0);
-                controls.update();
-            }
-
-            // Load images
-            const textureLoader = new THREE.TextureLoader();
-            config.images.forEach((imageConfig, index) => {
-                textureLoader.load(imageConfig.dataURL, (texture) => {
-                    // Create geometry with saved dimensions
-                    const geometry = new THREE.PlaneGeometry(
-                        imageConfig.width,
-                        imageConfig.height
-                    );
-
-                    // Create material
-                    const material = new THREE.MeshBasicMaterial({
-                        map: texture,
-                        side: THREE.DoubleSide,
-                        transparent: true
-                    });
-
-                    // Create mesh
-                    const mesh = new THREE.Mesh(geometry, material);
-                    mesh.position.z = index * params.zSpacing;
-
-                    // Store and add to scene
-                    imageStack.push({
-                        mesh: mesh,
-                        texture: texture,
-                        filename: imageConfig.filename,
-                        width: imageConfig.width,
-                        height: imageConfig.height
-                    });
-
-                    scene.add(mesh);
-
-                    logExport.info(`Loaded ${imageConfig.filename} from config`);
-                });
-            });
-
-            // Refresh Tweakpane to show updated params
-            pane.refresh();
-
-            logExport.info('JSON configuration imported successfully');
-
-        } catch (error) {
-            logExport.error('Failed to import JSON:', error);
-            alert(`Failed to import configuration: ${error.message}`);
-        }
-    };
-
-    reader.onerror = function(error) {
-        logExport.error('Failed to read JSON file:', error);
-    };
-
-    reader.readAsText(file);
+    return exportManager.importJSON(file);
 }
 
 function copyJSON() {
-    // Check if images are loaded
-    if (imageStack.length === 0) {
-        logExport.warn(' No images loaded - cannot copy empty configuration');
-        showToast('⚠️ Load images first', 'warning');
+    if (!exportManager) {
+        logExport.warn('Export manager not initialized');
         return;
     }
-
-    logExport.info('Copying JSON configuration to clipboard...');
-
-    // Build config object (same as exportJSON)
-    const config = {
-        version: '1.0',
-        params: {
-            zSpacing: params.zSpacing,
-            bgColor: params.bgColor,
-            cameraMode: params.cameraMode,
-            cameraFOV: params.cameraFOV,
-            transparentBg: params.transparentBg
-        },
-        camera: {
-            position: {
-                x: camera.position.x,
-                y: camera.position.y,
-                z: camera.position.z
-            }
-        },
-        images: []
-    };
-
-    // Export each image with embedded base64 data
-    imageStack.forEach(imageData => {
-        const texture = imageData.mesh.material.map;
-        if (texture && texture.image) {
-            const tempCanvas = document.createElement('canvas');
-            tempCanvas.width = texture.image.width;
-            tempCanvas.height = texture.image.height;
-            const ctx = tempCanvas.getContext('2d');
-            ctx.drawImage(texture.image, 0, 0);
-            const dataURL = tempCanvas.toDataURL('image/png');
-
-            config.images.push({
-                filename: imageData.filename,
-                dataURL: dataURL,
-                width: imageData.width,
-                height: imageData.height
-            });
-        }
-    });
-
-    // Copy to clipboard
-    const json = JSON.stringify(config, null, 2);
-    navigator.clipboard.writeText(json).then(() => {
-        logExport.info('JSON configuration copied to clipboard');
-        showToast('📋 Configuration copied to clipboard!', 'success');
-    }).catch(err => {
-        logExport.error('Failed to copy to clipboard:', err);
-        showToast('⚠️ Failed to copy to clipboard', 'warning');
-    });
+    return exportManager.copyJSON();
 }
 
 function pasteJSON() {
-    logExport.info('Pasting JSON configuration from clipboard...');
-
-    navigator.clipboard.readText().then(text => {
-        try {
-            const config = JSON.parse(text);
-
-            // Validate config
-            if (!config.version || !config.params || !config.images) {
-                throw new Error('Invalid config format');
-            }
-
-            // Clear existing
-            clearAll();
-
-            // Apply params
-            params.zSpacing = config.params.zSpacing;
-            params.bgColor = config.params.bgColor;
-            if (config.params.cameraMode) params.cameraMode = config.params.cameraMode;
-            if (config.params.cameraFOV) params.cameraFOV = config.params.cameraFOV;
-            if (config.params.transparentBg !== undefined) params.transparentBg = config.params.transparentBg;
-
-            // Update background
-            updateBackground();
-
-            // Update camera
-            if (config.camera && config.camera.position) {
-                camera.position.set(
-                    config.camera.position.x,
-                    config.camera.position.y,
-                    config.camera.position.z
-                );
-                camera.lookAt(0, 0, 0);
-                controls.update();
-            }
-
-            // Load images
-            const textureLoader = new THREE.TextureLoader();
-            config.images.forEach((imageConfig, index) => {
-                textureLoader.load(imageConfig.dataURL, (texture) => {
-                    const geometry = new THREE.PlaneGeometry(
-                        imageConfig.width,
-                        imageConfig.height
-                    );
-
-                    const material = new THREE.MeshBasicMaterial({
-                        map: texture,
-                        side: THREE.DoubleSide,
-                        transparent: true
-                    });
-
-                    const mesh = new THREE.Mesh(geometry, material);
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
-                    mesh.position.z = index * params.zSpacing;
-
-                    imageStack.push({
-                        mesh: mesh,
-                        texture: texture,
-                        filename: imageConfig.filename,
-                        width: imageConfig.width,
-                        height: imageConfig.height,
-                        originalWidth: imageConfig.width,
-                        originalHeight: imageConfig.height,
-                        id: Date.now() + Math.random()
-                    });
-
-                    scene.add(mesh);
-                    updateImageList();
-                    logExport.info(`Loaded ${imageConfig.filename} from clipboard`);
-                    emitStackUpdated('imported');
-                });
-            });
-
-            // Refresh Tweakpane
-            pane.refresh();
-
-            logExport.info('JSON configuration pasted successfully');
-            alert('Configuration pasted from clipboard!');
-
-        } catch (error) {
-            logExport.error('Failed to parse JSON from clipboard:', error);
-            alert(`Failed to paste configuration: ${error.message}`);
-        }
-    }).catch(err => {
-        logExport.error('Failed to read from clipboard:', err);
-        alert('Failed to read from clipboard. Check console for details.');
-    });
+    if (!exportManager) {
+        logExport.warn('Export manager not initialized');
+        return;
+    }
+    return exportManager.pasteJSON();
 }
 
 // Initialize when DOM is ready

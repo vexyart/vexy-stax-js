@@ -8,8 +8,8 @@
  * Modules Tested:
  * - src/core/SceneComposition.js (SceneComposition class)
  *
- * Test Count: 4 tests
- * @lastTested 2025-11-05 (Phase 5 Iteration 2)
+ * Test Count: 7 tests
+ * @lastTested 2025-11-05 (Phase 5 Iteration 5)
  */
 
 import test from 'node:test';
@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 
 import { SceneComposition } from '../src/core/SceneComposition.js';
+import { FLOOR_Y } from '../src/core/constants.js';
 
 function createTexture(width, height) {
     return {
@@ -49,6 +50,7 @@ function createContext(overrides = {}) {
         materialMetalness: 0.3,
         materialBorderWidth: 0,
         materialBorderColor: 0xffffff,
+        bgColor: '#101010',
         zSpacing: 12,
         ...overrides.params
     };
@@ -98,7 +100,9 @@ function createContext(overrides = {}) {
         logMemory: {
             info: () => {}
         },
-        checkMemoryUsage
+        checkMemoryUsage,
+        calculateLuminance: overrides.calculateLuminance,
+        getAdaptiveEmissiveIntensity: overrides.getAdaptiveEmissiveIntensity
     });
 
     return {
@@ -193,4 +197,172 @@ test('SceneComposition_reorder_when_indicesDiffer_then_stackOrderUpdated', () =>
         ['reordered'],
         'reorder should notify listeners with reason reordered'
     );
+});
+
+test('SceneComposition_applyMaterialPreset_when_ambienceEnabled_then_rebuildsMeshesAndAppliesEmissive', () => {
+    const luminanceCalls = [];
+    const emissiveCalls = [];
+    const ctx = createContext({
+        params: {
+            ambience: true,
+            bgColor: '#445566',
+            materialThickness: 1,
+            materialBorderWidth: 0,
+            materialRoughness: 0.2,
+            materialMetalness: 0.1,
+            zSpacing: 18
+        },
+        calculateLuminance: (hex) => {
+            luminanceCalls.push(hex);
+            return 0.62;
+        },
+        getAdaptiveEmissiveIntensity: (luminance) => {
+            emissiveCalls.push(luminance);
+            return 0.48;
+        }
+    });
+
+    const texture = createTexture(600, 300);
+    ctx.composition.addImage(texture, 'panel.png');
+
+    const [imageData] = ctx.imageStack;
+    const originalMesh = imageData.mesh;
+    let geometryDisposed = 0;
+    let materialDisposed = 0;
+    originalMesh.geometry.dispose = () => {
+        geometryDisposed += 1;
+    };
+    originalMesh.material.dispose = () => {
+        materialDisposed += 1;
+    };
+
+    const preset = {
+        roughness: 0.35,
+        metalness: 0.55,
+        thickness: 4,
+        borderWidth: 0
+    };
+
+    ctx.composition.applyMaterialPreset(preset);
+
+    assert.equal(geometryDisposed, 1, 'previous geometry should be disposed exactly once');
+    assert.equal(materialDisposed, 1, 'previous material should be disposed exactly once');
+    assert.equal(ctx.scene.removed.length, 1, 'scene.remove should run for each replaced mesh');
+    assert.equal(ctx.scene.added.at(-1), imageData.mesh, 'new mesh should be re-added to the scene');
+    assert.notStrictEqual(imageData.mesh, originalMesh, 'image stack should point to the rebuilt mesh instance');
+
+    const newMesh = imageData.mesh;
+    assert.ok(newMesh.material instanceof THREE.MeshStandardMaterial, 'ambience mode should use MeshStandardMaterial');
+    assert.equal(newMesh.material.roughness, preset.roughness, 'roughness should adopt preset value');
+    assert.equal(newMesh.material.metalness, preset.metalness, 'metalness should adopt preset value');
+    assert.equal(newMesh.material.emissiveIntensity, 0.48, 'emissive intensity should follow adaptive helper result');
+    assert.deepEqual(luminanceCalls, ['#445566'], 'bgColor should be passed to luminance calculator');
+    assert.deepEqual(emissiveCalls, [0.62], 'adaptive emissive helper should receive luminance output');
+
+    const geometryParams = newMesh.geometry.parameters;
+    const expectedY = FLOOR_Y + ((geometryParams.height ?? 0) / 2);
+    assert.equal(newMesh.position.z, 0, 'z position should remain aligned with index 0');
+    assert.equal(newMesh.position.y, expectedY, 'ambience should elevate mesh to rest on the floor plane');
+    assert.equal(
+        geometryParams.depth ?? geometryParams.height,
+        preset.thickness,
+        'geometry depth/height should match preset thickness'
+    );
+    assert.equal(imageData.width, geometryParams.width, 'image metadata width should sync with new mesh geometry');
+    assert.equal(imageData.height, geometryParams.height, 'image metadata height should sync with new mesh geometry');
+});
+
+test('SceneComposition_applyMaterialPreset_when_borderWidthPositive_then_attachesBorderMesh', () => {
+    const ctx = createContext({
+        params: {
+            ambience: true,
+            bgColor: '#202020',
+            materialBorderColor: 0xffcc00,
+            materialBorderWidth: 0,
+            materialThickness: 1,
+            materialRoughness: 0.4,
+            materialMetalness: 0.25,
+            zSpacing: 15
+        }
+    });
+
+    const texture = createTexture(320, 240);
+    ctx.composition.addImage(texture, 'bordered.png');
+
+    const [imageData] = ctx.imageStack;
+    const preset = {
+        roughness: 0.35,
+        metalness: 0.55,
+        thickness: 1,
+        borderWidth: 12
+    };
+
+    ctx.composition.applyMaterialPreset(preset);
+
+    const mesh = imageData.mesh;
+    assert.equal(mesh.children.length, 1, 'border branch should append a single child mesh');
+
+    const [borderMesh] = mesh.children;
+    assert.ok(borderMesh instanceof THREE.Mesh, 'border child should be a THREE.Mesh instance');
+    assert.ok(borderMesh.geometry instanceof THREE.PlaneGeometry, 'border should be composed of PlaneGeometry');
+    assert.equal(borderMesh.position.z, -0.5, 'border mesh should sit just behind the primary mesh');
+    assert.equal(borderMesh.castShadow, true, 'ambience mode should enable casting shadows on the border');
+    assert.equal(borderMesh.receiveShadow, true, 'ambience mode should enable receiving shadows on the border');
+
+    const borderColor = borderMesh.material.color.getHexString();
+    assert.equal(borderColor, 'ffcc00', 'border colour should match materialBorderColor parameter');
+
+    const borderWidth = borderMesh.geometry.parameters.width;
+    const borderHeight = borderMesh.geometry.parameters.height;
+    assert.equal(borderWidth, 320 + (12 * 2), 'border width should expand plane width by twice the border width');
+    assert.equal(borderHeight, 240 + (12 * 2), 'border height should expand plane height by twice the border width');
+});
+
+test('SceneComposition_applyMaterialPreset_when_thicknessGreaterThanOne_then_usesBoxGeometry', () => {
+    const ctx = createContext({
+        params: {
+            ambience: false,
+            materialThickness: 1,
+            materialBorderWidth: 0,
+            materialRoughness: 0.2,
+            materialMetalness: 0.15,
+            zSpacing: 10
+        }
+    });
+
+    const texture = createTexture(256, 128);
+    ctx.composition.addImage(texture, 'thick.png');
+
+    const [imageData] = ctx.imageStack;
+    const originalMesh = imageData.mesh;
+    let geometryDisposed = 0;
+    let materialDisposed = 0;
+    originalMesh.geometry.dispose = () => {
+        geometryDisposed += 1;
+    };
+    originalMesh.material.dispose = () => {
+        materialDisposed += 1;
+    };
+
+    const preset = {
+        roughness: 0.4,
+        metalness: 0.1,
+        thickness: 6,
+        borderWidth: 0
+    };
+
+    ctx.composition.applyMaterialPreset(preset);
+
+    assert.equal(geometryDisposed, 1, 'existing geometry should dispose before rebuild');
+    assert.equal(materialDisposed, 1, 'existing material should dispose before rebuild');
+    assert.equal(ctx.scene.removed.length, 1, 'scene.remove should execute for the prior mesh');
+
+    const newMesh = imageData.mesh;
+    assert.ok(newMesh.geometry instanceof THREE.BoxGeometry, 'thickness > 1 should create BoxGeometry');
+    assert.equal(newMesh.geometry.parameters.depth, 6, 'box depth should match preset thickness');
+    assert.ok(newMesh.material instanceof THREE.MeshBasicMaterial, 'non-ambience preset should use MeshBasicMaterial');
+    assert.equal(newMesh.material.transparent, true, 'MeshBasicMaterial should preserve transparency');
+
+    assert.equal(imageData.width, newMesh.geometry.parameters.width, 'stack width metadata should reflect box width');
+    assert.equal(imageData.height, newMesh.geometry.parameters.height, 'stack height metadata should reflect box height');
 });

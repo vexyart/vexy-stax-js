@@ -9,8 +9,8 @@
  * Modules Tested:
  * - src/files/FileHandler.js (FileHandler class)
  *
- * Test Count: 4 tests
- * @lastTested 2025-11-05 (Phase 5 Iteration 1)
+ * Test Count: 8 tests
+ * @lastTested 2025-11-05 (Phase 5 Iteration 5)
  */
 
 import test from 'node:test';
@@ -92,6 +92,18 @@ function createTestContext(overrides = {}) {
     };
 }
 
+function createElementStub() {
+    const classes = new Set();
+    return {
+        classList: {
+            add: (value) => classes.add(value),
+            remove: (value) => classes.delete(value),
+            contains: (value) => classes.has(value)
+        },
+        getClasses: () => Array.from(classes)
+    };
+}
+
 test('FileHandler_processFiles_when_fileTypeUnsupported_then_rejectsWithToast', () => {
     const ctx = createTestContext();
     const invalidFile = { name: 'design.psd', type: 'image/vnd.photoshop', size: 2 * BYTES_PER_MB };
@@ -167,4 +179,135 @@ test('FileHandler_processFiles_when_memoryGuardDeclines_then_skipsAndWarns', () 
         /memory limit/i,
         'toast should mention memory limit'
     );
+});
+
+test('FileHandler_dragEvents_when_nestedEnterLeave_then_overlayVisibilityTracksDepth', () => {
+    const dropOverlay = createElementStub();
+    const slidesPanel = createElementStub();
+    const ctx = createTestContext({
+        elements: {
+            imageInput: {},
+            browseButton: null,
+            dropOverlay,
+            slidesPanel
+        }
+    });
+
+    const dragEvent = {
+        dataTransfer: {
+            files: [{ name: 'hero.png' }]
+        }
+    };
+
+    ctx.handler.handleDragEnter(dragEvent);
+    ctx.handler.handleDragEnter(dragEvent);
+
+    assert.equal(ctx.handler.dragDepth, 2, 'dragDepth should increment per dragenter with files');
+    assert.ok(dropOverlay.classList.contains('visible'), 'overlay should be visible while dragging with files');
+    assert.ok(slidesPanel.classList.contains('drag-active'), 'slides panel should signal drag-active state');
+
+    ctx.handler.handleDragLeave(dragEvent);
+    assert.equal(ctx.handler.dragDepth, 1, 'dragDepth should decrement on dragleave but remain positive until last leave');
+    assert.ok(dropOverlay.classList.contains('visible'), 'overlay should remain visible until dragDepth reaches zero');
+
+    ctx.handler.handleDragLeave(dragEvent);
+    assert.equal(ctx.handler.dragDepth, 0, 'dragDepth should reset once all drag contexts exit');
+    assert.equal(dropOverlay.classList.contains('visible'), false, 'overlay should hide after final dragleave');
+    assert.equal(slidesPanel.classList.contains('drag-active'), false, 'slides panel should clear drag-active class after final leave');
+});
+
+test('FileHandler_handleDrop_when_payloadMissingFiles_then_hidesOverlayAndSkipsProcessing', () => {
+    const dropOverlay = createElementStub();
+    const slidesPanel = createElementStub();
+    const ctx = createTestContext({
+        elements: {
+            imageInput: {},
+            browseButton: null,
+            dropOverlay,
+            slidesPanel
+        }
+    });
+
+    let processed = false;
+    ctx.handler.processFiles = () => {
+        processed = true;
+    };
+
+    const dragWithFiles = {
+        dataTransfer: {
+            files: [{ name: 'art.png' }]
+        }
+    };
+
+    ctx.handler.handleDragEnter(dragWithFiles);
+    assert.ok(dropOverlay.classList.contains('visible'), 'overlay should show on dragenter with files');
+
+    const dragWithoutFiles = {
+        dataTransfer: {
+            files: [],
+            types: []
+        }
+    };
+
+    ctx.handler.handleDrop(dragWithoutFiles);
+
+    assert.equal(processed, false, 'processFiles should not run when drop payload lacks files');
+    assert.equal(ctx.handler.dragDepth, 0, 'dragDepth must reset after drop cleanup');
+    assert.equal(dropOverlay.classList.contains('visible'), false, 'overlay should hide when payload has no files');
+    assert.equal(slidesPanel.classList.contains('drag-active'), false, 'slides panel should clear drag-active state after drop cleanup');
+});
+
+test('FileHandler_handleDragEnter_when_typesIncludeFiles_then_treatsEventAsFilePayload', () => {
+    const dropOverlay = createElementStub();
+    const slidesPanel = createElementStub();
+    const ctx = createTestContext({
+        elements: {
+            imageInput: {},
+            browseButton: null,
+            dropOverlay,
+            slidesPanel
+        }
+    });
+
+    const dragEventWithTypes = {
+        dataTransfer: {
+            files: [],
+            types: ['Files']
+        }
+    };
+
+    ctx.handler.handleDragEnter(dragEventWithTypes);
+
+    assert.equal(ctx.handler.dragDepth, 1, 'dragDepth should increment when dataTransfer.types contains Files');
+    assert.equal(dropOverlay.classList.contains('visible'), true, 'overlay should display when payload advertises files via types');
+    assert.equal(slidesPanel.classList.contains('drag-active'), true, 'slides panel should adopt drag-active state for types-backed payloads');
+
+    ctx.handler.handleDragLeave(dragEventWithTypes);
+
+    assert.equal(ctx.handler.dragDepth, 0, 'dragDepth should reset after matching dragleave event');
+    assert.equal(dropOverlay.classList.contains('visible'), false, 'overlay should hide once dragDepth returns to zero');
+    assert.equal(slidesPanel.classList.contains('drag-active'), false, 'slides panel should clear drag-active state once dragDepth resets');
+});
+
+test('FileHandler_teardown_when_called_then_overlayClassesCleared', () => {
+    const dropOverlay = createElementStub();
+    const slidesPanel = createElementStub();
+    dropOverlay.classList.add('visible');
+    slidesPanel.classList.add('drag-active');
+
+    const ctx = createTestContext({
+        elements: {
+            imageInput: {},
+            browseButton: null,
+            dropOverlay,
+            slidesPanel
+        }
+    });
+
+    ctx.handler.dragDepth = 3;
+    ctx.handler.teardown();
+
+    assert.equal(ctx.handler.dragDepth, 0, 'teardown should reset drag depth to zero');
+    assert.equal(dropOverlay.classList.contains('visible'), false, 'teardown should clear overlay visibility');
+    assert.equal(slidesPanel.classList.contains('drag-active'), false, 'teardown should clear slides panel drag state');
 });

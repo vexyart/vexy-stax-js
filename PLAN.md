@@ -25,26 +25,22 @@ Maintain a browser-based Three.js studio that stacks 2D artwork with accurate co
 1. Shrink main.js to an orchestration shell (<300 lines) while preserving behaviour and API surface.
 2. Extract cohesive modules that match existing plan (UI setup, file handling, scene composition, camera control, exports) with clear interfaces and tests.
 3. Apply JSDoc templates (and extend where gaps remain) so every exported function in new modules ships with examples and type hints.
-4. Maintain current test count (235) and performance baselines; prevent regression in memory watchdogs or export fidelity.
+4. Maintain current test count (294) and performance baselines; prevent regression in memory watchdogs or export fidelity.
 
 ### Completed Workstreams
 - **File Handling (`src/files/FileHandler.js`)**: Drag/drop + browse intake orchestrated with validation + memory gating; unit tests (`tests/files_file_handler.test.js`) ensure oversize/type thresholds and warning surfaces.
 - **Scene Composition (`src/core/SceneComposition.js`)**: Mesh lifecycle, material presets, reorder/clear safeguards extracted; integration tests (`tests/core_scene_composition.test.js`) confirm add/reorder/clear flows.
-
-### Workstreams & Deliverables
-1. **UI Controls (`src/ui/TweakpaneSetup.js`)**
-   - Scope: Tweakpane construction (~300 lines), button callbacks, pane refresh logic.
-   - Deliverables: Class with dependency-injected callbacks, tests covering folder creation and callback wiring, documentation referencing templates for UI-bound functions (e.g., `showToast` usage).
-   - Dependencies: Relies on existing FileHandler + SceneComposition contracts and upcoming ExportManager/CameraController interfaces.
-2. **Export Manager (`src/export/ExportManager.js`)**
-   - Scope: PNG multi-scale rendering, JSON serialisation/deserialisation, clipboard interactions.
-   - Deliverables: Deterministic exports with dependency injection for renderer/canvas, tests with mocked renderer to validate scale bounds (per `exportPNG` template).
-3. **Camera Controls (`src/camera/CameraController.js`)**
-   - Scope: Mode switching, viewpoint presets, integration with existing animator/OrbitControls.
-   - Deliverables: Controller abstraction, tests verifying transforms, JSDoc for `setCameraMode`, `centerOnContent`.
-4. **Keyboard Shortcuts (`src/ui/KeyboardShortcuts.js`)**
-   - Scope: Isolate 62-line `keydownHandler`; ensure undo/redo/export shortcuts remain covered by tests.
-   - Deliverables: Focused listener with test coverage for modifier edge cases.
+- **Export Manager (`src/export/ExportManager.js`)**: PNG/JSON export, clipboard copy, and JSON import isolated with dependency injection; unit suite (`tests/export_export_manager.test.js`) verifies scale sanitisation, overlay cleanup, config serialisation, clipboard writes, and import application.
+- **Camera Controller (`src/camera/CameraController.js`)**: Delegated mode switching, telephoto configuration, zoom synchronisation, centering, and viewpoint helpers; new suite (`tests/camera_camera_controller.test.js`) covers mode toggles, telephoto FOV enforcement, zoom sync, bounding-box centering, and `setViewpointFitToFrame` fallback branches; `src/main.js` now calls the controller with temporary fallbacks slated for deletion after UI extraction.
+- **Tweakpane UI (`src/ui/TweakpaneSetup.js`)**: Control surface wiring relocated with dependency injection for callbacks, plugins, and DOM helpers; tests (`tests/ui_tweakpane_setup.test.js`) validate plugin registration and camera folder bindings; `src/main.js` now instantiates the module and attaches the resulting pane to the camera controller.
+- **Keyboard Shortcuts (`src/ui/KeyboardShortcuts.js`)**: Help overlay + shortcut handling extracted with dependency injection; tests (`tests/ui_keyboard_shortcuts.test.js`) cover modifier combinations, animation cancellation, and destructive confirmations; `src/main.js` delegates registration/cleanup to the module.
+- **Keyboard Shortcuts Hardening**: Added teardown overlay removal, post-teardown listener cleanup, `/` alias coverage tests, and the Tweakpane Defaults cancel regression test.
+- **Reliability Sweep (CameraController & ExportManager)**: Added regression tests for invalid camera-mode input, orthographic FOV guardrails, and clipboard/import failure handling; `importJSON`/`pasteJSON` now emit error toasts alongside alerts for malformed payloads.
+- **Memory Monitor (`src/memory/MemoryMonitor.js`)**: Refactored memory estimation, warning/critical handling, and FPS overlay updates into an injectable class with dedicated unit coverage.
+- **Toast Service (`src/ui/ToastService.js`)**: Extracted toast creation into a factory with document/timeout injection and tests for styling and dismissal.
+- **Settings Manager (`src/settings/SettingsManager.js`)**: Moved load/save/reset into a modular manager with storage hooks, confirm/alert integration, and regression tests for quota and defaults.
+- **Quality Hardening (2025-11-05)**: Added FileHandler drag/drop overlay depth regression tests, SceneComposition material rebuild + emissive coverage, and MemoryMonitor confirmation + overlay invalidation tests.
+- **Quality Coverage (2025-11-05)**: Added SceneComposition border mesh + thick-material rebuild tests and FileHandler `dataTransfer.types` drag coverage to push unit suite to 294 tests without altering runtime code.
 
 ### Cross-Cutting Tasks
 - Define shared data contracts (callbacks, state fragments) before extraction to avoid circular imports.
@@ -55,15 +51,14 @@ Maintain a browser-based Three.js studio that stacks 2D artwork with accurate co
 ### Acceptance Criteria
 - main.js orchestrates module wiring, public API exposure, and lifecycle only; internal logic resides elsewhere.
 - Each new module ≤250 lines, internally documented, unit-tested, and referenced in `DEPENDENCIES.md` if new packages appear (avoid unless essential).
-- 235/235 tests stay green; add new suites per module.
+- 294/294 tests stay green; add new suites per module.
 - Build size remains ≤1,150 kB; memory guard rails continue to emit warnings at 500 MB.
 - Public API signatures unchanged; templates applied so IDE hints remain accurate.
 
 ### Coordination & Sequencing
-1. Confirm callback/state contract documentation in WORK.md reflects FileHandler + SceneComposition integrations before UI extraction.
-2. Implement ExportManager and CameraController to provide stable APIs for UI wiring.
-3. Build TweakpaneSetup atop the new module interfaces, backfilling tests and documentation.
-4. Extract keyboard shortcut handling and complete final main.js orchestration pass.
+1. Confirm callback/state contract documentation in WORK.md reflects FileHandler, SceneComposition, ExportManager, CameraController, and TweakpaneSetup integrations before keyboard extraction.
+2. Extract keyboard shortcut handling and complete final main.js orchestration pass.
+3. Remove temporary camera fallbacks from `src/main.js` once UI/keyboard extractions ship.
 
 ### Verification Strategy
 - Unit: Dedicated suites per new module.
