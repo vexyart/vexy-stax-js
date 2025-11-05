@@ -25,7 +25,7 @@
     "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov npm run test:unit",
     "test:coverage:check": "c8 --check-coverage --lines 80 --functions 80 --branches 75 npm run test:unit",
     "clean": "rm -rf docs/assets coverage .nyc_output test-results playwright-report && echo 'Cleaned: docs/assets, coverage, test-results'",
-    "help": "echo '\n=== Vexy Stax JS - Available Commands ===\nnpm run dev          → Start dev server (http://localhost:5173)\nnpm run build        → Build for production (outputs to docs/)\nnpm run preview      → Preview production build\nnpm test             → Run all tests (unit + E2E)\nnpm run test:unit    → Run unit tests only (208 tests)\nnpm run test:coverage → Generate coverage reports (coverage/index.html)\nnpm run test:coverage:check → Enforce 80% coverage thresholds\nnpm run clean        → Remove build artifacts and coverage reports\n'"
+    "help": "echo '\n=== Vexy Stax JS - Available Commands ===\nnpm run dev          → Start dev server (http://localhost:5173)\nnpm run build        → Build for production (outputs to docs/)\nnpm run preview      → Preview production build\nnpm test             → Run all tests (unit + E2E)\nnpm run test:unit    → Run unit tests only (218 tests)\nnpm run test:coverage → Generate coverage reports (coverage/index.html)\nnpm run test:coverage:check → Enforce 80% coverage thresholds\nnpm run clean        → Remove build artifacts and coverage reports\n'"
   },
   "keywords": [
     "threejs",
