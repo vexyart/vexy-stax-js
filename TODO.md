@@ -623,11 +623,12 @@ Reduce main.js from 3,367 lines to <300 lines by extracting modules
   - **Result**: Package properly configured for npm publishing
 
 - [x] **Add API.md documentation** ✅
-  - Created comprehensive docs/API.md (370 lines)
+  - Created comprehensive API.md (370 lines) in project root
   - Documented all 14 exported functions with examples
   - Added usage tips, error handling, keyboard shortcuts
   - Included browser support requirements
-  - README.md already references docs/API.md
+  - README.md references API.md
+  - Fixed location: API.md in root (not docs/ which vite build clears)
   - **Result**: Complete API reference for developers
 
 ---

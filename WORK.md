@@ -1108,7 +1108,7 @@ console.error(`[Validation] Unsupported file type...`)
 - **Result**: Package properly configured for npm publishing
 
 **Task 3: Add comprehensive API documentation** ✅
-- Created docs/API.md (370 lines)
+- Created API.md (370 lines) in project root
 - Documented all 14 exported window.vexyStax functions:
   - Export: exportPNG(scale)
   - Image Management: clearAll(), getImageStack()
@@ -1130,13 +1130,14 @@ console.error(`[Validation] Unsupported file type...`)
   - Usage tips (memory checks, batch operations, performance monitoring)
   - Browser support requirements
   - Cross-references to README and CHANGELOG
-- README.md already references docs/API.md (line 143)
+- README.md references API.md (corrected from docs/API.md)
+- Fixed location: API.md in root (not docs/ which vite build clears)
 - **Result**: Complete API reference for developers and users
 
 **Test Results**: 208/208 passing ✅ (+0 tests - documentation only)
 **Build**: 1,143.27 kB (stable)
-**Git**: 1 new file (docs/API.md)
-**Files Updated**: 2 files (TODO.md, WORK.md)
+**Git**: 1 new file (API.md in project root)
+**Files Updated**: 3 files (API.md, README.md, TODO.md, WORK.md)
 **Impact**: v0.2.0 publicly released, package npm-ready, complete developer documentation
 
 ---
