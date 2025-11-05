@@ -1,4 +1,17 @@
 // this_file: tests/core_ordering.test.js
+/**
+ * Test Suite: Core - Ordering
+ *
+ * Purpose: Tests the reorderList utility function for array reordering
+ * operations used in drag-and-drop interfaces. Validates move operations
+ * and proper error handling for out-of-bounds indices.
+ *
+ * Modules Tested:
+ * - src/core/ordering.js (reorderList function)
+ *
+ * Test Count: 3 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

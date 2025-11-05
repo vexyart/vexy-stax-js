@@ -1,4 +1,19 @@
 // this_file: tests/error_recovery.test.js
+/**
+ * Test Suite: Error Recovery
+ *
+ * Purpose: Tests error handling and recovery patterns across all manager
+ * classes. Validates disposal safety, initialization error handling,
+ * and cleanup order independence. Ensures WebGL resources are properly managed.
+ *
+ * Modules Tested:
+ * - src/scene/SceneManager.js
+ * - src/scene/LightingManager.js
+ * - src/scene/FloorManager.js
+ * - src/camera/animation.js (CameraAnimator)
+ *
+ * Test Count: 23 tests
+ */
 
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';

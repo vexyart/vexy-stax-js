@@ -1,4 +1,16 @@
 // this_file: tests/core_render_loop.test.js
+/**
+ * Test Suite: Core - RenderLoop
+ *
+ * Purpose: Tests the RenderLoop class for animation frame management,
+ * FPS monitoring, start/stop lifecycle, and proper cleanup. Validates
+ * performance tracking and callback invocation.
+ *
+ * Modules Tested:
+ * - src/core/RenderLoop.js (RenderLoop class)
+ *
+ * Test Count: 20 tests
+ */
 
 import { describe, it, beforeEach, afterEach, mock, before } from 'node:test';
 import assert from 'node:assert/strict';

@@ -1,4 +1,17 @@
 // this_file: tests/core_constants.test.js
+/**
+ * Test Suite: Core - Constants
+ *
+ * Purpose: Validates all configuration constants exported from constants.js,
+ * including material presets, viewpoints, lighting, floor, events, and
+ * numeric constants. Ensures all values are within valid ranges.
+ *
+ * Modules Tested:
+ * - src/core/constants.js (all exported constants and configurations)
+ *
+ * Test Count: 30 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

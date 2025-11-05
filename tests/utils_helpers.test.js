@@ -1,5 +1,17 @@
 // tests/utils_helpers.test.js
 // this_file: tests/utils_helpers.test.js
+/**
+ * Test Suite: Utils - Helpers
+ *
+ * Purpose: Tests all utility helper functions for validation, calculations,
+ * formatting, and data manipulation. Covers luminance calculations, clamping,
+ * interpolation, file validation, deep cloning, ID generation, and debouncing.
+ *
+ * Modules Tested:
+ * - src/utils/helpers.js (all exported utility functions)
+ *
+ * Test Count: 41 tests
+ */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

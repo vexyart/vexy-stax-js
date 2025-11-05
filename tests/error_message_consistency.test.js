@@ -1,5 +1,18 @@
 // tests/error_message_consistency.test.js
 // this_file: tests/error_message_consistency.test.js
+/**
+ * Test Suite: Error Message Consistency
+ *
+ * Purpose: Validates that error messages across all modules include
+ * function/class names, parameter context, and use consistent error types
+ * (TypeError for type violations, RangeError for bounds violations).
+ *
+ * Modules Tested:
+ * - src/utils/helpers.js (all utility functions)
+ * - src/core/EventBus.js, AppState.js, sharedState.js, ordering.js
+ *
+ * Test Count: 9 tests
+ */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

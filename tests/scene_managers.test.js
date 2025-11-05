@@ -1,5 +1,19 @@
 // tests/scene_managers.test.js
 // this_file: tests/scene_managers.test.js
+/**
+ * Test Suite: Scene Managers
+ *
+ * Purpose: Tests the public API and export structure of Scene, Lighting,
+ * and Floor manager classes. Validates that all managers expose expected
+ * methods and properties for proper initialization and cleanup.
+ *
+ * Modules Tested:
+ * - src/scene/SceneManager.js
+ * - src/scene/LightingManager.js (including getAdaptiveEmissiveIntensity)
+ * - src/scene/FloorManager.js
+ *
+ * Test Count: 8 tests
+ */
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';

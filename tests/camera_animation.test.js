@@ -1,4 +1,16 @@
 // this_file: tests/camera_animation.test.js
+/**
+ * Test Suite: Camera Animation
+ *
+ * Purpose: Tests the CameraAnimator class for camera state management,
+ * viewpoint calculations, and animation lifecycle. Ensures camera
+ * positions and controls are properly saved/restored.
+ *
+ * Modules Tested:
+ * - src/camera/animation.js (CameraAnimator class)
+ *
+ * Test Count: 10 tests
+ */
 
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';

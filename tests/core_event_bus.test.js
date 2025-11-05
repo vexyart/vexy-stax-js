@@ -1,4 +1,17 @@
 // this_file: tests/core_event_bus.test.js
+/**
+ * Test Suite: Core - EventBus
+ *
+ * Purpose: Tests the EventBus class for publish-subscribe event handling,
+ * including listener registration, event emission, one-time handlers,
+ * unsubscription, and error handling for invalid inputs.
+ *
+ * Modules Tested:
+ * - src/core/EventBus.js (EventBus class)
+ *
+ * Test Count: 13 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

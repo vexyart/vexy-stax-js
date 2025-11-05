@@ -1,4 +1,17 @@
 // this_file: tests/core_app_state.test.js
+/**
+ * Test Suite: Core - AppState
+ *
+ * Purpose: Tests the AppState class for reactive state management,
+ * including get/set operations, merging, array operations, snapshots,
+ * and validation. Ensures proper error handling for invalid inputs.
+ *
+ * Modules Tested:
+ * - src/core/AppState.js (AppState class, createDefaultParams)
+ *
+ * Test Count: 15 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

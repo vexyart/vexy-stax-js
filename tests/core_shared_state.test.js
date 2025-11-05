@@ -1,4 +1,17 @@
 // this_file: tests/core_shared_state.test.js
+/**
+ * Test Suite: Core - Shared State
+ *
+ * Purpose: Tests the shared state registry pattern for global singleton
+ * references. Validates storage/retrieval of shared objects, key validation,
+ * and immutability of the SHARED_STATE_KEYS constant.
+ *
+ * Modules Tested:
+ * - src/core/sharedState.js (storeSharedRef, getSharedRef, SHARED_STATE_KEYS)
+ *
+ * Test Count: 6 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

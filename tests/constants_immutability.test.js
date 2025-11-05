@@ -1,4 +1,17 @@
 // this_file: tests/constants_immutability.test.js
+/**
+ * Test Suite: Constants Immutability
+ *
+ * Purpose: Verifies that all exported constants are properly frozen using
+ * Object.freeze() and documents deep freeze limitations for nested objects.
+ * Ensures constants cannot be accidentally mutated at runtime.
+ *
+ * Modules Tested:
+ * - src/core/constants.js (all exported constants)
+ *
+ * Test Count: 17 tests
+ */
+
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {

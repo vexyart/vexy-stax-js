@@ -1,4 +1,17 @@
 // this_file: tests/core_studio_sizing.test.js
+/**
+ * Test Suite: Core - Studio Sizing
+ *
+ * Purpose: Tests DPR (Device Pixel Ratio) aware rendering calculations
+ * for high-resolution displays. Validates canvas size computation for
+ * retina/non-retina displays and fractional pixel ratio handling.
+ *
+ * Modules Tested:
+ * - src/core/studioSizing.js (computeRetinaDimensions)
+ *
+ * Test Count: 5 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 

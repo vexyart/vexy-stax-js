@@ -1,4 +1,17 @@
 // this_file: tests/utils_logger.test.js
+/**
+ * Test Suite: Utils - Logger
+ *
+ * Purpose: Tests the logging utility factory function for creating module-
+ * specific loggers with consistent prefixes. Validates that log/warn/error
+ * methods work correctly and preserve module context.
+ *
+ * Modules Tested:
+ * - src/utils/logger.js (createLogger function)
+ *
+ * Test Count: 4 tests
+ */
+
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLogger } from '../src/utils/logger.js';
