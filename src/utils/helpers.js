@@ -80,6 +80,11 @@ export function isValidHexColor(color) {
  * @returns {number} Clamped value
  * @throws {TypeError} If inputs are not valid numbers
  * @throws {RangeError} If min > max
+ * @example
+ * // Clamp value within range
+ * clamp(5, 0, 10);    // Returns 5
+ * clamp(-5, 0, 10);   // Returns 0
+ * clamp(15, 0, 10);   // Returns 10
  */
 export function clamp(value, min, max) {
     // Input validation
@@ -106,6 +111,11 @@ export function clamp(value, min, max) {
  * @param {number} t - Interpolation factor (0-1)
  * @returns {number} Interpolated value
  * @throws {TypeError} If inputs are not valid numbers
+ * @example
+ * // Interpolate between values
+ * lerp(0, 100, 0.5);   // Returns 50 (midpoint)
+ * lerp(0, 100, 0);     // Returns 0 (start)
+ * lerp(0, 100, 1);     // Returns 100 (end)
  */
 export function lerp(a, b, t) {
     // Input validation
@@ -163,6 +173,13 @@ export function isValidImageFile(file) {
  * Format file size in human-readable format
  * @param {number} bytes - File size in bytes
  * @returns {string} Formatted file size (e.g., "1.5 MB")
+ * @example
+ * // Format various file sizes
+ * formatFileSize(0);           // Returns "0 B"
+ * formatFileSize(500);         // Returns "500 B"
+ * formatFileSize(1536);        // Returns "1.5 KB"
+ * formatFileSize(2097152);     // Returns "2.0 MB"
+ * formatFileSize(1073741824);  // Returns "1.0 GB"
  */
 export function formatFileSize(bytes) {
     if (!isValidNumber(bytes) || bytes < 0) {
@@ -231,6 +248,16 @@ export function deepClone(obj) {
  * @param {Function} func - Function to debounce
  * @param {number} wait - Wait time in milliseconds
  * @returns {Function} Debounced function
+ * @example
+ * // Debounce a search input handler
+ * const handleSearch = debounce((query) => {
+ *   console.log('Searching for:', query);
+ * }, 300);
+ *
+ * // Only executes after 300ms of no calls
+ * handleSearch('test');  // Won't execute yet
+ * handleSearch('test2'); // Cancels previous, won't execute yet
+ * handleSearch('test3'); // Executes after 300ms with 'test3'
  */
 export function debounce(func, wait) {
     let timeout;

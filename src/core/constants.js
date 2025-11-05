@@ -84,6 +84,86 @@ export const TOAST_DURATION_INFO = 3000;
 export const CAMERA_FAR_PLANE = 5000;
 
 /**
+ * Default camera distance from scene origin
+ * @type {number}
+ * @constant
+ * @default 800
+ * @unit world units
+ */
+export const CAMERA_DEFAULT_DISTANCE = 800;
+
+/**
+ * Minimum allowed camera distance (zoom limit)
+ * @type {number}
+ * @constant
+ * @default 100
+ * @unit world units
+ */
+export const CAMERA_MIN_DISTANCE = 100;
+
+/**
+ * Maximum allowed camera distance (zoom limit)
+ * @type {number}
+ * @constant
+ * @default 3000
+ * @unit world units
+ */
+export const CAMERA_MAX_DISTANCE = 3000;
+
+/**
+ * OrbitControls damping factor (smoothing)
+ * @type {number}
+ * @constant
+ * @default 0.05
+ * @range 0-1 (0=no damping, 1=instant stop)
+ */
+export const CONTROLS_DAMPING_FACTOR = 0.05;
+
+/**
+ * Toast notification fade-out animation duration
+ * @type {number}
+ * @constant
+ * @default 300
+ * @unit milliseconds
+ */
+export const TOAST_FADE_DURATION = 300;
+
+/**
+ * Delay before showing overlay to allow rendering
+ * @type {number}
+ * @constant
+ * @default 100
+ * @unit milliseconds
+ */
+export const OVERLAY_RENDER_DELAY = 100;
+
+/**
+ * Default camera field of view (perspective mode)
+ * @type {number}
+ * @constant
+ * @default 75
+ * @unit degrees
+ */
+export const DEFAULT_CAMERA_FOV = 75;
+
+/**
+ * Default background color (black)
+ * @type {string}
+ * @constant
+ * @default '#000000'
+ */
+export const DEFAULT_BG_COLOR = '#000000';
+
+/**
+ * Default Z-spacing between stacked images
+ * @type {number}
+ * @constant
+ * @default 100
+ * @unit pixels
+ */
+export const DEFAULT_Z_SPACING = 100;
+
+/**
  * Z-index for modal overlays and UI elements
  * @type {number}
  * @constant

@@ -435,3 +435,99 @@ test('Loading and dimension constants have valid values', async () => {
     assert.ok(MAX_DIMENSION_PX > 0, 'Max dimension must be positive');
     assert.ok(DEBOUNCE_DELAY_MS > 0, 'Debounce delay must be positive');
 });
+
+// Tests for Iteration 73 constants (camera, controls, timing, defaults) - added 2025-11-05
+test('Camera distance constants have valid values and hierarchy', async () => {
+    const {
+        CAMERA_DEFAULT_DISTANCE,
+        CAMERA_MIN_DISTANCE,
+        CAMERA_MAX_DISTANCE
+    } = await import('../src/core/constants.js');
+
+    // Verify exact values
+    assert.strictEqual(CAMERA_DEFAULT_DISTANCE, 800, 'Default camera distance should be 800');
+    assert.strictEqual(CAMERA_MIN_DISTANCE, 100, 'Min camera distance should be 100');
+    assert.strictEqual(CAMERA_MAX_DISTANCE, 3000, 'Max camera distance should be 3000');
+
+    // Verify type
+    assert.strictEqual(typeof CAMERA_DEFAULT_DISTANCE, 'number', 'Default distance should be number');
+    assert.strictEqual(typeof CAMERA_MIN_DISTANCE, 'number', 'Min distance should be number');
+    assert.strictEqual(typeof CAMERA_MAX_DISTANCE, 'number', 'Max distance should be number');
+
+    // Verify hierarchy: min < default < max
+    assert.ok(CAMERA_MIN_DISTANCE < CAMERA_DEFAULT_DISTANCE,
+        'Min distance must be less than default distance');
+    assert.ok(CAMERA_DEFAULT_DISTANCE < CAMERA_MAX_DISTANCE,
+        'Default distance must be less than max distance');
+
+    // Verify all positive
+    assert.ok(CAMERA_MIN_DISTANCE > 0, 'Min distance must be positive');
+    assert.ok(CAMERA_DEFAULT_DISTANCE > 0, 'Default distance must be positive');
+    assert.ok(CAMERA_MAX_DISTANCE > 0, 'Max distance must be positive');
+});
+
+test('CONTROLS_DAMPING_FACTOR has valid value and range', async () => {
+    const { CONTROLS_DAMPING_FACTOR } = await import('../src/core/constants.js');
+
+    // Verify exact value
+    assert.strictEqual(CONTROLS_DAMPING_FACTOR, 0.05, 'Damping factor should be 0.05');
+
+    // Verify type
+    assert.strictEqual(typeof CONTROLS_DAMPING_FACTOR, 'number', 'Damping factor should be number');
+
+    // Verify range (0-1, where 0=no damping, 1=instant stop)
+    assert.ok(CONTROLS_DAMPING_FACTOR > 0 && CONTROLS_DAMPING_FACTOR < 1,
+        'Damping factor must be between 0 and 1');
+});
+
+test('Timing constants have valid values', async () => {
+    const {
+        TOAST_FADE_DURATION,
+        OVERLAY_RENDER_DELAY
+    } = await import('../src/core/constants.js');
+
+    // Verify exact values
+    assert.strictEqual(TOAST_FADE_DURATION, 300, 'Toast fade duration should be 300ms');
+    assert.strictEqual(OVERLAY_RENDER_DELAY, 100, 'Overlay render delay should be 100ms');
+
+    // Verify type
+    assert.strictEqual(typeof TOAST_FADE_DURATION, 'number', 'Toast fade duration should be number');
+    assert.strictEqual(typeof OVERLAY_RENDER_DELAY, 'number', 'Overlay delay should be number');
+
+    // Verify all positive
+    assert.ok(TOAST_FADE_DURATION > 0, 'Toast fade duration must be positive');
+    assert.ok(OVERLAY_RENDER_DELAY > 0, 'Overlay delay must be positive');
+
+    // Verify reasonable timing (under 1 second for UI responsiveness)
+    assert.ok(TOAST_FADE_DURATION < 1000, 'Toast fade should be under 1 second');
+    assert.ok(OVERLAY_RENDER_DELAY < 1000, 'Overlay delay should be under 1 second');
+});
+
+test('Default parameter constants have valid values', async () => {
+    const {
+        DEFAULT_CAMERA_FOV,
+        DEFAULT_BG_COLOR,
+        DEFAULT_Z_SPACING
+    } = await import('../src/core/constants.js');
+
+    // Verify exact values
+    assert.strictEqual(DEFAULT_CAMERA_FOV, 75, 'Default FOV should be 75 degrees');
+    assert.strictEqual(DEFAULT_BG_COLOR, '#000000', 'Default background should be black (#000000)');
+    assert.strictEqual(DEFAULT_Z_SPACING, 100, 'Default Z-spacing should be 100 pixels');
+
+    // Verify types
+    assert.strictEqual(typeof DEFAULT_CAMERA_FOV, 'number', 'FOV should be number');
+    assert.strictEqual(typeof DEFAULT_BG_COLOR, 'string', 'Background color should be string');
+    assert.strictEqual(typeof DEFAULT_Z_SPACING, 'number', 'Z-spacing should be number');
+
+    // Verify FOV range (typical perspective camera range)
+    assert.ok(DEFAULT_CAMERA_FOV > 0 && DEFAULT_CAMERA_FOV < 180,
+        'FOV must be between 0 and 180 degrees');
+
+    // Verify background color format (6-digit hex with #)
+    assert.ok(/^#[0-9a-fA-F]{6}$/.test(DEFAULT_BG_COLOR),
+        'Background color must be valid 6-digit hex color');
+
+    // Verify Z-spacing is positive
+    assert.ok(DEFAULT_Z_SPACING > 0, 'Z-spacing must be positive');
+});

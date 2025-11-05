@@ -22,6 +22,15 @@ import {
     TOAST_DURATION_WARNING,
     TOAST_DURATION_INFO,
     CAMERA_FAR_PLANE,
+    CAMERA_DEFAULT_DISTANCE,
+    CAMERA_MIN_DISTANCE,
+    CAMERA_MAX_DISTANCE,
+    CONTROLS_DAMPING_FACTOR,
+    TOAST_FADE_DURATION,
+    OVERLAY_RENDER_DELAY,
+    DEFAULT_CAMERA_FOV,
+    DEFAULT_BG_COLOR,
+    DEFAULT_Z_SPACING,
     Z_INDEX_MODAL,
     BYTES_PER_MB,
     FLOOR_Y,
@@ -243,7 +252,7 @@ function init() {
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(params.cameraFOV, aspect, 0.1, CAMERA_FAR_PLANE);
     storeSharedRef(SHARED_STATE_KEYS.camera, camera);
-    camera.position.set(0, 0, 800);  // Default distance
+    camera.position.set(0, 0, CAMERA_DEFAULT_DISTANCE);
     camera.lookAt(0, 0, 0);
     camera.zoom = params.cameraZoom;
 
@@ -258,7 +267,7 @@ function init() {
         5000
     );
     storeSharedRef(SHARED_STATE_KEYS.orthoCamera, orthoCamera);
-    orthoCamera.position.set(0, 0, 800);
+    orthoCamera.position.set(0, 0, CAMERA_DEFAULT_DISTANCE);
     orthoCamera.lookAt(0, 0, 0);
     orthoCamera.zoom = params.cameraZoom;
 
@@ -302,9 +311,9 @@ function init() {
     controls = new OrbitControls(camera, renderer.domElement);
     storeSharedRef(SHARED_STATE_KEYS.controls, controls);
     controls.enableDamping = true;
-    controls.dampingFactor = 0.05;
-    controls.minDistance = 100;
-    controls.maxDistance = 3000;
+    controls.dampingFactor = CONTROLS_DAMPING_FACTOR;
+    controls.minDistance = CAMERA_MIN_DISTANCE;
+    controls.maxDistance = CAMERA_MAX_DISTANCE;
 
     // Initialize camera animator
     cameraAnimator = new CameraAnimator(camera, controls);
@@ -964,7 +973,7 @@ function exposeDebugAPI() {
                 try {
                     // Validate config
                     if (!config.version || !config.params || !config.images) {
-                        throw new Error('Invalid config format');
+                        throw new Error('importJSON: invalid config format, missing version, params, or images');
                     }
 
                     // Clear existing
@@ -1536,7 +1545,7 @@ function showToast(message, type = 'info', duration = 3000) {
     // Auto-dismiss
     setTimeout(() => {
         toast.style.animation = 'slideOut 0.3s ease-in';
-        setTimeout(() => toast.remove(), 300);
+        setTimeout(() => toast.remove(), TOAST_FADE_DURATION);
     }, duration);
 }
 
@@ -1637,11 +1646,11 @@ function saveSettings() {
  */
 function resetSettings() {
     params.cameraMode = 'perspective';
-    params.cameraFOV = 75;
+    params.cameraFOV = DEFAULT_CAMERA_FOV;
     params.cameraZoom = 1.0;
-    params.bgColor = '#000000';
+    params.bgColor = DEFAULT_BG_COLOR;
     params.transparentBg = false;
-    params.zSpacing = 100;
+    params.zSpacing = DEFAULT_Z_SPACING;
 
     // Update UI
     if (pane) {
@@ -1966,6 +1975,28 @@ function setupTweakpane() {
     }).on('change', saveSettings);
 }
 
+/**
+ * Export current 3D scene as PNG image with configurable resolution
+ *
+ * @param {number} [scale=1] - Resolution multiplier (1x, 2x, or 4x). Values outside 1-4 range default to 1x.
+ * @returns {void}
+ *
+ * @example
+ * // Export at standard resolution (window size)
+ * window.vexyStax.exportPNG(1);
+ *
+ * @example
+ * // Export at 2x resolution for high-DPI displays
+ * window.vexyStax.exportPNG(2);
+ *
+ * @example
+ * // Export at 4x resolution for print quality
+ * window.vexyStax.exportPNG(4);
+ *
+ * @example
+ * // Use default 1x if no parameter
+ * window.vexyStax.exportPNG();
+ */
 function exportPNG(scale = 1) {
     // Check if images are loaded
     if (imageStack.length === 0) {
@@ -2036,7 +2067,7 @@ function exportPNG(scale = 1) {
 
             // Verify data URL was created successfully
             if (!dataURL || !dataURL.startsWith('data:image/png')) {
-                throw new Error('Failed to generate PNG data');
+                throw new Error('exportPNG: failed to generate PNG data URL');
             }
 
             // Estimate file size (rough approximation)
@@ -2059,7 +2090,7 @@ function exportPNG(scale = 1) {
                 downloadSuccess = true;
             } catch (error) {
                 logExport.error(' Download failed:', error);
-                throw new Error('Failed to trigger download');
+                throw new Error('exportPNG: failed to trigger download');
             } finally {
                 document.body.removeChild(link);
             }
@@ -2087,7 +2118,7 @@ function exportPNG(scale = 1) {
                 document.body.removeChild(loadingOverlay);
             }
         }
-    }, 100); // 100ms delay to allow overlay to render
+    }, OVERLAY_RENDER_DELAY);
 }
 
 function getActiveCamera() {
@@ -2191,7 +2222,7 @@ function switchCameraMode(mode) {
 
     if (mode === 'orthographic') {
         // Front orthographic view
-        orthoCamera.position.set(0, 0, 800);
+        orthoCamera.position.set(0, 0, CAMERA_DEFAULT_DISTANCE);
         orthoCamera.lookAt(0, 0, 0);
         orthoCamera.zoom = params.cameraZoom;
         orthoCamera.updateProjectionMatrix();
@@ -2215,7 +2246,7 @@ function switchCameraMode(mode) {
         pane.refresh();
     } else {
         // Default perspective
-        camera.position.set(0, 0, 800);
+        camera.position.set(0, 0, CAMERA_DEFAULT_DISTANCE);
         camera.lookAt(0, 0, 0);
         camera.zoom = params.cameraZoom;
         camera.updateProjectionMatrix();
@@ -2334,6 +2365,31 @@ function setViewpointFitToFrame() {
     logCamera.info(`Front view: fitted studio canvas ${canvasWidth}×${canvasHeight}px at distance ${distance.toFixed(1)} from slide`);
 }
 
+/**
+ * Remove all loaded images from the 3D scene and clear the image stack
+ *
+ * Properly disposes of all Three.js resources (geometries, materials, textures)
+ * to prevent memory leaks. Saves current state to history for undo/redo.
+ *
+ * @returns {void}
+ *
+ * @example
+ * // Clear all images and start fresh
+ * window.vexyStax.clearAll();
+ *
+ * @example
+ * // Check if images exist before clearing
+ * if (window.vexyStax.getImageStack().length > 0) {
+ *   window.vexyStax.clearAll();
+ * }
+ *
+ * @example
+ * // Clear and reload from JSON
+ * window.vexyStax.clearAll();
+ * // Then load new configuration
+ * const fileInput = document.getElementById('json-input');
+ * fileInput.click();
+ */
 function clearAll() {
     // Save history before clearing
     saveHistory();
@@ -3149,6 +3205,45 @@ function exportJSON() {
     logExport.info(`JSON exported successfully as ${link.download}`);
 }
 
+/**
+ * Import scene configuration from JSON file
+ *
+ * Loads a previously exported JSON file containing scene parameters,
+ * camera position, and image data (encoded as base64). Clears current
+ * scene before applying imported configuration.
+ *
+ * @param {File} file - File object from file input or drag-and-drop event
+ * @returns {void}
+ *
+ * @example
+ * // Import from file input
+ * const fileInput = document.getElementById('json-input');
+ * fileInput.addEventListener('change', (e) => {
+ *   const file = e.target.files[0];
+ *   if (file) {
+ *     window.vexyStax.importJSON(file);
+ *   }
+ * });
+ *
+ * @example
+ * // Import from drag-and-drop
+ * dropZone.addEventListener('drop', (e) => {
+ *   e.preventDefault();
+ *   const files = Array.from(e.dataTransfer.files);
+ *   const jsonFile = files.find(f => f.name.endsWith('.json'));
+ *   if (jsonFile) {
+ *     window.vexyStax.importJSON(jsonFile);
+ *   }
+ * });
+ *
+ * @example
+ * // Import with error handling
+ * try {
+ *   window.vexyStax.importJSON(file);
+ * } catch (error) {
+ *   console.error('Import failed:', error);
+ * }
+ */
 function importJSON(file) {
     if (!file) {
         logExport.error('No file provided for import');
