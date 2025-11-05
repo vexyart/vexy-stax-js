@@ -8,8 +8,8 @@
  * Modules Tested:
  * - src/camera/CameraController.js (CameraController class)
  *
- * Test Count: 8 tests
- * @lastTested 2025-11-05 (Phase 5 Iteration 4)
+ * Test Count: 9 tests
+ * @lastTested 2025-11-06 (Quality Improvements - Iteration 106)
  */
 
 import test from 'node:test';
@@ -228,4 +228,22 @@ test('CameraController_setFOV_when_modeOrthographic_then_leavesPerspectiveProjec
 
     assert.equal(ctx.camera.fov, originalFOV, 'perspective camera FOV should remain unchanged outside perspective/telephoto modes');
     assert.equal(ctx.emissions.length, originalEmissionCount, 'FOV update should not emit in orthographic mode');
+});
+
+test('CameraController_setViewpoint_when_presetProvided_then_positionsCamera', () => {
+    const ctx = createContext();
+    const beautyViewpoint = { x: -1280, y: -40, z: 1400 };
+
+    ctx.controller.setViewpoint(beautyViewpoint.x, beautyViewpoint.y, beautyViewpoint.z);
+
+    assert.equal(ctx.camera.position.x, beautyViewpoint.x, 'camera x position should match preset');
+    assert.equal(ctx.camera.position.y, beautyViewpoint.y, 'camera y position should match preset');
+    assert.equal(ctx.camera.position.z, beautyViewpoint.z, 'camera z position should match preset');
+    assert.ok(ctx.controls.updateCalls > 0, 'controls should be updated after viewpoint change');
+    // Verify camera was repositioned successfully regardless of event emissions
+    const distance = Math.sqrt(
+        beautyViewpoint.x ** 2 + beautyViewpoint.y ** 2 + beautyViewpoint.z ** 2
+    );
+    const actualDistance = ctx.camera.position.length();
+    assert.ok(Math.abs(actualDistance - distance) < 0.01, 'camera should be at expected distance from origin');
 });

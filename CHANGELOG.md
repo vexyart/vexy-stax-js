@@ -4,6 +4,8 @@
 ## [0.2.0] - 2025-11-05
 
 ### Verification
+- 2025-11-06 — npm run test:unit: 294/294 passing (≈1.3 s, Node 22); viewpoint preset optimization complete; all camera positions updated for better layer readability.
+- 2025-11-06 — npm run test:unit: 295/295 passing (≈1.16 s, Node 22); quality improvements complete - added viewpoint validation, memory formatting edge cases, and viewpoint integration test.
 - 2025-11-05 15:51 UTC — `npm run test:unit`: 294/294 passing (≈0.90 s, Node 22); new SceneComposition border/thickness tests plus FileHandler `dataTransfer.types` drag coverage added; Playwright smoke still disabled.
 - 2025-11-05 15:43 UTC — `npm run test:unit`: 291/291 passing (≈0.96 s, Node 22); debounce timer remains slowest (~102 ms); Playwright smoke still disabled.
 - 2025-11-05 15:45 UTC — `npm run test:unit`: 285/285 (≈1.05 s); added FileHandler overlay, SceneComposition rebuild, and MemoryMonitor confirm suites.
@@ -31,6 +33,15 @@
 - `src/main.js`: applied pending JSDoc templates for export/settings/camera/history/memory helpers and added reliability tests for CameraController fallbacks + ExportManager error toasts.
 - `src/settings/SettingsManager.js`: modular load/save/reset with injected storage + alerts; `tests/settings_settings_manager.test.js` (+5) cover storage loss, snapshots, quota recovery, defaults.
 - Tests-only: expanded `tests/core_scene_composition.test.js` with border mesh and BoxGeometry thickness coverage (+2) and `tests/files_file_handler.test.js` with `dataTransfer.types` drag handling (+1).
+
+### UX Improvements
+- **Viewpoint Optimization (2025-11-06)**: Updated all camera viewpoint presets (`src/core/constants.js`) for better layer readability and clearer separation:
+  - Beauty: repositioned from `{x:600, y:400, z:700}` to `{x:-1280, y:-40, z:1400}` for readable 3/4 view
+  - Top: increased from `{x:0, y:800, z:100}` to `{x:0, y:1200, z:200}` for better depth perception
+  - Isometric: adjusted to `{x:-900, y:900, z:900}` for true isometric from improved angle
+  - 3D-Stack: enhanced to `{x:-800, y:400, z:1000}` for better depth emphasis
+  - Side: updated to `{x:-1400, y:0, z:200}` for side view with slight perspective
+  - All viewpoints now provide more face-on visualization with reduced perspective distortion, making individual layers easier to read and distinguish.
 
 ### Bug Fixes
 - Restored drag-and-drop slide loading after RenderLoop extraction by reinstating FPS overlay tracking inside `src/main.js`; regression cleared with `npm run test:unit` (227 tests at fix time).

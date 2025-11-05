@@ -216,6 +216,14 @@ test('VIEWPOINT_PRESETS have valid coordinate ranges', () => {
         const distance = Math.sqrt(x * x + y * y + z * z);
         assert.ok(distance < 10000,
             `${name}: camera distance ${distance} seems unreasonably large`);
+
+        // Ensure camera is not at origin (would cause rendering issues)
+        assert.ok(distance > 10,
+            `${name}: camera distance ${distance} too close to origin`);
+
+        // Z coordinate should be positive enough to see scene
+        assert.ok(z > -5000,
+            `${name}: z coordinate ${z} is behind scene bounds`);
     });
 });
 

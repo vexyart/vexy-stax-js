@@ -215,9 +215,9 @@ describe('Constants Immutability', () => {
         assert.strictEqual(RETRY_DELAYS_MS[2], 3000, 'Third retry delay should be 3000');
         assert.strictEqual(MATERIAL_PRESETS['flat-matte'].roughness, 1.0, 'flat-matte roughness should be 1.0');
         assert.strictEqual(MATERIAL_PRESETS['flat-matte'].metalness, 0, 'flat-matte metalness should be 0');
-        assert.strictEqual(VIEWPOINT_PRESETS.beauty.x, 600, 'beauty viewpoint x should be 600');
-        assert.strictEqual(VIEWPOINT_PRESETS.beauty.y, 400, 'beauty viewpoint y should be 400');
-        assert.strictEqual(VIEWPOINT_PRESETS.beauty.z, 700, 'beauty viewpoint z should be 700');
+        assert.strictEqual(VIEWPOINT_PRESETS.beauty.x, -1280, 'beauty viewpoint x should be -1280');
+        assert.strictEqual(VIEWPOINT_PRESETS.beauty.y, -40, 'beauty viewpoint y should be -40');
+        assert.strictEqual(VIEWPOINT_PRESETS.beauty.z, 1400, 'beauty viewpoint z should be 1400');
         assert.strictEqual(EVENTS.backgroundChanged, 'background:changed', 'backgroundChanged event name should be correct');
         assert.strictEqual(EVENTS.stackUpdated, 'stack:updated', 'stackUpdated event name should be correct');
         assert.strictEqual(EVENTS.cameraUpdated, 'camera:updated', 'cameraUpdated event name should be correct');

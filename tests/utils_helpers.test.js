@@ -265,10 +265,14 @@ test('formatFileSize handles zero bytes', () => {
 });
 
 test('formatFileSize handles edge unit boundaries', () => {
+    assert.strictEqual(formatFileSize(1), '1 B', 'Single byte');
     assert.strictEqual(formatFileSize(1023), '1023 B', 'Just under KB');
     assert.strictEqual(formatFileSize(1024), '1.0 KB', 'Exactly 1 KB');
     assert.strictEqual(formatFileSize(1024 * 1024 - 1), '1024.0 KB', 'Just under MB');
     assert.strictEqual(formatFileSize(1024 * 1024), '1.0 MB', 'Exactly 1 MB');
+    assert.strictEqual(formatFileSize(1024 * 1024 * 1024), '1.0 GB', 'Exactly 1 GB');
+    assert.strictEqual(formatFileSize(1024 * 1024 * 1024 * 1024), '1024.0 GB', 'Exactly 1 TB (formatted as GB)');
+    assert.strictEqual(formatFileSize(1024 * 1024 * 1024 * 1024 * 10), '10240.0 GB', 'Very large file (10 TB in GB)');
 });
 
 test('deepClone handles circular reference gracefully', () => {

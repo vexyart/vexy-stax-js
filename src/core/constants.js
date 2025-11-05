@@ -490,22 +490,22 @@ export const MATERIAL_PRESETS = Object.freeze({
  * @constant
  * @property {null} center - Returns camera to centered default position
  * @property {string} front - Special 'fitToFrame' mode that calculates distance to fit canvas
- * @property {Object} beauty - Attractive 3/4 view (x:600, y:400, z:700)
- * @property {Object} top - Top-down view (x:0, y:800, z:100)
- * @property {Object} isometric - True isometric angle (x:500, y:500, z:500)
- * @property {Object} 3d-stack - Emphasizes stack depth (x:400, y:300, z:600)
- * @property {Object} side - Pure side view (x:800, y:0, z:0)
+ * @property {Object} beauty - Readable 3/4 view with clear layer separation (x:-1280, y:-40, z:1400)
+ * @property {Object} top - Top-down view with slight depth (x:0, y:1200, z:200)
+ * @property {Object} isometric - True isometric angle (x:-900, y:900, z:900)
+ * @property {Object} 3d-stack - Emphasizes stack depth (x:-800, y:400, z:1000)
+ * @property {Object} side - Side view with slight perspective (x:-1400, y:0, z:200)
  * @unit pixels for x/y/z coordinates
- * @description Preset camera positions for common viewing angles
+ * @description Preset camera positions for common viewing angles, optimized for layer readability
  */
 export const VIEWPOINT_PRESETS = Object.freeze({
     center: null,
     front: 'fitToFrame',
-    beauty: { x: 600, y: 400, z: 700 },
-    top: { x: 0, y: 800, z: 100 },
-    isometric: { x: 500, y: 500, z: 500 },
-    '3d-stack': { x: 400, y: 300, z: 600 },
-    side: { x: 800, y: 0, z: 0 }
+    beauty: { x: -1280, y: -40, z: 1400 },
+    top: { x: 0, y: 1200, z: 200 },
+    isometric: { x: -900, y: 900, z: 900 },
+    '3d-stack': { x: -800, y: 400, z: 1000 },
+    side: { x: -1400, y: 0, z: 200 }
 });
 
 /**

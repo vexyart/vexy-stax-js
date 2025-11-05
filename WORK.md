@@ -1,12 +1,12 @@
 # <!-- this_file: WORK.md -->
 # Vexy Stax JS - Work Progress
 
-## Current Status (2025-11-05)
-**Phase**: 4 ✅ **COMPLETE** - 98 quality improvement iterations
-**Tests**: 294/294 passing ✅ (+184 vs baseline 110; recent adds cover FileHandler drag/drop overlays, SceneComposition material rebuilds, MemoryMonitor confirmation flows, KeyboardShortcuts teardown/aliases, expanded Tweakpane tooling, CameraController delegation, ExportManager flows, and Playwright-ready UI guards)
-**Build**: 1,142.72 kB ✅ (improved -0.67 kB from vite 7.2.0 upgrade, stable <0.1% variance over 66+ iterations)
+## Current Status (2025-11-06)
+**Phase**: 5 **IN PROGRESS** - Quality improvements + main.js decomposition
+**Tests**: 295/295 passing ✅ (+185 vs baseline 110; latest adds: viewpoint validation, memory formatting edges, viewpoint integration test)
+**Build**: 1,142.72 kB ✅ (stable <0.1% variance)
 **Main.js**: 3,367 lines (-88 from 3,455) → Target: <300 lines (Phase 5)
-**Completed**: 98 iterations ✅
+**Completed**: 107 iterations ✅ (Iterations 106-107 on 2025-11-06: viewpoint optimization + quality improvements)
 
 **Phase 4 Summary** (Iterations 1-98):
 - Module Extraction: RenderLoop.js (244 lines, -88 from main.js)
@@ -43,6 +43,52 @@
 
 ### Iteration 105 – Quality coverage additions (COMPLETE)
 - Added SceneComposition border mesh and thick-material coverage along with FileHandler `dataTransfer.types` drag handling tests; no production code changes required and unit suite expanded to 294 cases.
+
+### Iteration 106 – Viewpoint preset optimization (COMPLETE - 2025-11-06)
+**Objective**: Update all camera viewpoint presets to provide better layer readability and clearer separation between stacked images.
+
+**Analysis**: User-provided reference images showed current "Beauty" viewpoint `{x:600, y:400, z:700}` created excessive perspective tilt, while desired view `{x:-1277, y:-39, z:1400}` provided clearer face-on visualization with better layer distinction.
+
+**Changes Made**:
+- Updated all VIEWPOINT_PRESETS in `src/core/constants.js`:
+  - Beauty: `{x:600, y:400, z:700}` → `{x:-1280, y:-40, z:1400}` (readable 3/4 view)
+  - Top: `{x:0, y:800, z:100}` → `{x:0, y:1200, z:200}` (increased height + depth)
+  - Isometric: `{x:500, y:500, z:500}` → `{x:-900, y:900, z:900}` (true isometric, new angle)
+  - 3D-Stack: `{x:400, y:300, z:600}` → `{x:-800, y:400, z:1000}` (better depth emphasis)
+  - Side: `{x:800, y:0, z:0}` → `{x:-1400, y:0, z:200}` (side view with perspective)
+- Updated JSDoc comments to reflect new coordinates and improved descriptions
+- Updated test assertions in `tests/constants_immutability.test.js` to match new Beauty viewpoint values
+
+**Test Results**: All 294/294 tests passing (≈1.3s, Node 22)
+**Risk Assessment**: Low - changes are purely numerical adjustments to camera positions; all existing functionality preserved; test coverage validates immutability and coordinate ranges.
+
+### Iteration 107 – Quality improvements: Validation & Integration Tests (COMPLETE - 2025-11-06)
+**Objective**: Add three targeted quality improvements to increase reliability and robustness.
+
+**Task 1: Viewpoint Coordinate Validation** ✅
+- Enhanced `tests/core_constants.test.js` with additional validation checks
+- Added minimum distance check (>10 units) to prevent camera at origin
+- Added Z-coordinate bounds check (>-5000) to prevent camera behind scene
+- All existing viewpoint presets pass enhanced validation
+
+**Task 2: Memory Formatting Edge Cases** ✅
+- Expanded `tests/utils_helpers.test.js` edge case coverage for `formatFileSize`
+- Added tests for: 1 byte, 1 GB, 1 TB (as GB), 10 TB (as GB)
+- Verified proper formatting across entire range from bytes to terabytes
+- All edge cases handle correctly with proper unit selection
+
+**Task 3: Viewpoint Integration Test** ✅
+- Added end-to-end test in `tests/camera_camera_controller.test.js`
+- Verifies Beauty viewpoint preset correctly positions camera through CameraController
+- Tests coordinate application, controls update, and distance calculation
+- Updated test count from 8 to 9 tests in CameraController suite
+
+**Test Results**: All 295/295 tests passing (≈1.16s, Node 22) - **+1 test added**
+**Files Modified**:
+- `tests/core_constants.test.js` (enhanced validation)
+- `tests/utils_helpers.test.js` (expanded edge cases)
+- `tests/camera_camera_controller.test.js` (new integration test)
+**Risk Assessment**: Very low - only added test coverage, no production code changes
 
 ### Test Session – 2025-11-05 (SceneComposition + FileHandler coverage)
 **Command**: `npm run test:unit -- --test-name-pattern=SceneComposition`
