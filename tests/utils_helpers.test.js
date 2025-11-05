@@ -11,6 +11,7 @@
  * - src/utils/helpers.js (all exported utility functions)
  *
  * Test Count: 41 tests
+ * @lastTested 2025-11-05 (Iteration 92)
  */
 
 import { test } from 'node:test';

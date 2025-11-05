@@ -10,6 +10,7 @@
  * - src/core/studioSizing.js (computeRetinaDimensions)
  *
  * Test Count: 5 tests
+ * @lastTested 2025-11-05 (Iteration 92)
  */
 
 import test from 'node:test';

@@ -1,6 +1,11 @@
 // this_file: tests/api_input_validation.test.js
-// Tests for input validation in user-facing API functions
-// Ensures window.vexyStax API handles invalid inputs gracefully
+/**
+ * @fileoverview API Input Validation Tests
+ * @description Tests for input validation in user-facing API functions
+ *              Ensures window.vexyStax API handles invalid inputs gracefully
+ * @testCount 10 tests
+ * @lastTested 2025-11-05 (Iteration 92)
+ */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';

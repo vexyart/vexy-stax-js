@@ -13,6 +13,7 @@
  * - src/camera/animation.js (CameraAnimator)
  *
  * Test Count: 23 tests
+ * @lastTested 2025-11-05 (Iteration 92)
  */
 
 import { describe, test } from 'node:test';

@@ -10,6 +10,7 @@
  * - src/core/constants.js (all exported constants)
  *
  * Test Count: 17 tests
+ * @lastTested 2025-11-05 (Iteration 92)
  */
 
 import { describe, test } from 'node:test';

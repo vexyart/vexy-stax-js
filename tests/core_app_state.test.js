@@ -10,6 +10,7 @@
  * - src/core/AppState.js (AppState class, createDefaultParams)
  *
  * Test Count: 15 tests
+ * @lastTested 2025-11-05 (Iteration 92)
  */
 
 import test from 'node:test';

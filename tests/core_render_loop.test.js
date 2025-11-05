@@ -10,6 +10,7 @@
  * - src/core/RenderLoop.js (RenderLoop class)
  *
  * Test Count: 20 tests
+ * @lastTested 2025-11-05 (Iteration 92)
  */
 
 import { describe, it, beforeEach, afterEach, mock, before } from 'node:test';

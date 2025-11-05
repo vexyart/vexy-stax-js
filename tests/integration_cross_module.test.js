@@ -1,5 +1,11 @@
 // this_file: tests/integration_cross_module.test.js
-// Integration tests for cross-module interactions
+/**
+ * @fileoverview Cross-Module Integration Tests
+ * @description Integration tests verifying interactions between multiple modules
+ *              Tests module boundaries, data flow, and inter-module contracts
+ * @testCount 5 tests
+ * @lastTested 2025-11-05 (Iteration 92)
+ */
 
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
