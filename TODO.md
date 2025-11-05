@@ -13,7 +13,7 @@
 **Package**: npm-ready with entry points, .editorconfig, .gitattributes, cleanup script, LICENSE with copyright, comprehensive docs
 **Coverage**: helpers.js 100% (was 94.14%), core 96.41%, utils 97.22%
 **Constants**: 7 new constants added (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), 25 magic numbers eliminated
-**Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-35 committed and pushed
+**Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-36 committed and pushed
 
 ---
 
