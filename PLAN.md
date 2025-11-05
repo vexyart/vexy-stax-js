@@ -6,303 +6,77 @@ Maintain a browser-based Three.js studio that stacks 2D artwork with accurate co
 
 ---
 
-## Current Focus – Phase 4: Main.js Modularization (2025-11-05)
-
-### Phase 3: Documentation & Code Quality ✅ COMPLETE
-**Completed**: 2025-11-05
-**Results**: 110/110 tests passing, zero memory leaks, full JSDoc coverage
-
-### Phase 4: Quality Improvements & Modularization ✅ COMPLETE
-**Timeline**: Iterations 1-98 (2025-11-05)
-**Status**: 98 quality improvement iterations complete ✅ **PHASE 4 COMPLETE**
-**Progress**:
-- ✅ 227/227 tests passing (+117 from baseline, includes 5 integration tests + 4 Iteration 73 constant tests)
-- ✅ RenderLoop module extracted and integrated
-- ✅ 99.3% logging migration (144/145 console calls to logger, 7 intentional console calls remain)
-- ✅ Documentation optimized & complete (README 194 lines, all 8 dependencies documented, BROWSER_COMPATIBILITY.md 227 lines, PERFORMANCE.md 400+ lines)
-- ✅ 96%+ coverage on core utilities
-- ✅ Code robustness verified (WebGL recovery, resource cleanup, input validation, API input validation comprehensive)
-- ✅ Integration tests added (cross-module interaction testing)
-- ✅ Test suite documentation (16 files with comprehensive JSDoc headers)
-- ✅ Complete constant coverage (all 36 exported constants validated + 10 Iteration 73 constants)
-- ✅ npm package configured (entry points: main, module, exports, files)
-- ✅ Cross-platform consistency (.editorconfig + .gitattributes for LF line endings)
-- ✅ Package metadata accurate (LICENSE copyright, npm help updated)
-- ✅ Project hygiene (obsolete/duplicate docs removed: 16→9 files, -119K total)
-- ✅ JSDoc @example tags added to main.js exports (exportPNG, clearAll, importJSON)
-
-**Current Problem**: main.js is 3,367 lines (was 3,455, -88 from RenderLoop)
-**Goal**: Complete remaining 5 module extractions to reduce to <300 lines orchestration layer
+## Phase History Snapshot
+- **Phase 1 – Core Refactor**: Extracted Scene, Lighting, and Floor managers; added helpers and layout foundations.
+- **Phase 2 – UI & Ambient**: Delivered ambient mode, UI dark theme, and camera polish with 93/93 tests passing.
+- **Phase 3 – Documentation & Quality**: Completed full JSDoc coverage, zero memory leaks, 110/110 tests.
+- **Phase 4 – Quality Intensification**: 98 disciplined iterations, 227/227 tests, RenderLoop module extracted, logging and docs aligned, project release-ready.
 
 ---
 
-## Extraction Strategy
+## Current Focus – Phase 5: main.js Decomposition (2025-11-05)
 
-### Step 1: Render Loop Module
-**File**: src/core/RenderLoop.js
-**Lines**: ~100 lines
-**Scope**:
-- requestAnimationFrame management
-- FPS tracking (if showFPS enabled)
-- Pause/resume animation
-- Render callback registration
+### Baseline
+- `src/main.js`: 3,367 lines, 77 functions (per `main_js_complexity.md`), single keyboard handler >60 lines, several 150–300 line blocks.
+- Major hotspots: init orchestration, Tweakpane setup, image loading/memory guardrails, export handlers.
+- Public API functions mapped in `main_js_jsdoc_templates.md`; templates flag 18 functions requiring consistent documentation once relocated.
 
-**API**:
-```javascript
-class RenderLoop {
-  start(renderCallback)
-  stop()
-  pause()
-  resume()
-  showFPS(enabled)
-  getCurrentFPS()
-}
-```
+### Objectives
+1. Shrink main.js to an orchestration shell (<300 lines) while preserving behaviour and API surface.
+2. Extract cohesive modules that match existing plan (UI setup, file handling, scene composition, camera control, exports) with clear interfaces and tests.
+3. Apply JSDoc templates (and extend where gaps remain) so every exported function in new modules ships with examples and type hints.
+4. Maintain current test count (227) and performance baselines; prevent regression in memory watchdogs or export fidelity.
 
----
+### Workstreams & Deliverables
+1. **UI Controls (`src/ui/TweakpaneSetup.js`)**
+   - Scope: Tweakpane construction (~300 lines), button callbacks, pane refresh logic.
+   - Deliverables: Class with dependency-injected callbacks, tests covering folder creation and callback wiring, documentation referencing templates for UI-bound functions (e.g., `showToast` usage).
+   - Dependencies: Needs scene/camera/export callback contracts defined before extraction.
+2. **File Handling (`src/files/FileHandler.js`)**
+   - Scope: Drag/drop, browse flow, file validation (type, 50 MB limit), memory checks (per `checkMemoryUsage` template).
+   - Deliverables: Module exposing enable/disable APIs, retries for texture loading, tests simulating oversize files and memory threshold breaches, JSDoc aligned with `loadImageFile` template.
+3. **Scene Composition (`src/core/SceneComposition.js`)**
+   - Scope: Texture creation, mesh lifecycle, Z-spacing updates, reorder logic identified as hotspot in complexity report.
+   - Deliverables: Pure functions where possible for stack math, integration tests covering reorder and cleanup, documentation for `updateZSpacing`, `reorderImages`, `clearAll`.
+4. **Camera Controls (`src/camera/CameraController.js`)**
+   - Scope: Mode switching, viewpoint presets, integration with existing animator/OrbitControls.
+   - Deliverables: Controller abstraction, tests verifying transforms, JSDoc for `setCameraMode`, `centerOnContent`.
+5. **Export Manager (`src/export/ExportManager.js`)**
+   - Scope: PNG multi-scale rendering, JSON serialisation/deserialisation, clipboard interactions.
+   - Deliverables: Deterministic exports with dependency injection for renderer/canvas, tests with mocked renderer to validate scale bounds (per `exportPNG` template).
+6. **Keyboard Shortcuts (`src/ui/KeyboardShortcuts.js`)**
+   - Scope: Isolate 62-line `keydownHandler`; ensure undo/redo/export shortcuts remain covered by tests.
+   - Deliverables: Focused listener with test coverage for modifier edge cases.
 
-### Step 2: UI Initialization Module
-**File**: src/ui/TweakpaneSetup.js
-**Lines**: ~200 lines
-**Scope**:
-- Tweakpane folder structure creation
-- Control bindings (sliders, buttons, color pickers)
-- Material preset buttons
-- Viewpoint preset buttons
-- Tab setup (File/Image/Video/Studio/Camera)
+### Cross-Cutting Tasks
+- Define shared data contracts (callbacks, state fragments) before extraction to avoid circular imports.
+- Introduce façade helpers in main.js during transition so modules can be integrated incrementally.
+- Ensure every relocated function gains a JSDoc block derived from the templates; add missing templates for memory/watchdog helpers as they become module APIs.
+- Update `WORK.md` and docs after each module lands; note test runs (`npm run test:unit` minimum, add targeted unit suites as they appear).
 
-**API**:
-```javascript
-class TweakpaneSetup {
-  constructor(container, params, callbacks)
-  createStudioFolder()
-  createCameraFolder()
-  createFileFolder()
-  bindControls()
-  refresh()
-}
-```
+### Acceptance Criteria
+- main.js orchestrates module wiring, public API exposure, and lifecycle only; internal logic resides elsewhere.
+- Each new module ≤250 lines, internally documented, unit-tested, and referenced in `DEPENDENCIES.md` if new packages appear (avoid unless essential).
+- 227/227 tests stay green; add new suites per module.
+- Build size remains ≤1,150 kB; memory guard rails continue to emit warnings at 500 MB.
+- Public API signatures unchanged; templates applied so IDE hints remain accurate.
 
----
+### Coordination & Sequencing
+1. Establish callback contract doc (short UML/section in WORK.md) before UI extraction.
+2. Extract FileHandler first to stabilise input pipeline, then SceneComposition to remove mesh logic from main.js.
+3. Follow with ExportManager and CameraController so UI module can bind to stable APIs.
+4. Finish with keyboard shortcuts clean-up and final main.js shrink pass.
 
-### Step 3: File Handling Module
-**File**: src/files/FileHandler.js
-**Lines**: ~180 lines
-**Scope**:
-- Drag/drop event handlers
-- Browse button functionality
-- File type validation
-- Size validation (50MB limit)
-- Memory usage calculation/warnings
-- Multi-file processing
-
-**API**:
-```javascript
-class FileHandler {
-  constructor(callbacks)
-  enableDragDrop(element)
-  enableBrowse(button, input)
-  validateFile(file)
-  checkMemoryUsage(newBytes)
-  processFiles(fileList)
-}
-```
+### Verification Strategy
+- Unit: Dedicated suites per new module.
+- Integration: Regression tests ensuring drag/drop → scene update → export still works when modules interact.
+- Manual smoke: Load sample stacks (small/large), trigger exports, verify keyboard shortcuts.
+- Documentation: Update README features table only if behaviour changes; record test outcomes in `CHANGELOG.md`.
 
 ---
 
-### Step 4: Scene Composition Module
-**File**: src/core/SceneComposition.js
-**Lines**: ~200 lines
-**Scope**:
-- Image loading from File/URL/DataURL
-- Texture creation with retry logic
-- Mesh creation (PlaneGeometry/BoxGeometry)
-- Z-positioning along stack
-- Material application
-- Mesh deletion with resource cleanup
-- Stack reordering
-
-**API**:
-```javascript
-class SceneComposition {
-  constructor(scene, params)
-  addImageFromFile(file)
-  addImageFromDataURL(dataURL, filename)
-  removeImage(meshId)
-  reorderStack(fromIndex, toIndex)
-  updateZSpacing(newSpacing)
-  updateMaterials(materialProps)
-  clearAll()
-}
-```
-
----
-
-### Step 5: Camera Controller Module
-**File**: src/camera/CameraController.js
-**Lines**: ~150 lines
-**Scope**:
-- Camera mode switching (Perspective/Ortho/Iso/Telephoto)
-- Viewpoint preset application
-- FOV/zoom controls
-- Integration with existing CameraAnimator
-- OrbitControls management
-
-**API**:
-```javascript
-class CameraController {
-  constructor(cameras, controls, animator)
-  setMode(mode) // 'perspective'|'orthographic'|'isometric'|'telephoto'
-  setViewpoint(preset) // 'front'|'top'|'beauty'|'center'|etc
-  setFOV(degrees)
-  setZoom(factor)
-  animateToViewpoint(preset, duration)
-}
-```
-
----
-
-### Step 6: Export Manager Module
-**File**: src/export/ExportManager.js
-**Lines**: ~200 lines
-**Scope**:
-- PNG export with scale multiplier (1x/2x/4x)
-- JSON serialization (params + images as base64)
-- JSON deserialization
-- Clipboard copy/paste
-- Download trigger
-
-**API**:
-```javascript
-class ExportManager {
-  constructor(renderer, scene, camera, params)
-  exportPNG(scale, filename)
-  exportJSON()
-  importJSON(jsonString)
-  copyToClipboard()
-  pasteFromClipboard()
-}
-```
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- Test each new module independently
-- Mock dependencies (scene, renderer, etc.)
-- Verify API contracts
-- Test error handling
-
-### Integration Tests
-- Test module interactions
-- Verify orchestration in main.js
-- Check resource cleanup
-- Validate event flow
-
-### Regression Prevention
-- All 110 existing tests must pass
-- Bundle size must not increase significantly
-- Performance must remain ≥60fps
-
----
-
-## Success Criteria
-
-✅ main.js < 300 lines (entry point only)
-✅ Each module < 250 lines
-✅ Zero circular dependencies
-✅ All tests passing (110+)
-✅ Bundle size ≤ 1,150 kB
-✅ Build successful
-✅ No runtime errors
-
----
-
-## Risk Assessment
-
-**Risk 1: Circular Dependencies**
-- Probability: Medium
-- Impact: High (build failure)
-- Mitigation: Use dependency injection, avoid cross-imports
-- Verification: Bundle build must succeed
-
-**Risk 2: Breaking Changes**
-- Probability: Low (good test coverage)
-- Impact: High
-- Mitigation: Run tests after each extraction
-- Verification: All tests must pass
-
-**Risk 3: Performance Regression**
-- Probability: Low
-- Impact: Medium
-- Mitigation: Profile before/after
-- Verification: Maintain 60fps with 10+ images
-
----
-
-## Future Considerations (Post-Phase 4)
-
-- Video export (MP4/WebM via MediaRecorder API)
-- Advanced material editor (custom shaders)
-- Plugin system for extensions
-- Cloud storage integration
-- Collaborative features
-- Automated visual regression (Playwright)
-
----
-
-## Technical Debt Backlog
-
-1. ✅ JSDoc coverage (constants.js: 100%)
-2. ✅ Event listener memory management (zero leaks)
-3. 🔄 Main.js modularization (3,367 lines → <300) - Deferred to Phase 5
-4. ✅ Console.log cleanup (99.3% migrated to logger, 7 intentional console calls)
-5. ✅ Deep freeze for nested constant objects
-
----
-
-## Release Preparation Checklist (v0.2.0)
-
-### Pre-Release Verification
-- [x] All tests passing (208/208) ✅
-- [x] Build successful (1,143.27 kB) ✅
-- [x] Documentation synchronized (24 iterations documented) ✅
-- [x] No uncommitted work (ready for git commit)
-- [ ] Git commit with comprehensive message
-- [ ] Version bump in package.json (0.1.0 → 0.2.0)
-- [ ] Git tag release (v0.2.0)
-
-### Quality Metrics for v0.2.0
-- **Tests**: 208 (+98 from v0.1.0, +89% improvement)
-- **Coverage**: helpers.js 100%, core 96.41%, utils 97.22%
-- **Build**: 1,143.27 kB (stable, -6 kB from v0.1.0)
-- **Documentation**: 9 essential files (was 16, -119K cleanup)
-- **Code Quality**: 24 systematic improvement iterations
-- **Package**: npm-ready with proper entry points, cross-platform consistency
-
-### Release Notes Template
-```markdown
-## v0.2.0 - Quality & Refinement Release
-
-This release focuses on code quality, testing, and developer experience through
-24 systematic improvement iterations. No new features, but significant improvements
-to maintainability, reliability, and documentation.
-
-**Highlights:**
-- +98 tests (89% increase), 96%+ coverage on core utilities
-- 99.3% logging migration to structured logger (19 module loggers)
-- Complete dependency documentation, npm package configuration
-- Cross-platform consistency (.editorconfig + .gitattributes)
-- 119K of obsolete/duplicate documentation removed
-
-**Breaking Changes:** None
-**Upgrade Path:** Drop-in replacement for v0.1.0
-```
-
-### Post-Release Tasks
-- [ ] Update GitHub Pages deployment
-- [ ] Tag release on GitHub with release notes
-- [ ] Update README badges if needed
-- [ ] Consider npm publish (package is ready)
-- [ ] Plan Phase 5: Module Extraction Strategy
+### Risks & Mitigations
+- **Circular dependencies**: Keep module APIs dependency-injected; enforce lint checks for banned imports; smoke-test build after each extraction.
+- **Behaviour regressions**: Write targeted unit tests before moving logic; run `npm run test:unit` and relevant integration suites after every module.
+- **Performance drift**: Benchmark render loop with 10-image stacks pre/post extraction; log deltas in WORK.md.
+- **Documentation drift**: Track template adoption in WORK.md; block merges until relocated functions ship with updated JSDoc.

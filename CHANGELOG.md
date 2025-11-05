@@ -3,6 +3,13 @@
 
 ## [0.2.0] - 2025-11-05
 
+### Phase 5: main.js Decomposition
+- Introduced `src/files/FileHandler.js` to own drag/drop + browse intake with injected callbacks, size/type checks, and memory gating; rewired `src/main.js` to delegate validation and removed duplicate logic. Added `tests/files_file_handler.test.js` (4 tests) raising total to 231/231 green via `npm run test:unit`.
+- Extracted mesh lifecycle into `src/core/SceneComposition.js`, delegating clear/delete/reorder/material preset logic away from `src/main.js`; added `tests/core_scene_composition.test.js` (4 tests) bringing the suite to 235/235 passing after `npm run test:unit`.
+
+### Bug Fixes
+- Restored drag-and-drop slide loading after RenderLoop extraction by reinstating FPS overlay state tracking in `src/main.js`; `npm run test:unit` (227 tests) passing.
+
 ### Phase 4: Modularization & Quality
 
 **Module Extraction**:

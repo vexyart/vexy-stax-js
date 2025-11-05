@@ -11,7 +11,9 @@ import * as EssentialsPlugin from '@kitschpatrol/tweakpane-plugin-essentials';
 import * as ColorPlusPlugin from 'tweakpane-plugin-color-plus';
 import { CameraAnimator } from './camera/animation.js';
 import { RenderLoop } from './core/RenderLoop.js';
+import { SceneComposition } from './core/SceneComposition.js';
 import { createLogger } from './utils/logger.js';
+import { FileHandler } from './files/FileHandler.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
@@ -41,8 +43,6 @@ import {
     REFLECTION_BLUR_RADIUS,
     REFLECTION_FADE_STRENGTH,
     ORTHO_FRUSTUM_SIZE,
-    FILE_SIZE_WARN_MB,
-    FILE_SIZE_REJECT_MB,
     MAX_DIMENSION_PX,
     MAX_LOAD_RETRIES,
     RETRY_DELAYS_MS,
@@ -64,7 +64,6 @@ import { appState } from './core/AppState.js';
 import { eventBus } from './core/EventBus.js';
 import { storeSharedRef, SHARED_STATE_KEYS } from './core/sharedState.js';
 import { computeRetinaDimensions } from './core/studioSizing.js';
-import { reorderList } from './core/ordering.js';
 
 // Scene, Camera, Renderer
 let scene, camera, orthoCamera, renderer, controls;
@@ -73,6 +72,8 @@ let cameraMode = 'perspective'; // 'perspective', 'orthographic', 'isometric'
 let cameraAnimator; // Camera animation system
 
 let renderLoop; // Render animation loop manager
+let sceneComposition; // Manages image stack meshes
+let fileHandler = null; // Handles file intake (browse + drag/drop)
 // Lighting and environment
 let ambientLight, mainLight, fillLight;
 let floorGroup = null;
@@ -89,6 +90,10 @@ let eventListeners = [];
 // History management for undo/redo
 let historyStack = [];
 let historyIndex = -1;
+
+// FPS monitor tracking
+let showFPSEnabled = false;
+let fpsDisplayElement = null;
 
 
 // Memory usage tracking
@@ -319,8 +324,41 @@ function init() {
     cameraAnimator = new CameraAnimator(camera, controls);
     storeSharedRef(SHARED_STATE_KEYS.cameraAnimator, cameraAnimator);
 
+    sceneComposition = new SceneComposition({
+        scene,
+        params,
+        imageStack,
+        saveHistory,
+        emitStackUpdated,
+        updateImageList,
+        showToast,
+        checkMemoryUsage,
+        logImages,
+        logMemory,
+        calculateLuminance,
+        getAdaptiveEmissiveIntensity
+    });
+
     // Setup file input handler
-    setupFileInput();
+    fileHandler = new FileHandler({
+        elements: {
+            imageInput: document.getElementById('image-input'),
+            browseButton: document.getElementById('browse-button'),
+            dropOverlay: document.getElementById('drop-overlay'),
+            slidesPanel: document.getElementById('slides-panel')
+        },
+        addTrackedEventListener,
+        onFileAccepted: (file) => {
+            loadImage(file);
+        },
+        shouldProceedAfterMemoryCheck: () => checkMemoryUsage(true),
+        showToast,
+        loggers: {
+            logFile,
+            logValidation
+        }
+    });
+    fileHandler.setup();
 
     // Setup Tweakpane UI
     setupTweakpane();
@@ -879,7 +917,11 @@ function exposeDebugAPI() {
         // Performance monitoring
         showFPS: (enabled) => {
             logAPI.info(` FPS display: ${enabled ? 'enabled' : 'disabled'}`);
-            if (renderLoop) renderLoop.showFPS(enabled);
+            showFPSEnabled = Boolean(enabled);
+            fpsDisplayElement = null;
+            if (renderLoop) {
+                renderLoop.showFPS(showFPSEnabled);
+            }
         },
 
         // Stats and info
@@ -1138,7 +1180,7 @@ function setupCleanup() {
             });
 
             // Clear image stack
-            imageStack = [];
+            imageStack.length = 0;
             storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
             emitStackUpdated('disposed');
 
@@ -1167,6 +1209,11 @@ function setupCleanup() {
             if (environmentTexture) {
                 environmentTexture.dispose();
                 environmentTexture = null;
+            }
+
+            if (fileHandler) {
+                fileHandler.teardown();
+                fileHandler = null;
             }
 
             // Remove all tracked event listeners
@@ -1319,6 +1366,42 @@ function calculateMemoryUsage() {
 }
 
 /**
+ * Synchronize memory usage output with the FPS overlay provided by RenderLoop.
+ * Guards against missing DOM in test environments and reacquires the element
+ * if RenderLoop has recreated it.
+ *
+ * @param {number} memoryMB - Current estimated memory usage
+ */
+function updateFPSMemoryOverlay(memoryMB) {
+    if (!showFPSEnabled) {
+        return;
+    }
+
+    if (typeof document === 'undefined') {
+        return;
+    }
+
+    const body = document.body;
+    const hasBodyContains = Boolean(body && typeof body.contains === 'function');
+    const isDetachedByContains = hasBodyContains && fpsDisplayElement ? !body.contains(fpsDisplayElement) : false;
+    const isDetachedByParent = fpsDisplayElement ? !fpsDisplayElement.parentNode : false;
+
+    if (!fpsDisplayElement || isDetachedByContains || isDetachedByParent) {
+        fpsDisplayElement = document.getElementById('fps-display') || null;
+    }
+
+    if (!fpsDisplayElement) {
+        return;
+    }
+
+    const memoryMarkup = `<br><small data-fps-memory="true" style="opacity: 0.7">${memoryMB.toFixed(0)}MB</small>`;
+    const existingHTML = fpsDisplayElement.innerHTML;
+    const htmlWithoutMemory = existingHTML.replace(/\s*<br><small\s+data-fps-memory="true"[^>]*>.*?<\/small>/, '');
+
+    fpsDisplayElement.innerHTML = `${htmlWithoutMemory}${memoryMarkup}`;
+}
+
+/**
  * Check memory usage and warn if thresholds exceeded
  * @param {boolean} isAdding - Whether this check is before adding a new image
  * @returns {boolean} True if operation should proceed, false if critical threshold reached
@@ -1354,13 +1437,7 @@ function checkMemoryUsage(isAdding = false) {
     }
 
     // Update FPS display if showing
-    if (showFPSEnabled && fpsDisplay) {
-        const currentHTML = fpsDisplay.innerHTML;
-        const memoryLine = `<br><small style="opacity: 0.7">${memoryMB.toFixed(0)}MB</small>`;
-        if (!currentHTML.includes('MB')) {
-            fpsDisplay.innerHTML += memoryLine;
-        }
-    }
+    updateFPSMemoryOverlay(memoryMB);
 
     return true;
 }
@@ -1431,7 +1508,7 @@ function undo() {
             img.mesh.material.map.dispose();
         }
     });
-    imageStack = [];
+    imageStack.length = 0;
     storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
     // Restore previous state
@@ -1481,7 +1558,7 @@ function redo() {
             img.mesh.material.map.dispose();
         }
     });
-    imageStack = [];
+    imageStack.length = 0;
     storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
 
     // Restore next state
@@ -2391,305 +2468,14 @@ function setViewpointFitToFrame() {
  * fileInput.click();
  */
 function clearAll() {
-    // Save history before clearing
-    saveHistory();
-
-    // Remove all meshes from scene
-    imageStack.forEach(imageData => {
-        scene.remove(imageData.mesh);
-        // Dispose geometry and material
-        imageData.mesh.geometry.dispose();
-        imageData.mesh.material.dispose();
-        if (imageData.mesh.material.map) {
-            imageData.mesh.material.map.dispose();
-        }
-    });
-
-    // Clear array
-    imageStack = [];
-    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
-
-    // Update UI
-    updateImageList();
-
-    logImages.info('All images cleared');
-    emitStackUpdated('cleared');
-    showToast('🗑️ All images cleared', 'info');
-}
-
-function setupFileInput() {
-    const fileInput = document.getElementById('image-input');
-    const browseButton = document.getElementById('browse-button');
-    const dropOverlay = document.getElementById('drop-overlay');
-    const slidesPanel = document.getElementById('slides-panel');
-
-    if (!fileInput) {
-        logFile.error('File input element not found');
-        return;
-    }
-
-    if (browseButton) {
-        addTrackedEventListener(browseButton, 'click', () => fileInput.click());
-    }
-
-    addTrackedEventListener(fileInput, 'change', handleFileSelect);
-
-    let dragDepth = 0;
-
-    const eventHasFiles = (event) => {
-        if (!event.dataTransfer) {
-            return false;
-        }
-        if (event.dataTransfer.files && event.dataTransfer.files.length > 0) {
-            return true;
-        }
-        const types = Array.from(event.dataTransfer.types || []);
-        return types.includes('Files');
-    };
-
-    const showOverlay = () => {
-        dropOverlay?.classList.add('visible');
-        slidesPanel?.classList.add('drag-active');
-    };
-
-    const hideOverlay = () => {
-        dropOverlay?.classList.remove('visible');
-        slidesPanel?.classList.remove('drag-active');
-        dragDepth = 0;
-    };
-
-    addTrackedEventListener(window, 'dragenter', (event) => {
-        if (!eventHasFiles(event)) {
-            return;
-        }
-        dragDepth += 1;
-        showOverlay();
-    });
-
-    addTrackedEventListener(window, 'dragleave', (event) => {
-        if (!eventHasFiles(event)) {
-            return;
-        }
-        dragDepth = Math.max(0, dragDepth - 1);
-        if (dragDepth === 0) {
-            hideOverlay();
-        }
-    });
-
-    addTrackedEventListener(window, 'dragover', (event) => {
-        if (!eventHasFiles(event)) {
-            return;
-        }
-        event.preventDefault();
-        showOverlay();
-    });
-
-    addTrackedEventListener(window, 'drop', (event) => {
-        if (!eventHasFiles(event)) {
-            hideOverlay();
-            return;
-        }
-
-        event.preventDefault();
-        const { files } = event.dataTransfer;
-        hideOverlay();
-
-        if (files && files.length > 0) {
-            handleFileDrop(files);
-        }
-    });
-
-    addTrackedEventListener(window, 'dragend', hideOverlay);
-}
-
-function handleFileDrop(files) {
-    logFile.info(`Dropped ${files.length} file(s)...`);
-
-    let validCount = 0;
-    let invalidCount = 0;
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-
-        // Validate file type with enhanced validation
-        if (!validateImageFile(file)) {
-            invalidCount++;
-            continue;
-        }
-
-        validCount++;
-        loadImage(file);
-    }
-
-    // Summary log
-    if (invalidCount > 0) {
-        logValidation.warn(` ${invalidCount} file(s) rejected, ${validCount} accepted from drop`);
-    }
-}
-
-/**
- * Validate file type for image loading
- * @param {File} file - File to validate
- * @returns {boolean} True if valid image file
- */
-function validateImageFile(file) {
-    // Supported MIME types
-    const supportedTypes = [
-        'image/png',
-        'image/jpeg',
-        'image/jpg',
-        'image/gif',
-        'image/webp',
-        'image/svg+xml'
-    ];
-
-    // Check MIME type
-    if (!supportedTypes.includes(file.type)) {
-        // Extract extension for error message
-        const extension = file.name.split('.').pop().toLowerCase();
-        logValidation.error(`Unsupported file type: ${file.name} (${file.type || 'unknown type'})`);
-        showToast(`❌ Unsupported file type: .${extension} (only images supported)`, 'error', 4000);
-        return false;
-    }
-
-    return true;
-}
-
-function handleFileSelect(event) {
-    const files = event.target.files;
-    if (!files || files.length === 0) {
-        logFile.warn('No files selected');
-        return;
-    }
-
-    logFile.info(`Loading ${files.length} file(s)...`);
-
-    let validCount = 0;
-    let invalidCount = 0;
-
-    for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-
-        // Validate file type
-        if (!validateImageFile(file)) {
-            invalidCount++;
-            continue;
-        }
-
-        validCount++;
-        loadImage(file);
-    }
-
-    // Summary log
-    if (invalidCount > 0) {
-        logValidation.warn(` ${invalidCount} file(s) rejected, ${validCount} accepted`);
-    }
+    sceneComposition?.clearAll();
 }
 
 function applyMaterialPreset(preset) {
-    // Update material parameters
-    params.materialRoughness = preset.roughness;
-    params.materialMetalness = preset.metalness;
-    params.materialThickness = preset.thickness;
-    params.materialBorderWidth = preset.borderWidth;
-
-    logImages.info(`Applying material preset: roughness=${preset.roughness}, metalness=${preset.metalness}, thickness=${preset.thickness}, border=${preset.borderWidth}`);
-
-    // Apply to all existing images
-    imageStack.forEach((imageData, index) => {
-        const texture = imageData.mesh.material.map;
-        const width = imageData.width;
-        const height = imageData.height;
-
-        // Remove old mesh
-        scene.remove(imageData.mesh);
-        imageData.mesh.geometry.dispose();
-        imageData.mesh.material.dispose();
-
-        // Create new geometry based on thickness
-        let geometry;
-        if (params.materialThickness > 1) {
-            geometry = new THREE.BoxGeometry(width, height, params.materialThickness);
-        } else {
-            geometry = new THREE.PlaneGeometry(width, height);
-        }
-
-        // Calculate adaptive emissive for background contrast
-        const bgLuminance = calculateLuminance(params.bgColor);
-        const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
-
-        // Create new material with updated properties
-        const material = new THREE.MeshStandardMaterial({
-            map: texture,
-            side: THREE.DoubleSide,
-            transparent: true,
-            roughness: params.materialRoughness,
-            metalness: params.materialMetalness,
-            emissive: new THREE.Color(0xffffff),
-            emissiveMap: texture,
-            emissiveIntensity: emissiveIntensity
-        });
-        material.envMapIntensity = 0.55;
-        material.needsUpdate = true;
-
-        // Create new mesh
-        const mesh = new THREE.Mesh(geometry, material);
-        if (params.ambience) {
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-            mesh.position.y = FLOOR_Y + (height / 2);
-        } else {
-            mesh.position.y = 0;
-        }
-        mesh.position.z = index * params.zSpacing;
-
-        // Add border if enabled
-        if (params.materialBorderWidth > 0) {
-            const borderWidth = width + params.materialBorderWidth * 2;
-            const borderHeight = height + params.materialBorderWidth * 2;
-            const borderGeometry = new THREE.PlaneGeometry(borderWidth, borderHeight);
-            const borderMaterial = new THREE.MeshStandardMaterial({
-                color: params.materialBorderColor,
-                side: THREE.DoubleSide,
-                roughness: params.materialRoughness,
-                metalness: params.materialMetalness
-            });
-            borderMaterial.envMapIntensity = 0.35;
-            const borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
-            borderMesh.position.z = -0.5;
-            if (params.ambience) {
-                borderMesh.castShadow = true;
-                borderMesh.receiveShadow = true;
-            }
-            mesh.add(borderMesh);
-        }
-
-        // Update image data
-        imageData.mesh = mesh;
-        scene.add(mesh);
-    });
-
-    logImages.info(`Material applied to ${imageStack.length} images`);
+    sceneComposition?.applyMaterialPreset(preset);
 }
 
 function loadImage(file) {
-    // Validate file size before loading
-    const maxSizeWarn = FILE_SIZE_WARN_MB * 1024 * 1024;
-    const maxSizeReject = FILE_SIZE_REJECT_MB * 1024 * 1024;
-
-    if (file.size > maxSizeReject) {
-        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        logValidation.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is ${FILE_SIZE_REJECT_MB}MB.`);
-        showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: ${FILE_SIZE_REJECT_MB}MB`, 'error', TOAST_DURATION_ERROR);
-        return;
-    }
-
-    if (file.size > maxSizeWarn) {
-        const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        logValidation.warn(`Warning: File ${file.name} is large (${sizeMB}MB). This may affect performance.`);
-        showToast(`⚠️ Large file: ${file.name} (${sizeMB}MB). May affect performance`, 'warning', TOAST_DURATION_WARNING);
-    }
-
     const reader = new FileReader();
 
     reader.onload = function(event) {
@@ -2723,7 +2509,7 @@ function loadImage(file) {
                     logRetry.info(`Successfully loaded ${filename} on attempt ${attempt + 1}`);
                 }
 
-                addImageToStack(texture, filename);
+                sceneComposition?.addImage(texture, filename);
             },
             undefined,
             function(error) {
@@ -2750,137 +2536,6 @@ function loadImage(file) {
     };
 
     reader.readAsDataURL(file);
-}
-
-function addImageToStack(texture, filename) {
-    // Check memory before adding
-    if (!checkMemoryUsage(true)) {
-        logMemory.info(` User declined to add image due to high memory usage`);
-        showToast('❌ Image not added (memory limit)', 'warning');
-        return;
-    }
-
-    // Save history before modification
-    saveHistory();
-
-    // Get image dimensions from texture
-    const img = texture.image;
-    const width = img.width;
-    const height = img.height;
-
-    // Scale to reasonable size (max 400px)
-    const maxDimension = 400;
-    let planeWidth = width;
-    let planeHeight = height;
-
-    if (width > height) {
-        if (width > maxDimension) {
-            planeWidth = maxDimension;
-            planeHeight = (height / width) * maxDimension;
-        }
-    } else {
-        if (height > maxDimension) {
-            planeHeight = maxDimension;
-            planeWidth = (width / height) * maxDimension;
-        }
-    }
-
-    // Create geometry based on thickness setting
-    let geometry;
-    if (params.materialThickness > 1) {
-        // Use BoxGeometry for thick materials
-        geometry = new THREE.BoxGeometry(planeWidth, planeHeight, params.materialThickness);
-    } else {
-        // Use PlaneGeometry for thin materials
-        geometry = new THREE.PlaneGeometry(planeWidth, planeHeight);
-    }
-
-    // Create material based on ambience mode
-    let material;
-    if (params.ambience) {
-        // Use MeshStandardMaterial with FULL saturation - no emissive washout
-        material = new THREE.MeshStandardMaterial({
-            map: texture,
-            side: THREE.FrontSide,  // Only render front face to prevent mirroring artifacts
-            transparent: true,
-            roughness: params.materialRoughness,
-            metalness: params.materialMetalness,
-            // NO emissive - keeps full color saturation
-            envMapIntensity: 0.15  // Reduced for less washing out
-        });
-        material.needsUpdate = true;
-    } else {
-        // Use MeshBasicMaterial to show true colors without lighting effects
-        material = new THREE.MeshBasicMaterial({
-            map: texture,
-            side: THREE.FrontSide,  // Only render front face
-            transparent: true
-        });
-    }
-
-    // Create main mesh
-    const mesh = new THREE.Mesh(geometry, material);
-
-    if (params.ambience) {
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-    }
-
-    // Add border if enabled
-    let borderMesh = null;
-    if (params.materialBorderWidth > 0) {
-        const borderWidth = planeWidth + params.materialBorderWidth * 2;
-        const borderHeight = planeHeight + params.materialBorderWidth * 2;
-        const borderGeometry = new THREE.PlaneGeometry(borderWidth, borderHeight);
-        const borderMaterial = new THREE.MeshStandardMaterial({
-            color: params.materialBorderColor,
-            side: THREE.FrontSide,  // Only render front face
-            roughness: params.materialRoughness,
-            metalness: params.materialMetalness
-        });
-        borderMaterial.envMapIntensity = 0.35;
-        borderMesh = new THREE.Mesh(borderGeometry, borderMaterial);
-        borderMesh.position.z = -0.5; // Slightly behind the image
-        if (params.ambience) {
-            borderMesh.castShadow = true;
-            borderMesh.receiveShadow = true;
-        }
-        mesh.add(borderMesh);
-    }
-
-    // Position based on ambience mode
-    const index = imageStack.length;
-    if (params.ambience) {
-        // Stand on floor like domino pieces
-        mesh.position.y = FLOOR_Y + (planeHeight / 2);
-        mesh.position.z = index * params.zSpacing;
-    } else {
-        // Default positioning (centered)
-        mesh.position.z = index * params.zSpacing;
-    }
-
-    // Store in stack
-    const imageData = {
-        mesh: mesh,
-        texture: texture,
-        filename: filename,
-        width: planeWidth,
-        height: planeHeight,
-        originalWidth: width,
-        originalHeight: height,
-        id: Date.now() + Math.random(), // Unique ID
-        thumbnailSrc: texture.image?.currentSrc || texture.image?.src || ''
-    };
-    imageStack.push(imageData);
-
-    // Add to scene
-    scene.add(mesh);
-
-    // Update UI list
-    updateImageList();
-
-    logImages.info(`Added ${filename} to stack at Z=${zPosition} (${imageStack.length} images total)`);
-    emitStackUpdated('added');
 }
 
 function updateImageList() {
@@ -3059,20 +2714,7 @@ function handleDrop(e) {
     const dropIndex = parseInt(e.currentTarget.dataset.index, 10);
 
     if (draggedIndex !== null && draggedIndex !== dropIndex) {
-        // Reorder the array
-        reorderList(imageStack, draggedIndex, dropIndex);
-        storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
-
-        // Update Z positions
-        imageStack.forEach((imageData, index) => {
-            imageData.mesh.position.z = index * params.zSpacing;
-        });
-
-        // Update UI
-        updateImageList();
-
-        logImages.info(`Reordered: moved ${draggedIndex} to ${dropIndex}`);
-        emitStackUpdated('reordered');
+        sceneComposition?.reorder(draggedIndex, dropIndex);
     }
 
     return false;
@@ -3086,38 +2728,7 @@ function handleDragEnd(e) {
 
 // Global function for delete button
 window.deleteImage = function(index) {
-    // Save history before deletion
-    saveHistory();
-
-    const imageData = imageStack[index];
-
-    // Remove from scene
-    scene.remove(imageData.mesh);
-
-    // Dispose resources
-    imageData.mesh.geometry.dispose();
-    imageData.mesh.material.dispose();
-    if (imageData.mesh.material.map) {
-        imageData.mesh.material.map.dispose();
-    }
-
-    // Remove from array
-    imageStack.splice(index, 1);
-
-    // Update Z positions
-    imageStack.forEach((img, i) => {
-        img.mesh.position.z = i * params.zSpacing;
-    });
-
-    // Update UI
-    updateImageList();
-
-    logImages.info(`Deleted image at index ${index}`);
-    emitStackUpdated('removed');
-    showToast(`🗑️ Deleted ${imageData.filename}`, 'info');
-
-    // Check memory after deletion
-    checkMemoryUsage(false);
+    sceneComposition?.deleteAt(index);
 };
 
 function onWindowResize() {

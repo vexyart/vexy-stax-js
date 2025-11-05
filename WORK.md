@@ -23,6 +23,35 @@
 
 ---
 
+### Test Session – 2025-11-05
+**Command**: `npm run test:unit`  
+**Result**: 235/235 passing in ≈1.1 s (Node 22).  
+**Sanity Review**:
+- File intake: `src/files/FileHandler.js` guards type/size thresholds correctly under mocked File objects. Risk: medium — real drag/drop path still depends on DOM event wiring inside `main.js`; manual smoke pending after module extraction.
+- Stack management: `src/core/SceneComposition.js` mutations exercised through unit harness; texture lifecycle relies on Three.js mocks so GPU resource disposal should be rechecked in-browser. Risk: medium.
+- Main orchestration: `src/main.js` now delegates to new modules but still holds legacy branches (keyboard/export). Risk: high until remaining modules extracted and tests cover DOM wiring.
+- Export + camera flows: untouched in this iteration; existing tests only validate parameter guards. Risk: high — absence of regression tests means upcoming refactors must introduce coverage.
+- UI bindings & keyboard shortcuts: still monolithic within `main.js`; no automated coverage. Risk: high — expect fragile behaviour during refactor.
+**Next Verification Steps**: add Playwright smoke once UI extraction lands; schedule manual drag/drop + export checks after ExportManager module creation.
+
+### Task 99: Restore drag-and-drop slide loading ✅
+**Status**: Complete  
+**Date**: 2025-11-05  
+
+**Problem**: After extracting the render loop into `src/core/RenderLoop.js`, `main.js` still referenced the old `showFPSEnabled`/`fpsDisplay` globals. The regression only triggered when dropping or browsing images because `checkMemoryUsage()` tried to append memory stats to the FPS overlay, raising `ReferenceError: showFPSEnabled is not defined` and aborting image insertion.
+
+**Fix**:
+- Reintroduced explicit FPS monitor state tracking (`showFPSEnabled`, `fpsDisplayElement`) inside `main.js`.
+- Added `updateFPSMemoryOverlay()` helper that safely reacquires the RenderLoop overlay and appends memory usage without depending on removed globals.
+- Ensured the public `vexyStax.showFPS()` API synchronises the new state with the RenderLoop instance.
+
+**Testing**:
+- `npm run test:unit` → 227/227 passing (no regressions).
+
+**Impact**: Drag-and-drop and file browser image loading both work again; FPS overlay stays in sync with RenderLoop module.
+
+---
+
 ## Phase 4: Main.js Modularization (IN PROGRESS)
 
 ### Goal
@@ -41,6 +70,45 @@ Extract main.js into focused modules, reducing from 3,455 lines to <300 lines or
 - Performance warnings for low FPS
 - Start/stop/dispose lifecycle
 - Configurable FPS update callbacks
+
+### Phase 5 Iteration 1 – File Handling Contracts (IN PROGRESS)
+- Task A: Capture shared callback + state contracts for main.js refactor before moving UI bindings.
+- Task B: Design FileHandler unit tests for type/size validation and memory gate interactions.
+- Task C: Extract drag/drop + file selection into `src/files/FileHandler.js` wired through dependency injection.
+- Tests to run: `npm run test:unit` (after FileHandler + integration wiring).
+
+**Shared Contract Draft**
+- DOM dependencies resolved once in main.js and injected: `imageInput` (`#image-input`), `browseButton` (`#browse-button`), `dropOverlay` (`#drop-overlay`), `slidesPanel` (`#slides-panel`).
+- Behaviour callbacks injected:
+  - `onFileAccepted(file: File)` → drives texture pipeline (currently calls `loadImage`).
+  - `shouldProceedAfterMemoryCheck()` → wraps `checkMemoryUsage(true)` so FileHandler can skip loading when user cancels.
+- Utility dependencies injected:
+  - `addTrackedEventListener(target, event, handler, options)` for lifecycle-aware listeners.
+  - `showToast(message, type, duration)` for validation messaging.
+  - Logger bundle `{ logFile, logValidation }` (info/warn/error signatures).
+- Constants imported inside module to keep single source: `FILE_SIZE_WARN_MB`, `FILE_SIZE_REJECT_MB`.
+- Module API to expose `{ setup(), teardown() }` so main.js can wire/unwire during init/cleanup.
+
+**Progress Log (2025-11-05)**
+- Extracted drag/drop + browse flow into `src/files/FileHandler.js` with injected callbacks, type/size guards, and memory gating (replacing 240+ LOC in `src/main.js`).
+- Added `tests/files_file_handler.test.js` covering unsupported types, size thresholds, and memory declines (test suite count now 231).
+- Rewired `main.js` to instantiate the handler and remove duplicate validation logic; FileHandler now owns pre-add memory gating while `SceneComposition` refreshes overlay post-add.
+- Created `src/core/SceneComposition.js` to manage mesh lifecycle, stack mutations, and material refresh; swapped existing `clearAll`, `deleteImage`, `applyMaterialPreset`, and reorder flows to delegate to the new module.
+- Added `tests/core_scene_composition.test.js` (4 tests) exercising add/clear/delete/reorder paths with real Three.js meshes; test suite count now 235 with `npm run test:unit` → 235/235 passing (≈1.08 s).
+
+**SceneComposition Audit (Draft)**
+- Candidate responsibilities currently tangled in `src/main.js`:
+  - `addImageToStack` (mesh creation, scaling, optional border, ambient placement, history push, scene insertion).
+  - `clearAll` (resource disposal, stack reset, emit/log/toast side effects).
+  - `deleteImage` and reordering helpers (array mutation, Z reflow, history + scene updates).
+  - Material refresh (`applyMaterialPreset`) recalculating geometry/material for existing entries.
+- Shared collaborators that must be dependency-injected:
+  - `scene` (Three.js Scene instance) for mesh lifecycle.
+  - `params` (mutable object from AppState) with up-to-date material settings.
+  - `history` hooks (`saveHistory`, `emitStackUpdated`) and UI refresh (`updateImageList`).
+  - Utilities: `logImages`, `logMemory`, `showToast`, `checkMemoryUsage`, `storeSharedRef`.
+- Data contract for each stack entry: `{ mesh, texture, filename, width, height, originalWidth, originalHeight, id, thumbnailSrc }`; module should manage IDs internally while exposing the array for read-only access.
+- Initial module shape idea: `new SceneComposition({ scene, params, onBeforeMutate, onStackChanged, onMemoryCheck, updateImageList, emitStackUpdated, loggers, notifyToast, storeSharedRef })` returning methods `addImage(texture, filename)`, `clearAll()`, `deleteAt(index)`, `reorder(from,to)`, `applyMaterialPreset(preset)`, and `getStack()`.
 
 **API**:
 - `setRenderCallback(fn)` - Set render function

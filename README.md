@@ -4,7 +4,7 @@
 Browser-based 3D image stacking visualizer built with Three.js. Load images, position them in 3D space, apply materials, and export high-resolution renders.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-227%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-235%20passing-success)](tests/)
 [![Demo](https://img.shields.io/badge/demo-live-success)](https://vexyart.github.io/vexy-stax-js/)
 
 ---
@@ -57,7 +57,7 @@ Creates **3D visualizations of image stacks** with Z-axis depth positioning:
 - **Vite 7.2.0**: Dev server + bundler
 
 **Build**: ES modules, 1,143 kB bundle
-**Tests**: 227/227 passing, 96%+ coverage on core utilities
+**Tests**: 235/235 passing, 96%+ coverage on core utilities
 **Browser Support**: Chrome 90+, Edge 90+, Firefox 88+, Safari 14+
 
 ---
@@ -70,7 +70,7 @@ npm run dev                   # Start dev server
 npm run build                 # Build for production
 npm run preview               # Preview production build
 npm test                      # Run all tests (unit + E2E)
-npm run test:unit             # Run unit tests only (227 tests)
+npm run test:unit             # Run unit tests only (235 tests)
 npm run test:coverage         # Generate coverage reports
 npm run test:coverage:check   # Enforce 80% coverage thresholds
 npm run clean                 # Remove build artifacts
@@ -87,7 +87,7 @@ src/
 ├── utils/               # Helpers, logger
 └── styles/              # Global CSS
 
-tests/                   # 16 test suites, 227 tests (includes cross-module integration)
+tests/                   # 17 test suites, 235 tests (includes cross-module integration)
 docs/                    # Production build output
 ```
 

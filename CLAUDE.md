@@ -1,5 +1,47 @@
-# <!-- this_file: CLAUDE.md -->
-# Development guidelines
+<!-- this_file: CLAUDE.md -->
+
+# Vexy Stax JS - Project Overview
+
+This document provides a compact description of the Vexy Stax JS project, its structure, and development guidelines.
+
+## Project Description
+
+Vexy Stax JS is a browser-based 3D image stacking visualizer built with Three.js. It allows users to load images, arrange them in a 3D space, apply various materials and camera effects, and export the final scene as high-resolution PNG images or JSON configurations.
+
+## Codebase Structure
+
+The project is organized into several directories, each with a specific purpose:
+
+-   **`src/main.js`**: The main entry point of the application. It is currently a large file that orchestrates the entire application, from UI setup to rendering.
+-   **`src/core`**: Contains the core utilities of the application, such as state management (`AppState.js`), an event bus for decoupled communication (`EventBus.js`), and the main rendering loop (`RenderLoop.js`).
+-   **`src/scene`**: Manages the Three.js scene, including the floor, lighting, and other environmental elements.
+-   **`src/camera`**: Handles camera animations and controls.
+-   **`src/utils`**: A collection of helper functions and a logging utility.
+-   **`tests`**: A comprehensive suite of unit tests that ensure the stability and correctness of the codebase.
+-   **`.md` files**: The project is extensively documented with over 30 markdown files covering everything from the API and architecture to testing and contribution guidelines.
+
+## `main.js` Refactoring State
+
+The `main.js` file is currently in a **partially refactored state**. While some core functionalities have been extracted into their own modules (e.g., `RenderLoop.js`), the file remains large and contains a significant amount of logic that is planned to be moved into more focused modules. The project's `PLAN.md` outlines a clear strategy to extract the following functionalities from `main.js`:
+
+-   UI Initialization (`TweakpaneSetup.js`)
+-   File Handling (`FileHandler.js`)
+-   Scene Composition (`SceneComposition.js`)
+-   Camera Controls (`CameraController.js`)
+-   Export Management (`ExportManager.js`)
+
+This refactoring effort aims to make the codebase more modular, maintainable, and easier to test.
+
+## Maintenance and Coding Guidelines
+
+The project adheres to a strict set of maintenance and coding guidelines to ensure high quality and consistency:
+
+-   **Testing**: All new code must be accompanied by comprehensive unit tests. The project has a high standard for test coverage, especially for core utilities.
+-   **Code Style**: A consistent coding style is enforced through an `.editorconfig` file. This includes rules for indentation (4 spaces for JavaScript, 2 for others) and line endings (LF).
+-   **Documentation**: All new features, modules, and functions must be thoroughly documented. The project uses JSDoc for all exported functions and constants.
+-   **Commit Messages**: A structured commit message format is enforced through a `.gitmessage` template to ensure a clear and informative git history.
+-   **Dependencies**: The project relies on a small, curated set of well-maintained and secure dependencies. All dependencies are documented in `DEPENDENCIES.md`.
+
 
 Analyze the entire codebase and the @README.md then /report the recent changes into @CHANGELOG.md and compress @CHANGELOG.md (keep all facts but compress fluff). Then /cleanup @TODO.md and @PLAN.md and @WORK.md (Remove all completed tasks). Then proceed to /work on the refactoring and other priority tasks. 
 
@@ -32,6 +74,7 @@ Before you generate any response, assume your first instinct is wrong. Apply cha
 - Match output format to input format (code box for code box).
 - Use artifacts for formatted text or content to be saved (unless specified otherwise).
 - Apply maximum thinking time for thoroughness.
+- MANDATORY: Whenever you list "Next steps" to do, and you state "I'm certain", say "And now I continue!", and then continue working on the next steps without prompting me! 
 
 ## Absolute priority: never overcomplicate, always verify
 
@@ -43,18 +86,11 @@ Before you generate any response, assume your first instinct is wrong. Apply cha
 - Ruthless deletion: Remove features, don’t add them.
 - Test or it doesn’t exist: Untested code is broken code.
 
-## Verification workflow: mandatory
-
-1. Implement minimal code: Just enough to pass the test.
-2. Write a test: Define what success looks like.
-3. Run the test: `uvx hatch test`.
-4. Test edge cases: Empty inputs, none, negative numbers, huge inputs.
-5. Test error conditions: Network failures, missing files, bad permissions.
 6. Document test results: Add to `CHANGELOG.md` what was tested and results.
 
 ## Before writing any code
 
-1. Search for existing packages: Check npm, pypi, github for solutions.
+1. Search for existing packages: Check npm, github for solutions.
 2. Evaluate packages: >200 stars, recent updates, good documentation.
 3. Test the package: write a small proof-of-concept first.
 4. Use the package: don’t reinvent what exists.
@@ -99,7 +135,6 @@ Before you generate any response, assume your first instinct is wrong. Apply cha
 
 - Always read `WORK.md` in the main project folder for work progress, and `CHANGELOG.md` for past changes notes.
 - Read `README.md` to understand the project.
-- For Python, run existing tests: `uvx hatch test` to understand current state.
 - Step back and think heavily step by step about the task.
 - Consider alternatives and carefully choose the best option.
 - Check for existing solutions in the codebase before starting.
@@ -142,7 +177,7 @@ Before you generate any response, assume your first instinct is wrong. Apply cha
 
 - Use `tree` CLI app if available to verify file locations.
 - Run `dir="." uvx codetoprompt: compress: output "$dir/llms.txt" --respect-gitignore: cxml: exclude "*.svg,.specstory,*.md,*.txt, ref, testdata,*.lock,*.svg" "$dir"` to get a condensed snapshot of the codebase into `llms.txt`.
-- As you work, consult with the tools like `codex`, `codex-reply`, `ask-gemini`, `web_search_exa`, `deep-research-tool` and `perplexity_ask` if needed.
+- As you work, consult with the tools like `perplexity_ask` if needed.
 
 ## File path tracking
 
@@ -151,50 +186,6 @@ Before you generate any response, assume your first instinct is wrong. Apply cha
 - Update paths when moving files.
 - Omit leading `./`.
 - Check `this_file` to confirm you’re editing the right file.
-
-
-## For Python
-
-- If we need a new Python project, run `uv venv --python 3.12 --clear; uv init; uv add fire rich pytest pytest-cov; uv sync`.
-- Check existing code with `.venv` folder to scan and consult dependency source code.
-- `uvx hatch test` :  run tests verbosely, stop on first failure.
-- `python --c "import package; print (package.__version__)"` :  verify package installation.
-- `uvx mypy file.py` :  type checking.
-- PEP 8: Use consistent formatting and naming, clear descriptive names.
-- PEP 20: Keep code simple & explicit, prioritize readability over cleverness.
-- PEP 257: Write docstrings.
-- Use type hints in their simplest form (list, dict, | for unions).
-- Use f-strings and structural pattern matching where appropriate.
-- Write modern code with `pathlib`.
-- Always add `--verbose` mode loguru-based debug logging.
-- Use `uv add`.
-- Use `uv pip install` instead of `pip install`.
-- Always use type hints: they catch bugs and document code.
-- Use dataclasses or Pydantic for data structures.
-
-### Package-first Python
-
-- Always use uv for package management.
-- Before any custom code: `uv add [package]`.
-- Common packages to always use:
-  - `httpx` for HTTP requests.
-  - `pydantic` for data validation.
-  - `rich` for terminal output.
-  - `fire` for CLI interfaces.
-  - `loguru` for logging.
-  - `pytest` for testing.
-
-### Python CLI scripts
-
-For CLI Python scripts, use `fire` & `rich`, and start with:
-
-```python
-#!/usr/bin/env-S uv run
-# /// script
-# dependencies = [“pkg1”, “pkg2”]
-# ///
-# this_file: path_to_current_file
-```
 
 ## Post-work activities
 
@@ -271,15 +262,7 @@ Break complex requirements into atomic, actionable tasks. Identify and document 
 
 #### `/test` command: run comprehensive tests
 
-When I say `/test`, if it’s a Python project, you must run
-
-```bash
-fd -e py -x uvx autoflake -i {}; fd -e py -x uvx pyupgrade --py312-plus {}; fd -e py -x uvx ruff check --output-format=github --fix --unsafe-fixes {}; fd -e py -x uvx ruff format --respect-gitignore --target-version py312 {}; uvx hatch test;
-```
-
-and document all results in `./WORK.md`.
-
-If the codebase is in a different language, you run the appropriate unit tests. 
+When I say `/test`, run the appropriate unit tests. 
 
 Then, for every type of language, you must perform step-by-step sanity checks and logics verification for every file in the codebase, especially the ones we’ve recently developed. And think hard and analyze the risk assessment of your uncertainty for each and every step. 
 
