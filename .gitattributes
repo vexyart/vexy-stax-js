@@ -1,0 +1,44 @@
+# this_file: .gitattributes
+# Git attributes for consistent line endings across platforms
+# https://git-scm.com/docs/gitattributes
+
+# Default: LF line endings for all text files
+* text=auto eol=lf
+
+# Source code
+*.js text eol=lf
+*.mjs text eol=lf
+*.cjs text eol=lf
+*.json text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.md text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Configuration files
+.editorconfig text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+.npmignore text eol=lf
+package.json text eol=lf
+package-lock.json text eol=lf
+
+# Binary files (explicitly mark as binary to prevent line ending conversion)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.svg binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.eot binary
+
+# Archive files
+*.zip binary
+*.gz binary
+*.tar binary
+*.7z binary

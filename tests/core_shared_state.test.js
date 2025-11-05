@@ -41,3 +41,74 @@ test('storeSharedRef_whenInvalidKey_thenThrowsHelpfulError', () => {
         'Unexpected keys must be rejected to avoid silent state divergence'
     );
 });
+
+// Edge case tests for robustness
+
+test('getSharedRef throws error for invalid key', () => {
+    appState.reset();
+
+    assert.throws(
+        () => getSharedRef('typo-key'),
+        /not registered/,
+        'getSharedRef should reject unregistered keys'
+    );
+});
+
+test('getSharedRef returns undefined for valid but unset key', () => {
+    appState.reset();
+
+    const result = getSharedRef(SHARED_STATE_KEYS.cameraAnimator);
+
+    assert.equal(result, undefined, 'getSharedRef should return undefined for unset keys');
+});
+
+test('storeSharedRef allows overwriting existing values', () => {
+    appState.reset();
+    const scene1 = { id: 'scene-1' };
+    const scene2 = { id: 'scene-2' };
+
+    storeSharedRef(SHARED_STATE_KEYS.scene, scene1);
+    storeSharedRef(SHARED_STATE_KEYS.scene, scene2);
+
+    const retrieved = getSharedRef(SHARED_STATE_KEYS.scene);
+
+    assert.equal(retrieved, scene2, 'storeSharedRef should allow overwriting values');
+    assert.notEqual(retrieved, scene1, 'old value should be replaced');
+});
+
+test('SHARED_STATE_KEYS is frozen and cannot be mutated', () => {
+    assert.throws(
+        () => {
+            SHARED_STATE_KEYS.newKey = 'value';
+        },
+        /Cannot add property/,
+        'SHARED_STATE_KEYS should be frozen'
+    );
+
+    assert.throws(
+        () => {
+            delete SHARED_STATE_KEYS.scene;
+        },
+        /Cannot delete property/,
+        'SHARED_STATE_KEYS properties cannot be deleted'
+    );
+});
+
+test('storeSharedRef handles null and undefined values', () => {
+    appState.reset();
+
+    storeSharedRef(SHARED_STATE_KEYS.camera, null);
+    assert.equal(getSharedRef(SHARED_STATE_KEYS.camera), null, 'null should be stored');
+
+    storeSharedRef(SHARED_STATE_KEYS.camera, undefined);
+    assert.equal(getSharedRef(SHARED_STATE_KEYS.camera), undefined, 'undefined should be stored');
+});
+
+test('storeSharedRef rejects typos that are close to valid keys', () => {
+    appState.reset();
+
+    // Common typos
+    assert.throws(() => storeSharedRef('scen', {}), /not registered/); // missing 'e'
+    assert.throws(() => storeSharedRef('render', {}), /not registered/); // missing 'er'
+    assert.throws(() => storeSharedRef('Camera', {}), /not registered/); // wrong case
+});

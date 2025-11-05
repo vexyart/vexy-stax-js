@@ -12,7 +12,9 @@ import {
     formatFileSize,
     generateId,
     deepClone,
-    isValidImageFile
+    isValidImageFile,
+    getAdaptiveFloorColor,
+    debounce
 } from '../src/utils/helpers.js';
 
 test('calculateLuminance returns 0 for black', () => {
@@ -175,4 +177,180 @@ test('isValidImageFile rejects invalid types', () => {
     for (const file of invalidFiles) {
         assert.strictEqual(isValidImageFile(file), false, `Should reject ${file?.type || 'invalid'}`);
     }
+});
+
+// Additional edge case tests for robustness
+
+test('calculateLuminance handles extreme hex values correctly', () => {
+    // Pure red
+    const red = calculateLuminance('#ff0000');
+    assert.ok(red >= 0 && red <= 1, 'Pure red should be in valid range');
+
+    // Pure green
+    const green = calculateLuminance('#00ff00');
+    assert.ok(green >= 0 && green <= 1, 'Pure green should be in valid range');
+    assert.ok(green > red, 'Green should be more luminous than red');
+
+    // Pure blue
+    const blue = calculateLuminance('#0000ff');
+    assert.ok(blue >= 0 && blue <= 1, 'Pure blue should be in valid range');
+    assert.ok(blue < red, 'Blue should be less luminous than red');
+});
+
+test('calculateLuminance handles 3-digit hex shorthand', () => {
+    const result = calculateLuminance('#fff');
+    assert.strictEqual(result, 1, '3-digit white should expand to #ffffff');
+
+    const black = calculateLuminance('#000');
+    assert.strictEqual(black, 0, '3-digit black should expand to #000000');
+});
+
+test('calculateLuminance is case-insensitive', () => {
+    const lower = calculateLuminance('#abc123');
+    const upper = calculateLuminance('#ABC123');
+    assert.strictEqual(lower, upper, 'Luminance should be case-insensitive');
+});
+
+test('clamp handles edge case where min === max', () => {
+    assert.strictEqual(clamp(5, 10, 10), 10, 'Should return min/max when they are equal');
+    assert.strictEqual(clamp(15, 10, 10), 10, 'Should return min/max when value exceeds');
+});
+
+test('clamp handles negative ranges', () => {
+    assert.strictEqual(clamp(-5, -10, -1), -5, 'Should work with negative range');
+    assert.strictEqual(clamp(-15, -10, -1), -10, 'Should clamp to negative min');
+    assert.strictEqual(clamp(5, -10, -1), -1, 'Should clamp to negative max');
+});
+
+test('clamp handles fractional values', () => {
+    assert.strictEqual(clamp(0.5, 0, 1), 0.5, 'Should handle fractional in range');
+    assert.strictEqual(clamp(1.5, 0, 1), 1, 'Should clamp fractional above max');
+    assert.strictEqual(clamp(-0.5, 0, 1), 0, 'Should clamp fractional below min');
+});
+
+test('lerp handles negative interpolation range', () => {
+    assert.strictEqual(lerp(-10, 0, 0.5), -5, 'Should interpolate negative to zero');
+    assert.strictEqual(lerp(10, -10, 0.5), 0, 'Should interpolate from positive to negative');
+});
+
+test('lerp handles same start and end values', () => {
+    assert.strictEqual(lerp(5, 5, 0), 5, 'Should return constant value at t=0');
+    assert.strictEqual(lerp(5, 5, 0.5), 5, 'Should return constant value at t=0.5');
+    assert.strictEqual(lerp(5, 5, 1), 5, 'Should return constant value at t=1');
+});
+
+test('lerp precision at boundary values', () => {
+    const result0 = lerp(0, 100, 0);
+    assert.strictEqual(result0, 0, 'Should be exactly 0 at t=0');
+
+    const result1 = lerp(0, 100, 1);
+    assert.strictEqual(result1, 100, 'Should be exactly 100 at t=1');
+});
+
+test('formatFileSize handles zero bytes', () => {
+    assert.strictEqual(formatFileSize(0), '0 B', 'Should format zero bytes');
+});
+
+test('formatFileSize handles edge unit boundaries', () => {
+    assert.strictEqual(formatFileSize(1023), '1023 B', 'Just under KB');
+    assert.strictEqual(formatFileSize(1024), '1.0 KB', 'Exactly 1 KB');
+    assert.strictEqual(formatFileSize(1024 * 1024 - 1), '1024.0 KB', 'Just under MB');
+    assert.strictEqual(formatFileSize(1024 * 1024), '1.0 MB', 'Exactly 1 MB');
+});
+
+test('deepClone handles circular reference gracefully', () => {
+    const obj = { a: 1 };
+    obj.self = obj; // Circular reference
+
+    // deepClone will hit recursion limit and throw RangeError
+    assert.throws(() => deepClone(obj),
+        RangeError,
+        'Should throw RangeError on circular reference');
+});
+
+test('deepClone handles undefined and null', () => {
+    assert.strictEqual(deepClone(null), null, 'Should clone null');
+    assert.strictEqual(deepClone(undefined), undefined, 'Should clone undefined');
+});
+
+test('generateId produces consistent length', () => {
+    const id1 = generateId();
+    const id2 = generateId();
+    const id3 = generateId();
+
+    assert.strictEqual(id1.length, id2.length, 'IDs should have consistent length');
+    assert.strictEqual(id2.length, id3.length, 'IDs should have consistent length');
+});
+
+test('getAdaptiveFloorColor returns THREE.Color for valid hex', () => {
+    const color = getAdaptiveFloorColor('#ff0000');
+    assert.ok(color, 'Should return color object');
+    assert.strictEqual(typeof color.r, 'number', 'Should have r component');
+    assert.strictEqual(typeof color.g, 'number', 'Should have g component');
+    assert.strictEqual(typeof color.b, 'number', 'Should have b component');
+});
+
+test('getAdaptiveFloorColor creates color from hex string', () => {
+    const bgColor = '#ff0000';
+    const floorColor = getAdaptiveFloorColor(bgColor);
+
+    // THREE.Color should parse the hex correctly
+    // Just verify it creates a valid color object
+    assert.ok(floorColor.r >= 0 && floorColor.r <= 1, 'Red should be in range 0-1');
+    assert.ok(floorColor.g >= 0 && floorColor.g <= 1, 'Green should be in range 0-1');
+    assert.ok(floorColor.b >= 0 && floorColor.b <= 1, 'Blue should be in range 0-1');
+    // For pure red, r should be high, g and b should be low
+    assert.ok(floorColor.r > 0.9, 'Red component should be high for #ff0000');
+});
+
+test('debounce delays function execution', (t, done) => {
+    let callCount = 0;
+    const func = () => { callCount++; };
+    const debounced = debounce(func, 50);
+
+    // Call multiple times rapidly
+    debounced();
+    debounced();
+    debounced();
+
+    // Should not have executed yet
+    assert.strictEqual(callCount, 0, 'Function should not execute immediately');
+
+    // Wait for debounce delay
+    setTimeout(() => {
+        assert.strictEqual(callCount, 1, 'Function should execute once after delay');
+        done();
+    }, 100);
+});
+
+test('debounce cancels previous calls', (t, done) => {
+    const calls = [];
+    const func = (arg) => { calls.push(arg); };
+    const debounced = debounce(func, 50);
+
+    // Call with different arguments
+    debounced('first');
+    setTimeout(() => debounced('second'), 10);
+    setTimeout(() => debounced('third'), 20);
+
+    // Only the last call should execute
+    setTimeout(() => {
+        assert.strictEqual(calls.length, 1, 'Should only execute once');
+        assert.strictEqual(calls[0], 'third', 'Should execute with last argument');
+        done();
+    }, 100);
+});
+
+test('debounce preserves function arguments', (t, done) => {
+    let receivedArgs = null;
+    const func = (...args) => { receivedArgs = args; };
+    const debounced = debounce(func, 50);
+
+    debounced(1, 'test', { key: 'value' });
+
+    setTimeout(() => {
+        assert.deepStrictEqual(receivedArgs, [1, 'test', { key: 'value' }],
+            'Should preserve all arguments');
+        done();
+    }, 100);
 });

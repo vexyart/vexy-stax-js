@@ -46,6 +46,58 @@ export const MEMORY_CRITICAL_THRESHOLD_MB = 1000;
 export const MEMORY_WARNING_COOLDOWN = 30000;
 
 /**
+ * Duration for error toast notifications
+ * @type {number}
+ * @constant
+ * @default 5000
+ * @unit milliseconds
+ */
+export const TOAST_DURATION_ERROR = 5000;
+
+/**
+ * Duration for warning toast notifications
+ * @type {number}
+ * @constant
+ * @default 4000
+ * @unit milliseconds
+ */
+export const TOAST_DURATION_WARNING = 4000;
+
+/**
+ * Duration for success/info toast notifications
+ * @type {number}
+ * @constant
+ * @default 3000
+ * @unit milliseconds
+ */
+export const TOAST_DURATION_INFO = 3000;
+
+/**
+ * Camera far clipping plane distance
+ * @type {number}
+ * @constant
+ * @default 5000
+ * @unit world units
+ */
+export const CAMERA_FAR_PLANE = 5000;
+
+/**
+ * Z-index for modal overlays and UI elements
+ * @type {number}
+ * @constant
+ * @default 10000
+ */
+export const Z_INDEX_MODAL = 10000;
+
+/**
+ * Bytes per megabyte (for size conversions)
+ * @type {number}
+ * @constant
+ * @default 1048576
+ */
+export const BYTES_PER_MB = 1024 * 1024;
+
+/**
  * Vertical position of floor plane in world coordinates
  * @type {number}
  * @constant

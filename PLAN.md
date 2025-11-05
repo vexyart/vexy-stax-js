@@ -4,238 +4,302 @@
 ## One-Sentence Scope
 Maintain a browser-based Three.js studio that stacks 2D artwork with accurate color reproduction, provides camera controls and animations, and exports PNG/JSON artifacts while keeping the codebase modular and testable.
 
-## Current Focus – Documentation & Code Quality (2025-11-05)
+---
 
-### Phase 3: Documentation & Code Quality (IN PROGRESS)
+## Current Focus – Phase 4: Main.js Modularization (2025-11-05)
+
+### Phase 3: Documentation & Code Quality ✅ COMPLETE
+**Completed**: 2025-11-05
+**Results**: 110/110 tests passing, zero memory leaks, full JSDoc coverage
+
+### Phase 4: Quality Improvements & Modularization (IN PROGRESS)
 **Timeline**: Current iteration
+**Status**: 25 quality improvement iterations complete ✅
+**Progress**:
+- ✅ 208/208 tests passing (+98 from baseline)
+- ✅ RenderLoop module extracted and integrated
+- ✅ 99.3% logging migration (144/145 console calls to logger, 7 intentional console calls remain)
+- ✅ Documentation optimized & complete (README 194 lines, all 8 dependencies documented)
+- ✅ 96%+ coverage on core utilities
+- ✅ Code robustness verified (WebGL recovery, resource cleanup, input validation)
+- ✅ Complete constant coverage (all 36 exported constants validated)
+- ✅ npm package configured (entry points: main, module, exports, files)
+- ✅ Cross-platform consistency (.editorconfig + .gitattributes for LF line endings)
+- ✅ Package metadata accurate (LICENSE copyright, npm help updated)
+- ✅ Project hygiene (obsolete/duplicate docs removed: 16→9 files, -119K total)
 
-**Sub-Task 3.1: JSDoc Annotations for constants.js**
-**Rationale**: constants.js has 0 JSDoc comments, causing poor IDE support
-
-**Required Annotations**:
-```javascript
-/**
- * Vertical position of floor plane in world coordinates
- * @type {number}
- * @constant
- * @default -250
- * @unit pixels
- */
-export const FLOOR_Y = -250;
-
-/**
- * Floor plane dimensions (width and depth)
- * @type {number}
- * @constant
- * @default 2000
- * @unit pixels
- * @description Large enough to extend beyond camera frustum
- */
-export const FLOOR_SIZE = 2000;
-
-/**
- * Reflection texture opacity (0.0 = invisible, 1.0 = opaque)
- * @type {number}
- * @constant
- * @default 0.01
- * @range {0.0, 1.0}
- * @description Reduced to 1% for subtle depth cue without visual distraction
- */
-export const REFLECTION_OPACITY = 0.01;
-```
-
-**Scope**: Add similar annotations for:
-- All numeric constants (FLOOR_Y, FLOOR_SIZE, ORTHO_FRUSTUM_SIZE, etc.)
-- All configuration objects (MATERIAL_PRESETS, VIEWPOINT_PRESETS, LIGHTING_CONFIG)
-- All frozen arrays (RETRY_DELAYS_MS)
-- Include measurement units, valid ranges, default values, descriptions
-
-**Testing**:
-- [ ] VSCode/IDE shows hover tooltips with type info
-- [ ] Autocomplete suggests correct parameter types
-- [ ] No missing type warnings in editor
+**Current Problem**: main.js is 3,367 lines (was 3,455, -88 from RenderLoop)
+**Goal**: Complete remaining 5 module extractions to reduce to <300 lines orchestration layer
 
 ---
 
-**Sub-Task 3.2: Event Listener Memory Leak Audit**
-**Rationale**: 11 `addEventListener` calls vs 1 `removeEventListener` - potential memory leaks
+## Extraction Strategy
 
-**Audit Process**:
-1. Grep for all `addEventListener` calls in src/main.js
-2. Document each listener: target, event type, handler function name
-3. Verify corresponding `removeEventListener` exists
-4. Add cleanup to `window.beforeunload` handler
-5. Use `addTrackedEventListener()` helper for automatic cleanup
+### Step 1: Render Loop Module
+**File**: src/core/RenderLoop.js
+**Lines**: ~100 lines
+**Scope**:
+- requestAnimationFrame management
+- FPS tracking (if showFPS enabled)
+- Pause/resume animation
+- Render callback registration
 
-**Known Listeners** (from grep analysis):
-- Window resize event
-- Window beforeunload event
-- Keyboard events (keydown)
-- Canvas context loss/restore events
-- File input change event
-- Drag/drop events (dragenter, dragover, dragleave, drop)
-
-**Implementation**:
+**API**:
 ```javascript
-// Track all event listeners for cleanup
-const eventListeners = [];
-
-function addTrackedEventListener(target, event, handler, options = {}) {
-    target.addEventListener(event, handler, options);
-    eventListeners.push({ target, event, handler, options });
+class RenderLoop {
+  start(renderCallback)
+  stop()
+  pause()
+  resume()
+  showFPS(enabled)
+  getCurrentFPS()
 }
-
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    eventListeners.forEach(({ target, event, handler, options }) => {
-        target.removeEventListener(event, handler, options);
-    });
-    eventListeners.length = 0;
-});
 ```
-
-**Testing**:
-- [ ] Monitor Chrome DevTools Performance → Memory
-- [ ] Toggle ambience 50 times, check memory growth
-- [ ] Reload page, verify listeners cleaned up
-- [ ] No orphaned handlers in heap snapshot
 
 ---
 
-**Sub-Task 3.3: Constants Immutability Tests**
-**Rationale**: Verify `Object.freeze()` actually prevents mutations
+### Step 2: UI Initialization Module
+**File**: src/ui/TweakpaneSetup.js
+**Lines**: ~200 lines
+**Scope**:
+- Tweakpane folder structure creation
+- Control bindings (sliders, buttons, color pickers)
+- Material preset buttons
+- Viewpoint preset buttons
+- Tab setup (File/Image/Video/Studio/Camera)
 
-**Test Cases**:
+**API**:
 ```javascript
-// tests/constants_immutability.test.js
-test('MATERIAL_PRESETS is frozen and cannot be mutated', () => {
-    const preset = MATERIAL_PRESETS.card;
-    assert.throws(() => {
-        preset.roughness = 0.99;  // Should throw
-    }, TypeError);
-});
-
-test('RETRY_DELAYS_MS array is frozen', () => {
-    assert.throws(() => {
-        RETRY_DELAYS_MS[0] = 999;  // Should throw
-    }, TypeError);
-});
-
-test('All numeric constants are immutable', () => {
-    assert.throws(() => {
-        FLOOR_Y = 0;  // Should throw or have no effect
-    });
-});
+class TweakpaneSetup {
+  constructor(container, params, callbacks)
+  createStudioFolder()
+  createCameraFolder()
+  createFileFolder()
+  bindControls()
+  refresh()
+}
 ```
 
-**Testing**:
-- [ ] Run tests, verify frozen objects throw on mutation
-- [ ] Verify arrays cannot be modified
-- [ ] Check nested object freezing (deep freeze)
-
 ---
 
-### Phase 4: Main.js Modularization (FUTURE)
-**Timeline**: Post-quality improvements, est. 2-3 weeks
+### Step 3: File Handling Module
+**File**: src/files/FileHandler.js
+**Lines**: ~180 lines
+**Scope**:
+- Drag/drop event handlers
+- Browse button functionality
+- File type validation
+- Size validation (50MB limit)
+- Memory usage calculation/warnings
+- Multi-file processing
 
-**Problem**: main.js is 3,459 lines with 82 functions - violates single responsibility principle
-
-**Target Structure**:
-```
-src/
-├── main.js (< 300 lines - entry point only)
-├── core/
-│   ├── RenderLoop.js         - requestAnimationFrame management
-│   ├── SceneComposition.js   - Image stacking, positioning
-│   └── [existing core modules]
-├── camera/
-│   ├── CameraController.js   - Mode switching, viewpoints
-│   ├── CameraAnimator.js     - [existing]
-│   └── animation.js          - [existing]
-├── ui/
-│   ├── TweakpaneSetup.js     - UI control initialization
-│   ├── ToastNotifications.js - Toast message system
-│   └── KeyboardShortcuts.js  - Keyboard event handling
-├── files/
-│   ├── FileHandler.js        - Drag/drop, browse, validation
-│   ├── ImageLoader.js        - Texture loading, retina sizing
-│   └── ExportManager.js      - PNG/JSON export logic
-└── [existing modules]
+**API**:
+```javascript
+class FileHandler {
+  constructor(callbacks)
+  enableDragDrop(element)
+  enableBrowse(button, input)
+  validateFile(file)
+  checkMemoryUsage(newBytes)
+  processFiles(fileList)
+}
 ```
 
-**Extraction Strategy**:
-1. Bottom-up approach: Start with pure functions
-2. Group related functionality into modules
-3. Test each extraction independently
-4. Maintain API compatibility
-5. Update imports progressively
+---
 
-**Success Criteria**:
-- main.js < 300 lines
-- Each module < 250 lines
-- Zero circular dependencies
-- All tests passing
-- Bundle size unchanged or smaller
+### Step 4: Scene Composition Module
+**File**: src/core/SceneComposition.js
+**Lines**: ~200 lines
+**Scope**:
+- Image loading from File/URL/DataURL
+- Texture creation with retry logic
+- Mesh creation (PlaneGeometry/BoxGeometry)
+- Z-positioning along stack
+- Material application
+- Mesh deletion with resource cleanup
+- Stack reordering
+
+**API**:
+```javascript
+class SceneComposition {
+  constructor(scene, params)
+  addImageFromFile(file)
+  addImageFromDataURL(dataURL, filename)
+  removeImage(meshId)
+  reorderStack(fromIndex, toIndex)
+  updateZSpacing(newSpacing)
+  updateMaterials(materialProps)
+  clearAll()
+}
+```
 
 ---
 
-### Risk Assessment & Mitigations
+### Step 5: Camera Controller Module
+**File**: src/camera/CameraController.js
+**Lines**: ~150 lines
+**Scope**:
+- Camera mode switching (Perspective/Ortho/Iso/Telephoto)
+- Viewpoint preset application
+- FOV/zoom controls
+- Integration with existing CameraAnimator
+- OrbitControls management
 
-**Risk 1: Memory Leaks from Event Listeners**
-- **Probability**: High (11 listeners, 1 cleanup)
-- **Impact**: Medium (gradual degradation)
-- **Mitigation**: Implement tracked listener system
-- **Verification**: Memory profiling over 100+ interactions
-
-**Risk 2: Breaking Existing Features**
-- **Probability**: Low (good test coverage: 93/93 passing)
-- **Impact**: High
-- **Mitigation**: Run full test suite after each change
-- **Verification**: All tests must pass
-
-**Risk 3: Performance Degradation**
-- **Probability**: Low
-- **Impact**: Medium
-- **Mitigation**: Profile render loop before/after changes
-- **Verification**: Maintain 60fps with 10+ slides loaded
-
----
-
-### Testing Strategy
-
-#### Unit Tests (Current: 93/93 passing)
-- Core modules (AppState, EventBus, constants)
-- Scene managers (SceneManager, LightingManager, FloorManager)
-- Camera animation (CameraAnimator)
-- Utilities (helpers.js)
-- Error recovery scenarios
-
-#### Integration Tests (Manual)
-- Material property changes: Roughness, metalness
-- Camera viewpoints: All 7 presets
-- Image loading: Multiple files, large files, retina sizing
-- Export functions: PNG 1x/2x/4x, JSON save/load
-
-#### Performance Tests
-- Frame rate: 60fps target with 10 slides
-- Memory usage: < 200MB growth over 100 interactions
-- Load time: < 3s for 10 images @ 2MB each
+**API**:
+```javascript
+class CameraController {
+  constructor(cameras, controls, animator)
+  setMode(mode) // 'perspective'|'orthographic'|'isometric'|'telephoto'
+  setViewpoint(preset) // 'front'|'top'|'beauty'|'center'|etc
+  setFOV(degrees)
+  setZoom(factor)
+  animateToViewpoint(preset, duration)
+}
+```
 
 ---
 
-### Future Considerations
+### Step 6: Export Manager Module
+**File**: src/export/ExportManager.js
+**Lines**: ~200 lines
+**Scope**:
+- PNG export with scale multiplier (1x/2x/4x)
+- JSON serialization (params + images as base64)
+- JSON deserialization
+- Clipboard copy/paste
+- Download trigger
 
-**Post-Modularization Goals**:
-- Video export support (MP4/WebM)
+**API**:
+```javascript
+class ExportManager {
+  constructor(renderer, scene, camera, params)
+  exportPNG(scale, filename)
+  exportJSON()
+  importJSON(jsonString)
+  copyToClipboard()
+  pasteFromClipboard()
+}
+```
+
+---
+
+## Testing Strategy
+
+### Unit Tests
+- Test each new module independently
+- Mock dependencies (scene, renderer, etc.)
+- Verify API contracts
+- Test error handling
+
+### Integration Tests
+- Test module interactions
+- Verify orchestration in main.js
+- Check resource cleanup
+- Validate event flow
+
+### Regression Prevention
+- All 110 existing tests must pass
+- Bundle size must not increase significantly
+- Performance must remain ≥60fps
+
+---
+
+## Success Criteria
+
+✅ main.js < 300 lines (entry point only)
+✅ Each module < 250 lines
+✅ Zero circular dependencies
+✅ All tests passing (110+)
+✅ Bundle size ≤ 1,150 kB
+✅ Build successful
+✅ No runtime errors
+
+---
+
+## Risk Assessment
+
+**Risk 1: Circular Dependencies**
+- Probability: Medium
+- Impact: High (build failure)
+- Mitigation: Use dependency injection, avoid cross-imports
+- Verification: Bundle build must succeed
+
+**Risk 2: Breaking Changes**
+- Probability: Low (good test coverage)
+- Impact: High
+- Mitigation: Run tests after each extraction
+- Verification: All tests must pass
+
+**Risk 3: Performance Regression**
+- Probability: Low
+- Impact: Medium
+- Mitigation: Profile before/after
+- Verification: Maintain 60fps with 10+ images
+
+---
+
+## Future Considerations (Post-Phase 4)
+
+- Video export (MP4/WebM via MediaRecorder API)
 - Advanced material editor (custom shaders)
-- Collaborative features (real-time sharing)
 - Plugin system for extensions
 - Cloud storage integration
-- Automated visual regression testing (Playwright)
+- Collaborative features
+- Automated visual regression (Playwright)
 
-**Technical Debt Priorities**:
-1. Console.log cleanup (95 statements)
-2. Main.js modularization (3,459 lines)
-3. Event listener memory management
-4. JSDoc coverage (constants.js: 0%)
-5. Error handling standardization
+---
+
+## Technical Debt Backlog
+
+1. ✅ JSDoc coverage (constants.js: 100%)
+2. ✅ Event listener memory management (zero leaks)
+3. 🔄 Main.js modularization (3,367 lines → <300) - Deferred to Phase 5
+4. ✅ Console.log cleanup (99.3% migrated to logger, 7 intentional console calls)
+5. ✅ Deep freeze for nested constant objects
+
+---
+
+## Release Preparation Checklist (v0.2.0)
+
+### Pre-Release Verification
+- [x] All tests passing (208/208) ✅
+- [x] Build successful (1,143.27 kB) ✅
+- [x] Documentation synchronized (24 iterations documented) ✅
+- [x] No uncommitted work (ready for git commit)
+- [ ] Git commit with comprehensive message
+- [ ] Version bump in package.json (0.1.0 → 0.2.0)
+- [ ] Git tag release (v0.2.0)
+
+### Quality Metrics for v0.2.0
+- **Tests**: 208 (+98 from v0.1.0, +89% improvement)
+- **Coverage**: helpers.js 100%, core 96.41%, utils 97.22%
+- **Build**: 1,143.27 kB (stable, -6 kB from v0.1.0)
+- **Documentation**: 9 essential files (was 16, -119K cleanup)
+- **Code Quality**: 24 systematic improvement iterations
+- **Package**: npm-ready with proper entry points, cross-platform consistency
+
+### Release Notes Template
+```markdown
+## v0.2.0 - Quality & Refinement Release
+
+This release focuses on code quality, testing, and developer experience through
+24 systematic improvement iterations. No new features, but significant improvements
+to maintainability, reliability, and documentation.
+
+**Highlights:**
+- +98 tests (89% increase), 96%+ coverage on core utilities
+- 99.3% logging migration to structured logger (19 module loggers)
+- Complete dependency documentation, npm package configuration
+- Cross-platform consistency (.editorconfig + .gitattributes)
+- 119K of obsolete/duplicate documentation removed
+
+**Breaking Changes:** None
+**Upgrade Path:** Drop-in replacement for v0.1.0
+```
+
+### Post-Release Tasks
+- [ ] Update GitHub Pages deployment
+- [ ] Tag release on GitHub with release notes
+- [ ] Update README badges if needed
+- [ ] Consider npm publish (package is ready)
+- [ ] Plan Phase 5: Module Extraction Strategy

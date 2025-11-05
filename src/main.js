@@ -1,4 +1,5 @@
-// src/main.js
+// this_file: src/main.js
+
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -7,12 +8,20 @@ import { Pane } from 'tweakpane';
 import * as EssentialsPlugin from '@kitschpatrol/tweakpane-plugin-essentials';
 import * as ColorPlusPlugin from 'tweakpane-plugin-color-plus';
 import { CameraAnimator } from './camera/animation.js';
+import { RenderLoop } from './core/RenderLoop.js';
+import { createLogger } from './utils/logger.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
     MEMORY_WARNING_THRESHOLD_MB,
     MEMORY_CRITICAL_THRESHOLD_MB,
     MEMORY_WARNING_COOLDOWN,
+    TOAST_DURATION_ERROR,
+    TOAST_DURATION_WARNING,
+    TOAST_DURATION_INFO,
+    CAMERA_FAR_PLANE,
+    Z_INDEX_MODAL,
+    BYTES_PER_MB,
     FLOOR_Y,
     FLOOR_SIZE,
     REFLECTION_TEXTURE_BASE,
@@ -52,6 +61,7 @@ let canvas;
 let cameraMode = 'perspective'; // 'perspective', 'orthographic', 'isometric'
 let cameraAnimator; // Camera animation system
 
+let renderLoop; // Render animation loop manager
 // Lighting and environment
 let ambientLight, mainLight, fillLight;
 let floorGroup = null;
@@ -69,19 +79,33 @@ let eventListeners = [];
 let historyStack = [];
 let historyIndex = -1;
 
-// FPS monitoring
-let fpsCounter = null;
-let fpsDisplay = null;
-let showFPSEnabled = false;
-let frameCount = 0;
-let lastFrameTime = performance.now();
-let fpsValues = [];
 
 // Memory usage tracking
 let lastMemoryWarning = 0;
 
 // Parameters
 const params = createDefaultParams();
+
+// Module loggers for organized debugging
+const logInit = createLogger('Init');
+const logLighting = createLogger('Lighting');
+const logFloor = createLogger('Floor');
+const logImages = createLogger('Images');
+const logFile = createLogger('File');
+const logCamera = createLogger('Camera');
+const logExport = createLogger('Export');
+const logUI = createLogger('UI');
+const logAPI = createLogger('API');
+const logCleanup = createLogger('Cleanup');
+const logWebGL = createLogger('WebGL');
+const logMemory = createLogger('Memory');
+const logHistory = createLogger('History');
+const logResize = createLogger('Resize');
+const logRetry = createLogger('Retry');
+const logValidation = createLogger('Validation');
+const logKeyboard = createLogger('Keyboard');
+const logDebugAPI = createLogger('Debug API');
+const logSettings = createLogger('Settings');
 cameraMode = params.cameraMode;
 
 // Persist core state through AppState for upcoming modularisation
@@ -91,7 +115,6 @@ storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
 storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
 storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
 appState.set('cameraMode', cameraMode);
-appState.set('fpsState', { fpsCounter, fpsDisplay, showFPSEnabled, frameCount, lastFrameTime, fpsValues });
 appState.set('memoryState', { lastMemoryWarning });
 
 // UI
@@ -176,7 +199,7 @@ function detectCapabilities() {
             border-radius: 10px;
             max-width: 500px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 10000;
+            z-index: ' + Z_INDEX_MODAL + ';
         `;
 
         errorDiv.innerHTML = `
@@ -189,11 +212,11 @@ function detectCapabilities() {
         `;
 
         document.body.appendChild(errorDiv);
-        console.error('Capability check failed:', errors);
+        logInit.error('Capability check failed:', errors);
         return false;
     }
 
-    console.log('✓ All required browser capabilities detected');
+    logInit.info('✓ All required browser capabilities detected');
     return true;
 }
 
@@ -216,7 +239,7 @@ function init() {
 
     // Create perspective camera
     const aspect = window.innerWidth / window.innerHeight;
-    camera = new THREE.PerspectiveCamera(params.cameraFOV, aspect, 0.1, 5000);
+    camera = new THREE.PerspectiveCamera(params.cameraFOV, aspect, 0.1, CAMERA_FAR_PLANE);
     storeSharedRef(SHARED_STATE_KEYS.camera, camera);
     camera.position.set(0, 0, 800);  // Default distance
     camera.lookAt(0, 0, 0);
@@ -291,7 +314,7 @@ function init() {
     // Setup Tweakpane UI
     setupTweakpane();
 
-    console.log('Initialization complete - UI should be visible');
+    logInit.info('Initialization complete - UI should be visible');
 
     // Handle window resize with debouncing
     setupDebouncedResize();
@@ -308,13 +331,16 @@ function init() {
     // Setup WebGL context loss recovery
     setupContextLossRecovery();
 
-    // Setup FPS monitor
-    setupFPSMonitor();
+    // Initialize RenderLoop
+    renderLoop = new RenderLoop();
+    renderLoop.setRenderCallback(() => {
+        controls.update();
+        const activeCamera = getActiveCamera();
+        renderer.render(scene, activeCamera);
+    });
+    renderLoop.start();
 
-    // Start render loop
-    animate();
-
-    console.log('Vexy Stax initialized');
+    logInit.info('Vexy Stax initialized');
 }
 
 /**
@@ -422,7 +448,7 @@ function setupLighting() {
     );
     scene.add(hemisphereLight);
 
-    console.log(`Lighting setup complete (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${ambientIntensity.toFixed(2)})`);
+    logLighting.info(`Lighting setup complete (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${ambientIntensity.toFixed(2)})`);
 }
 
 /**
@@ -436,7 +462,7 @@ function updateLighting() {
     const newIntensity = getAdaptiveAmbientIntensity(bgLuminance);
 
     ambientLight.intensity = newIntensity;
-    console.log(`Lighting updated (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${newIntensity.toFixed(2)})`);
+    logLighting.info(`Lighting updated (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${newIntensity.toFixed(2)})`);
 }
 
 function getReflectionResolution() {
@@ -525,7 +551,7 @@ function createFloor() {
     scene.add(floorGroup);
     updateReflectionSettings();
 
-    console.log(`Floor created at y=${FLOOR_Y} with ambience reflections (texture ${width}x${height})`);
+    logFloor.info(`Floor created at y=${FLOOR_Y} with ambience reflections (texture ${width}x${height})`);
 
     // Update all images to stand on floor and cast shadows
     updateImagesForAmbience(true);
@@ -549,7 +575,7 @@ function removeFloor() {
     }
     floorGroup = null;
 
-    console.log('Floor removed');
+    logFloor.info('Floor removed');
 
     // Update images to remove shadow casting
     updateImagesForAmbience(false);
@@ -628,7 +654,7 @@ function updateImagesForAmbience(enabled) {
         scene.add(mesh);
     });
 
-    console.log(`Images updated for ambience mode: ${enabled ? 'enabled' : 'disabled'}`);
+    logImages.info(`Images updated for ambience mode: ${enabled ? 'enabled' : 'disabled'}`);
 }
 
 /**
@@ -679,7 +705,7 @@ function setupKeyboardShortcuts() {
             border-radius: 10px;
             max-width: 400px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 10000;
+            z-index: ' + Z_INDEX_MODAL + ';
             display: none;
         `;
 
@@ -708,10 +734,10 @@ function setupKeyboardShortcuts() {
 
         if (helpOverlay.style.display === 'none') {
             helpOverlay.style.display = 'block';
-            console.log('Keyboard shortcuts help shown');
+            logUI.info('Keyboard shortcuts help shown');
         } else {
             helpOverlay.style.display = 'none';
-            console.log('Keyboard shortcuts help hidden');
+            logUI.info('Keyboard shortcuts help hidden');
         }
     }
 
@@ -730,14 +756,14 @@ function setupKeyboardShortcuts() {
             if (cameraAnimator && cameraAnimator.isAnimating) {
                 cameraAnimator.cancel();
                 showToast('Animation cancelled', 'info');
-                console.log('Animation cancelled via ESC');
+                logCamera.info('Animation cancelled via ESC');
                 return;
             }
 
             // Otherwise close help overlay
             if (helpOverlay && helpOverlay.style.display === 'block') {
                 helpOverlay.style.display = 'none';
-                console.log('Help closed');
+                logUI.info('Help closed');
             }
             return;
         }
@@ -745,7 +771,7 @@ function setupKeyboardShortcuts() {
         // Ctrl/Cmd + E: Export PNG
         if ((e.ctrlKey || e.metaKey) && e.key === 'e' && !e.shiftKey) {
             e.preventDefault();
-            console.log('Keyboard shortcut: Export PNG (Ctrl/Cmd+E)');
+            logUI.info('Keyboard shortcut: Export PNG (Ctrl/Cmd+E)');
             exportPNG(1);
             return;
         }
@@ -753,7 +779,7 @@ function setupKeyboardShortcuts() {
         // Ctrl/Cmd + Z: Undo
         if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
             e.preventDefault();
-            console.log('Keyboard shortcut: Undo (Ctrl/Cmd+Z)');
+            logUI.info('Keyboard shortcut: Undo (Ctrl/Cmd+Z)');
             undo();
             return;
         }
@@ -761,7 +787,7 @@ function setupKeyboardShortcuts() {
         // Ctrl/Cmd + Shift + Z: Redo
         if ((e.ctrlKey || e.metaKey) && e.key === 'z' && e.shiftKey) {
             e.preventDefault();
-            console.log('Keyboard shortcut: Redo (Ctrl/Cmd+Shift+Z)');
+            logUI.info('Keyboard shortcut: Redo (Ctrl/Cmd+Shift+Z)');
             redo();
             return;
         }
@@ -771,7 +797,7 @@ function setupKeyboardShortcuts() {
             e.preventDefault();
             if (imageStack.length > 0) {
                 if (confirm('Clear all images? This cannot be undone.')) {
-                    console.log('Keyboard shortcut: Clear all (Ctrl/Cmd+Delete)');
+                    logUI.info('Keyboard shortcut: Clear all (Ctrl/Cmd+Delete)');
                     clearAll();
                 }
             }
@@ -780,7 +806,7 @@ function setupKeyboardShortcuts() {
     };
 
     addTrackedEventListener(window, 'keydown', keydownHandler);
-    console.log('Keyboard shortcuts enabled (Ctrl/Cmd+E, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Delete, ?)');
+    logUI.info('Keyboard shortcuts enabled (Ctrl/Cmd+E, Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z, Ctrl/Cmd+Delete, ?)');
 }
 
 /**
@@ -790,13 +816,13 @@ function exposeDebugAPI() {
     window.vexyStax = {
         // Export functions
         exportPNG: (scale = 1) => {
-            console.log(`[API] Exporting PNG at ${scale}x`);
+            logAPI.info(` Exporting PNG at ${scale}x`);
             exportPNG(scale);
         },
 
         // Image management
         clearAll: () => {
-            console.log('[API] Clearing all images');
+            logAPI.info(' Clearing all images');
             clearAll();
         },
 
@@ -808,47 +834,47 @@ function exposeDebugAPI() {
                 height: img.texture.image.height,
                 position: { x: img.mesh.position.x, y: img.mesh.position.y, z: img.mesh.position.z }
             }));
-            console.log('[API] Image stack:', stack);
+            logAPI.info(' Image stack:', stack);
             return stack;
         },
 
         // Settings management
         loadSettings: () => {
-            console.log('[API] Loading settings');
+            logAPI.info(' Loading settings');
             return loadSettings();
         },
 
         saveSettings: () => {
-            console.log('[API] Saving settings');
+            logAPI.info(' Saving settings');
             saveSettings();
         },
 
         resetSettings: () => {
-            console.log('[API] Resetting settings to defaults');
+            logAPI.info(' Resetting settings to defaults');
             resetSettings();
         },
 
         // History management
         undo: () => {
-            console.log('[API] Undo');
+            logAPI.info(' Undo');
             undo();
         },
 
         redo: () => {
-            console.log('[API] Redo');
+            logAPI.info(' Redo');
             redo();
         },
 
         // Performance monitoring
         showFPS: (enabled) => {
-            console.log(`[API] FPS display: ${enabled ? 'enabled' : 'disabled'}`);
-            toggleFPS(enabled);
+            logAPI.info(` FPS display: ${enabled ? 'enabled' : 'disabled'}`);
+            if (renderLoop) renderLoop.showFPS(enabled);
         },
 
         // Stats and info
         getStats: () => {
-            const fps = fpsValues.length > 0 ?
-                Math.round(fpsValues.reduce((a, b) => a + b, 0) / fpsValues.length) :
+            const fpsStats = renderLoop ? renderLoop.getFPSStats() : { average: null };
+            const fps = fpsStats.average;
                 null;
 
             const stats = {
@@ -860,7 +886,7 @@ function exposeDebugAPI() {
                 estimatedMemoryMB: imageStack.reduce((sum, img) => {
                     const tex = img.texture.image;
                     // Rough estimate: 4 bytes per pixel (RGBA)
-                    return sum + (tex.width * tex.height * 4) / (1024 * 1024);
+                    return sum + (tex.width * tex.height * 4) / BYTES_PER_MB;
                 }, 0).toFixed(2),
                 cameraMode: params.cameraMode,
                 currentSettings: {
@@ -877,32 +903,32 @@ function exposeDebugAPI() {
                     historySize: `${historyIndex + 1}/${historyStack.length}`
                 }
             };
-            console.log('[API] Stats:', stats);
+            logAPI.info(' Stats:', stats);
             return stats;
         },
 
         // Animation
         playAnimation: async (config = {}) => {
             if (!cameraAnimator) {
-                console.error('[API] Camera animator not initialized');
+                logAPI.error(' Camera animator not initialized');
                 return;
             }
 
             if (imageStack.length === 0) {
-                console.error('[API] No images loaded');
+                logAPI.error(' No images loaded');
                 return;
             }
 
             const topSlide = imageStack[imageStack.length - 1];
             if (!topSlide) {
-                console.error('[API] No top slide found');
+                logAPI.error(' No top slide found');
                 return;
             }
 
             const duration = config.duration || params.animDuration;
             const easing = config.easing || params.animEasing;
 
-            console.log(`[API] Playing hero shot animation (duration: ${duration}s, easing: ${easing})`);
+            logAPI.info(` Playing hero shot animation (duration: ${duration}s, easing: ${easing})`);
 
             try {
                 await cameraAnimator.playHeroShot({
@@ -911,25 +937,25 @@ function exposeDebugAPI() {
                     duration,
                     easing
                 });
-                console.log('[API] Animation complete');
+                logAPI.info(' Animation complete');
             } catch (error) {
-                console.error('[API] Animation failed:', error);
+                logAPI.error(' Animation failed:', error);
             }
         },
 
         cancelAnimation: () => {
             if (!cameraAnimator) {
-                console.error('[API] Camera animator not initialized');
+                logAPI.error(' Camera animator not initialized');
                 return;
             }
 
-            console.log('[API] Cancelling animation');
+            logAPI.info(' Cancelling animation');
             cameraAnimator.cancel();
         },
 
         // JSON configuration
         loadConfig: (config) => {
-            console.log('[API] Loading configuration from object');
+            logAPI.info(' Loading configuration from object');
 
             // Return promise that resolves when all images are loaded
             return new Promise((resolve, reject) => {
@@ -997,12 +1023,12 @@ function exposeDebugAPI() {
 
                                     scene.add(mesh);
 
-                                    console.log(`[API] Loaded ${imageConfig.filename} from config`);
+                                    logAPI.info(` Loaded ${imageConfig.filename} from config`);
                                     resolveImage();
                                 },
                                 undefined,
                                 (error) => {
-                                    console.error(`[API] Failed to load ${imageConfig.filename}:`, error);
+                                    logAPI.error(` Failed to load ${imageConfig.filename}:`, error);
                                     rejectImage(error);
                                 }
                             );
@@ -1014,16 +1040,16 @@ function exposeDebugAPI() {
                         .then(() => {
                             // Refresh Tweakpane
                             pane.refresh();
-                            console.log('[API] Configuration loaded successfully');
+                            logAPI.info(' Configuration loaded successfully');
                             resolve();
                         })
                         .catch((error) => {
-                            console.error('[API] Failed to load one or more images:', error);
+                            logAPI.error(' Failed to load one or more images:', error);
                             reject(error);
                         });
 
                 } catch (error) {
-                    console.error('[API] Failed to load configuration:', error);
+                    logAPI.error(' Failed to load configuration:', error);
                     reject(error);
                 }
             });
@@ -1066,7 +1092,7 @@ Example usage:
     };
 
     // Log available API on init
-    console.log('%c[Debug API] Type vexyStax.help() for available commands', 'color: #00ff00');
+    logDebugAPI.log('%c Type vexyStax.help() for available commands', 'color: #00ff00');
 }
 
 /**
@@ -1074,7 +1100,7 @@ Example usage:
  */
 function setupCleanup() {
     window.addEventListener('beforeunload', () => {
-        console.log('[Cleanup] Disposing Three.js resources...');
+        logCleanup.info(' Disposing Three.js resources...');
 
         try {
             removeFloor();
@@ -1106,6 +1132,11 @@ function setupCleanup() {
             emitStackUpdated('disposed');
 
             // Dispose controls
+
+            // Dispose render loop
+            if (renderLoop) {
+                renderLoop.dispose();
+            }
             if (controls) {
                 controls.dispose();
             }
@@ -1133,15 +1164,15 @@ function setupCleanup() {
             });
             eventListeners = [];
             storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
-            console.log('[Cleanup] Removed all event listeners');
+            logCleanup.info(' Removed all event listeners');
 
-            console.log('[Cleanup] All resources disposed successfully');
+            logCleanup.info(' All resources disposed successfully');
         } catch (error) {
-            console.error('[Cleanup] Error during cleanup:', error);
+            logCleanup.error(' Error during cleanup:', error);
         }
     });
 
-    console.log('[Cleanup] Resource cleanup handler registered');
+    logCleanup.info(' Resource cleanup handler registered');
 }
 
 /**
@@ -1160,13 +1191,13 @@ function setupDebouncedResize() {
         // Schedule new resize
         resizeTimeout = setTimeout(() => {
             onWindowResize();
-            console.log('[Resize] Debounced resize executed');
+            logResize.info(' Debounced resize executed');
             resizeTimeout = null;
         }, DEBOUNCE_DELAY);
     };
 
     addTrackedEventListener(window, 'resize', debouncedResize);
-    console.log(`[Resize] Debounced resize handler registered (${DEBOUNCE_DELAY}ms delay)`);
+    logResize.info(` Debounced resize handler registered (${DEBOUNCE_DELAY}ms delay)`);
 }
 
 /**
@@ -1177,7 +1208,7 @@ function setupContextLossRecovery() {
 
     const contextLostHandler = (event) => {
         event.preventDefault(); // Allows context restoration
-        console.warn('[WebGL] Context lost - GPU reset detected');
+        logWebGL.warn(' Context lost - GPU reset detected');
 
         // Show user-friendly message
         const message = document.createElement('div');
@@ -1192,7 +1223,7 @@ function setupContextLossRecovery() {
             padding: 15px 25px;
             border-radius: 8px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 10000;
+            z-index: ' + Z_INDEX_MODAL + ';
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         `;
         message.textContent = '⚠️ Graphics context lost - recovering...';
@@ -1200,7 +1231,7 @@ function setupContextLossRecovery() {
     };
 
     const contextRestoredHandler = () => {
-        console.log('[WebGL] Context restored - reinitializing renderer');
+        logWebGL.info(' Context restored - reinitializing renderer');
 
         // Remove message
         const message = document.getElementById('webgl-context-lost-message');
@@ -1217,14 +1248,14 @@ function setupContextLossRecovery() {
 
         // Reload all textures in image stack
         imageStack.forEach((imageData, index) => {
-            console.log(`[WebGL] Reloading texture ${index + 1}/${imageStack.length}: ${imageData.filename}`);
+            logWebGL.info(` Reloading texture ${index + 1}/${imageStack.length}: ${imageData.filename}`);
             // Texture will be reloaded automatically by Three.js on next render
             if (imageData.texture && imageData.texture.image) {
                 imageData.texture.needsUpdate = true;
             }
         });
 
-        console.log('[WebGL] Context restoration complete');
+        logWebGL.info(' Context restoration complete');
 
         // Show success message briefly
         const successMessage = document.createElement('div');
@@ -1238,7 +1269,7 @@ function setupContextLossRecovery() {
             padding: 15px 25px;
             border-radius: 8px;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 10000;
+            z-index: ' + Z_INDEX_MODAL + ';
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         `;
         successMessage.textContent = '✓ Graphics recovered successfully';
@@ -1251,96 +1282,13 @@ function setupContextLossRecovery() {
 
     addTrackedEventListener(canvas, 'webglcontextlost', contextLostHandler);
     addTrackedEventListener(canvas, 'webglcontextrestored', contextRestoredHandler);
-    console.log('[WebGL] Context loss/restore handlers registered');
+    logWebGL.info(' Context loss/restore handlers registered');
 }
 
 /**
  * Setup FPS counter and performance monitoring
  * Creates FPS display element and tracks rendering performance
  */
-function setupFPSMonitor() {
-    // Create FPS display element (hidden by default)
-    fpsDisplay = document.createElement('div');
-    fpsDisplay.id = 'fps-display';
-    fpsDisplay.style.cssText = `
-        position: fixed;
-        top: 10px;
-        right: 10px;
-        background: rgba(0, 0, 0, 0.7);
-        color: #00ff00;
-        padding: 8px 12px;
-        border-radius: 4px;
-        font-family: 'Courier New', monospace;
-        font-size: 14px;
-        z-index: 9999;
-        display: none;
-        min-width: 120px;
-    `;
-    document.body.appendChild(fpsDisplay);
-
-    console.log('[FPS] Performance monitor initialized (use vexyStax.showFPS(true) to enable)');
-}
-
-/**
- * Update FPS counter (called each frame)
- */
-function updateFPS() {
-    if (!showFPSEnabled) return;
-
-    const now = performance.now();
-    frameCount++;
-
-    // Update FPS display every second
-    if (now >= lastFrameTime + 1000) {
-        const fps = Math.round((frameCount * 1000) / (now - lastFrameTime));
-        fpsValues.push(fps);
-
-        // Keep only last 5 seconds of data
-        if (fpsValues.length > 5) {
-            fpsValues.shift();
-        }
-
-        // Calculate average FPS
-        const avgFPS = Math.round(fpsValues.reduce((a, b) => a + b, 0) / fpsValues.length);
-
-        // Update display
-        let color = '#00ff00'; // Green
-        if (avgFPS < FPS_WARNING_THRESHOLD) {
-            color = '#ff0000'; // Red for low FPS
-        } else if (avgFPS < 50) {
-            color = '#ffaa00'; // Orange for moderate FPS
-        }
-
-        fpsDisplay.style.color = color;
-        fpsDisplay.innerHTML = `FPS: ${fps}<br>Avg: ${avgFPS}`;
-
-        // Log warning if consistently low
-        if (avgFPS < FPS_WARNING_THRESHOLD && fpsValues.length >= 3) {
-            console.warn(`[FPS] Performance warning: Average FPS ${avgFPS} below threshold ${FPS_WARNING_THRESHOLD}`);
-        }
-
-        frameCount = 0;
-        lastFrameTime = now;
-    }
-}
-
-/**
- * Toggle FPS display
- * @param {boolean} enabled - Whether to show FPS counter
- */
-function toggleFPS(enabled) {
-    showFPSEnabled = enabled;
-    fpsDisplay.style.display = enabled ? 'block' : 'none';
-
-    if (enabled) {
-        console.log('[FPS] Counter enabled');
-        frameCount = 0;
-        lastFrameTime = performance.now();
-        fpsValues = [];
-    } else {
-        console.log('[FPS] Counter disabled');
-    }
-}
 
 /**
  * Calculate estimated memory usage from image stack
@@ -1356,7 +1304,7 @@ function calculateMemoryUsage() {
             totalBytes += width * height * 4;
         }
     });
-    return totalBytes / (1024 * 1024); // Convert to MB
+    return totalBytes / BYTES_PER_MB; // Convert to MB
 }
 
 /**
@@ -1369,7 +1317,7 @@ function checkMemoryUsage(isAdding = false) {
     const now = Date.now();
 
     // Log memory stats
-    console.log(`[Memory] Current usage: ${memoryMB.toFixed(2)} MB (${imageStack.length} images)`);
+    logMemory.info(` Current usage: ${memoryMB.toFixed(2)} MB (${imageStack.length} images)`);
 
     // Critical threshold - block operation with confirmation
     if (memoryMB >= MEMORY_CRITICAL_THRESHOLD_MB) {
@@ -1377,20 +1325,20 @@ function checkMemoryUsage(isAdding = false) {
                        `Loading more images may cause browser slowdown or crash.\n\n` +
                        `Continue anyway?`;
 
-        console.warn(`[Memory] CRITICAL: ${memoryMB.toFixed(2)} MB >= ${MEMORY_CRITICAL_THRESHOLD_MB} MB`);
+        logMemory.warn(` CRITICAL: ${memoryMB.toFixed(2)} MB >= ${MEMORY_CRITICAL_THRESHOLD_MB} MB`);
 
         if (isAdding) {
             return confirm(message);
         } else {
-            showToast(`⚠️ Critical memory: ${memoryMB.toFixed(0)} MB`, 'error', 5000);
+            showToast(`⚠️ Critical memory: ${memoryMB.toFixed(0)} MB`, 'error', TOAST_DURATION_ERROR);
             return true;
         }
     }
 
     // Warning threshold - show toast (with cooldown to avoid spam)
     if (memoryMB >= MEMORY_WARNING_THRESHOLD_MB && now - lastMemoryWarning > MEMORY_WARNING_COOLDOWN) {
-        console.warn(`[Memory] Warning: ${memoryMB.toFixed(2)} MB >= ${MEMORY_WARNING_THRESHOLD_MB} MB`);
-        showToast(`⚠️ High memory usage: ${memoryMB.toFixed(0)} MB. Consider reducing image count.`, 'warning', 4000);
+        logMemory.warn(` Warning: ${memoryMB.toFixed(2)} MB >= ${MEMORY_WARNING_THRESHOLD_MB} MB`);
+        showToast(`⚠️ High memory usage: ${memoryMB.toFixed(0)} MB. Consider reducing image count.`, 'warning', TOAST_DURATION_WARNING);
         lastMemoryWarning = now;
     }
 
@@ -1444,7 +1392,7 @@ function saveHistory() {
         storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
     }
 
-    console.log(`[History] Saved state (${historyIndex + 1}/${historyStack.length})`);
+    logHistory.info(` Saved state (${historyIndex + 1}/${historyStack.length})`);
 }
 
 /**
@@ -1453,7 +1401,7 @@ function saveHistory() {
  */
 function undo() {
     if (historyIndex <= 0) {
-        console.log('[History] Nothing to undo');
+        logHistory.info(' Nothing to undo');
         showToast('⚠️ Nothing to undo', 'warning');
         return;
     }
@@ -1492,7 +1440,7 @@ function undo() {
     });
 
     updateImageList();
-    console.log(`[History] Undo to state ${historyIndex + 1}/${historyStack.length}`);
+    logHistory.info(` Undo to state ${historyIndex + 1}/${historyStack.length}`);
     emitStackUpdated('undo');
     showToast('↶ Undo applied', 'success');
 }
@@ -1503,7 +1451,7 @@ function undo() {
  */
 function redo() {
     if (historyIndex >= historyStack.length - 1) {
-        console.log('[History] Nothing to redo');
+        logHistory.info(' Nothing to redo');
         showToast('⚠️ Nothing to redo', 'warning');
         return;
     }
@@ -1542,7 +1490,7 @@ function redo() {
     });
 
     updateImageList();
-    console.log(`[History] Redo to state ${historyIndex + 1}/${historyStack.length}`);
+    logHistory.info(` Redo to state ${historyIndex + 1}/${historyStack.length}`);
     emitStackUpdated('redo');
     showToast('↷ Redo applied', 'success');
 }
@@ -1563,7 +1511,7 @@ function showToast(message, type = 'info', duration = 3000) {
         border-radius: 6px;
         font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         font-size: 14px;
-        z-index: 10000;
+        z-index: ' + Z_INDEX_MODAL + ';
         box-shadow: 0 4px 12px rgba(0,0,0,0.3);
         animation: slideIn 0.3s ease-out;
     `;
@@ -1597,13 +1545,13 @@ function showToast(message, type = 'info', duration = 3000) {
 function loadSettings() {
     try {
         if (!window.localStorage) {
-            console.warn('localStorage not available');
+            logSettings.warn('localStorage not available');
             return false;
         }
 
         const saved = localStorage.getItem('vexy-stax-settings');
         if (!saved) {
-            console.log('No saved settings found');
+            logSettings.info('No saved settings found');
             return false;
         }
 
@@ -1617,10 +1565,10 @@ function loadSettings() {
         if (settings.transparentBg !== undefined) params.transparentBg = settings.transparentBg;
         if (settings.zSpacing !== undefined) params.zSpacing = settings.zSpacing;
 
-        console.log('Settings loaded from localStorage:', settings);
+        logSettings.info('Settings loaded from localStorage:', settings);
         return true;
     } catch (error) {
-        console.error('Failed to load settings:', error);
+        logSettings.error('Failed to load settings:', error);
         return false;
     }
 }
@@ -1631,7 +1579,7 @@ function loadSettings() {
 function saveSettings() {
     try {
         if (!window.localStorage) {
-            console.warn('localStorage not available');
+            logSettings.warn('localStorage not available');
             return;
         }
 
@@ -1645,11 +1593,11 @@ function saveSettings() {
         };
 
         localStorage.setItem('vexy-stax-settings', JSON.stringify(settings));
-        console.log('Settings saved to localStorage');
+        logSettings.info('Settings saved to localStorage');
     } catch (error) {
         // Check for quota exceeded error
         if (error.name === 'QuotaExceededError' || error.code === 22) {
-            console.error('localStorage quota exceeded');
+            logSettings.error('localStorage quota exceeded');
 
             // Show user-friendly error with option to clear storage
             const clearStorage = confirm(
@@ -1662,22 +1610,22 @@ function saveSettings() {
                 try {
                     // Clear all vexy-stax related storage
                     localStorage.removeItem('vexy-stax-settings');
-                    console.log('Cleared storage, retrying save...');
+                    logSettings.info('Cleared storage, retrying save...');
 
                     // Retry save after clearing
                     localStorage.setItem('vexy-stax-settings', JSON.stringify(settings));
-                    console.log('Settings saved successfully after clearing storage');
+                    logSettings.info('Settings saved successfully after clearing storage');
                     alert('Storage cleared and settings saved!');
                 } catch (retryError) {
-                    console.error('Failed to save even after clearing:', retryError);
+                    logSettings.error('Failed to save even after clearing:', retryError);
                     alert('Still unable to save settings. Try closing other tabs or clearing browser data.');
                 }
             } else {
-                console.warn('User declined to clear storage - settings not saved');
+                logSettings.warn('User declined to clear storage - settings not saved');
             }
         } else {
             // Other localStorage errors
-            console.error('Failed to save settings:', error.name, error.message);
+            logSettings.error('Failed to save settings:', error.name, error.message);
         }
     }
 }
@@ -1708,17 +1656,17 @@ function resetSettings() {
     try {
         if (window.localStorage) {
             localStorage.removeItem('vexy-stax-settings');
-            console.log('Settings reset to defaults and cleared from localStorage');
+            logSettings.info('Settings reset to defaults and cleared from localStorage');
         }
     } catch (error) {
-        console.error('Failed to clear settings:', error);
+        logSettings.error('Failed to clear settings:', error);
     }
 }
 
 function setupTweakpane() {
     const controlsContainer = document.getElementById('controls');
     if (!controlsContainer) {
-        console.error('Controls container not found!');
+        logUI.error('Controls container not found!');
         return;
     }
 
@@ -1732,7 +1680,7 @@ function setupTweakpane() {
     pane.registerPlugin(EssentialsPlugin);
     pane.registerPlugin(ColorPlusPlugin);
 
-    console.log('Tweakpane created successfully');
+    logUI.info('Tweakpane created successfully');
 
     // ===== STUDIO SECTION =====
     const studioFolder = pane.addFolder({
@@ -1991,7 +1939,7 @@ function setupTweakpane() {
             });
             showToast('Animation complete', 'success');
         } catch (error) {
-            console.error('Animation error:', error);
+            logCamera.error('Animation error:', error);
             showToast('Animation failed', 'error');
         }
     });
@@ -2019,18 +1967,18 @@ function setupTweakpane() {
 function exportPNG(scale = 1) {
     // Check if images are loaded
     if (imageStack.length === 0) {
-        console.warn('[Export] No images loaded - cannot export empty scene');
+        logExport.warn(' No images loaded - cannot export empty scene');
         showToast('⚠️ Load images first', 'warning');
         return;
     }
 
     // Validate scale parameter (1-4 range for reasonable export sizes)
     if (typeof scale !== 'number' || scale < 1 || scale > 4) {
-        console.warn(`Invalid scale parameter: ${scale}. Using 1x instead.`);
+        logExport.warn(`Invalid scale parameter: ${scale}. Using 1x instead.`);
         scale = 1;
     }
 
-    console.log(`Exporting PNG at ${scale}x resolution...`);
+    logExport.info(`Exporting PNG at ${scale}x resolution...`);
 
     // Show loading overlay for high-res exports
     let loadingOverlay = null;
@@ -2049,7 +1997,7 @@ function exportPNG(scale = 1) {
             align-items: center;
             justify-content: center;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: 10000;
+            z-index: ' + Z_INDEX_MODAL + ';
         `;
 
         loadingOverlay.innerHTML = `
@@ -2092,7 +2040,7 @@ function exportPNG(scale = 1) {
             // Estimate file size (rough approximation)
             const base64Length = dataURL.length - 'data:image/png;base64,'.length;
             const fileSizeBytes = (base64Length * 3) / 4;
-            const fileSizeMB = (fileSizeBytes / (1024 * 1024)).toFixed(2);
+            const fileSizeMB = (fileSizeBytes / BYTES_PER_MB).toFixed(2);
 
             // Create download link
             const link = document.createElement('a');
@@ -2108,7 +2056,7 @@ function exportPNG(scale = 1) {
                 link.click();
                 downloadSuccess = true;
             } catch (error) {
-                console.error('[Export] Download failed:', error);
+                logExport.error(' Download failed:', error);
                 throw new Error('Failed to trigger download');
             } finally {
                 document.body.removeChild(link);
@@ -2123,14 +2071,14 @@ function exportPNG(scale = 1) {
 
             // Log success and show confirmation
             const dimensions = `${renderer.domElement.width}x${renderer.domElement.height}px`;
-            console.log(`[Export] PNG exported successfully: ${filename} (${dimensions}, ~${fileSizeMB} MB)`);
+            logExport.info(` PNG exported successfully: ${filename} (${dimensions}, ~${fileSizeMB} MB)`);
 
             if (downloadSuccess) {
-                showToast(`✓ Exported: ${filename} (${fileSizeMB} MB)`, 'success', 3000);
+                showToast(`✓ Exported: ${filename} (${fileSizeMB} MB)`, 'success', TOAST_DURATION_INFO);
             }
         } catch (error) {
-            console.error('[Export] Export failed:', error);
-            showToast(`❌ Export failed: ${error.message}`, 'error', 5000);
+            logExport.error(' Export failed:', error);
+            showToast(`❌ Export failed: ${error.message}`, 'error', TOAST_DURATION_ERROR);
         } finally {
             // Remove loading overlay
             if (loadingOverlay) {
@@ -2154,7 +2102,7 @@ function updateZoom(zoomValue) {
     orthoCamera.zoom = zoomValue;
     orthoCamera.updateProjectionMatrix();
 
-    console.log(`Zoom updated to ${zoomValue.toFixed(1)}x`);
+    logCamera.info(`Zoom updated to ${zoomValue.toFixed(1)}x`);
     emitCameraUpdated('zoom');
 }
 
@@ -2197,9 +2145,9 @@ function updateCanvasSize(size) {
     }
 
     if (dimensions) {
-        console.log(`Canvas resized to ${dimensions.cssWidth}x${dimensions.cssHeight} (pixel ratio ${dimensions.pixelRatio})`);
+        logResize.info(`Canvas resized to ${dimensions.cssWidth}x${dimensions.cssHeight} (pixel ratio ${dimensions.pixelRatio})`);
     } else {
-        console.log(`Canvas resized to ${size.x}x${size.y}`);
+        logResize.info(`Canvas resized to ${size.x}x${size.y}`);
     }
 }
 
@@ -2207,7 +2155,7 @@ function updateCanvasSize(size) {
 
 function centerViewOnContent() {
     if (imageStack.length === 0) {
-        console.log('No content to center on');
+        logCamera.info('No content to center on');
         return;
     }
 
@@ -2231,13 +2179,13 @@ function centerViewOnContent() {
     currentCam.lookAt(center);
 
     controls.update();
-    console.log(`Centered view on content at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)})`);
+    logCamera.info(`Centered view on content at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)})`);
     emitCameraUpdated('center');
 }
 
 function switchCameraMode(mode) {
     cameraMode = mode;
-    console.log(`Switching to ${mode} camera mode`);
+    logCamera.info(`Switching to ${mode} camera mode`);
 
     if (mode === 'orthographic') {
         // Front orthographic view
@@ -2298,7 +2246,7 @@ function updateBackground() {
         if (floorReflector) {
             floorReflector.material.uniforms.color.value.copy(floorColor);
         }
-        console.log(`Floor color updated to ${params.bgColor}`);
+        logFloor.info(`Floor color updated to ${params.bgColor}`);
     }
 
     // Update all existing slides' emissive intensity to react to background
@@ -2312,7 +2260,7 @@ function updateBackground() {
                 imageData.mesh.material.needsUpdate = true;
             }
         });
-        console.log(`Slides emissive updated (luminance: ${bgLuminance.toFixed(2)}, emissive: ${emissiveIntensity.toFixed(2)})`);
+        logImages.info(`Slides emissive updated (luminance: ${bgLuminance.toFixed(2)}, emissive: ${emissiveIntensity.toFixed(2)})`);
     }
 
     emitBackgroundChanged('update');
@@ -2323,14 +2271,14 @@ function updateZSpacing(newSpacing) {
     imageStack.forEach((imageData, index) => {
         imageData.mesh.position.z = index * newSpacing;
     });
-    console.log(`Z-spacing updated to ${newSpacing}px`);
+    logImages.info(`Z-spacing updated to ${newSpacing}px`);
 }
 
 function setViewpoint(x, y, z) {
     camera.position.set(x, y, z);
     camera.lookAt(0, 0, 0);
     controls.update();
-    console.log(`Viewpoint set to (${x}, ${y}, ${z})`);
+    logCamera.info(`Viewpoint set to (${x}, ${y}, ${z})`);
     emitCameraUpdated('viewpoint');
 }
 
@@ -2347,7 +2295,7 @@ function setViewpointFitToFrame() {
     // Get frontmost slide (last in stack)
     const frontSlide = imageStack[imageStack.length - 1];
     if (!frontSlide) {
-        console.error('No front slide found despite non-empty imageStack');
+        logCamera.error('No front slide found despite non-empty imageStack');
         setViewpoint(0, 0, 800);
         return;
     }
@@ -2381,7 +2329,7 @@ function setViewpointFitToFrame() {
     controls.target.set(0, 0, frontSlideZ);
     controls.update();
 
-    console.log(`Front view: fitted studio canvas ${canvasWidth}×${canvasHeight}px at distance ${distance.toFixed(1)} from slide`);
+    logCamera.info(`Front view: fitted studio canvas ${canvasWidth}×${canvasHeight}px at distance ${distance.toFixed(1)} from slide`);
 }
 
 function clearAll() {
@@ -2406,7 +2354,7 @@ function clearAll() {
     // Update UI
     updateImageList();
 
-    console.log('All images cleared');
+    logImages.info('All images cleared');
     emitStackUpdated('cleared');
     showToast('🗑️ All images cleared', 'info');
 }
@@ -2418,7 +2366,7 @@ function setupFileInput() {
     const slidesPanel = document.getElementById('slides-panel');
 
     if (!fileInput) {
-        console.error('File input element not found');
+        logFile.error('File input element not found');
         return;
     }
 
@@ -2497,7 +2445,7 @@ function setupFileInput() {
 }
 
 function handleFileDrop(files) {
-    console.log(`Dropped ${files.length} file(s)...`);
+    logFile.info(`Dropped ${files.length} file(s)...`);
 
     let validCount = 0;
     let invalidCount = 0;
@@ -2517,7 +2465,7 @@ function handleFileDrop(files) {
 
     // Summary log
     if (invalidCount > 0) {
-        console.warn(`[Validation] ${invalidCount} file(s) rejected, ${validCount} accepted from drop`);
+        logValidation.warn(` ${invalidCount} file(s) rejected, ${validCount} accepted from drop`);
     }
 }
 
@@ -2541,7 +2489,7 @@ function validateImageFile(file) {
     if (!supportedTypes.includes(file.type)) {
         // Extract extension for error message
         const extension = file.name.split('.').pop().toLowerCase();
-        console.error(`[Validation] Unsupported file type: ${file.name} (${file.type || 'unknown type'})`);
+        logValidation.error(`Unsupported file type: ${file.name} (${file.type || 'unknown type'})`);
         showToast(`❌ Unsupported file type: .${extension} (only images supported)`, 'error', 4000);
         return false;
     }
@@ -2552,11 +2500,11 @@ function validateImageFile(file) {
 function handleFileSelect(event) {
     const files = event.target.files;
     if (!files || files.length === 0) {
-        console.warn('No files selected');
+        logFile.warn('No files selected');
         return;
     }
 
-    console.log(`Loading ${files.length} file(s)...`);
+    logFile.info(`Loading ${files.length} file(s)...`);
 
     let validCount = 0;
     let invalidCount = 0;
@@ -2576,7 +2524,7 @@ function handleFileSelect(event) {
 
     // Summary log
     if (invalidCount > 0) {
-        console.warn(`[Validation] ${invalidCount} file(s) rejected, ${validCount} accepted`);
+        logValidation.warn(` ${invalidCount} file(s) rejected, ${validCount} accepted`);
     }
 }
 
@@ -2587,7 +2535,7 @@ function applyMaterialPreset(preset) {
     params.materialThickness = preset.thickness;
     params.materialBorderWidth = preset.borderWidth;
 
-    console.log(`Applying material preset: roughness=${preset.roughness}, metalness=${preset.metalness}, thickness=${preset.thickness}, border=${preset.borderWidth}`);
+    logImages.info(`Applying material preset: roughness=${preset.roughness}, metalness=${preset.metalness}, thickness=${preset.thickness}, border=${preset.borderWidth}`);
 
     // Apply to all existing images
     imageStack.forEach((imageData, index) => {
@@ -2663,7 +2611,7 @@ function applyMaterialPreset(preset) {
         scene.add(mesh);
     });
 
-    console.log(`Material applied to ${imageStack.length} images`);
+    logImages.info(`Material applied to ${imageStack.length} images`);
 }
 
 function loadImage(file) {
@@ -2673,15 +2621,15 @@ function loadImage(file) {
 
     if (file.size > maxSizeReject) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        console.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is ${FILE_SIZE_REJECT_MB}MB.`);
-        showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: ${FILE_SIZE_REJECT_MB}MB`, 'error', 5000);
+        logValidation.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is ${FILE_SIZE_REJECT_MB}MB.`);
+        showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: ${FILE_SIZE_REJECT_MB}MB`, 'error', TOAST_DURATION_ERROR);
         return;
     }
 
     if (file.size > maxSizeWarn) {
         const sizeMB = (file.size / 1024 / 1024).toFixed(1);
-        console.warn(`Warning: File ${file.name} is large (${sizeMB}MB). This may affect performance.`);
-        showToast(`⚠️ Large file: ${file.name} (${sizeMB}MB). May affect performance`, 'warning', 4000);
+        logValidation.warn(`Warning: File ${file.name} is large (${sizeMB}MB). This may affect performance.`);
+        showToast(`⚠️ Large file: ${file.name} (${sizeMB}MB). May affect performance`, 'warning', TOAST_DURATION_WARNING);
     }
 
     const reader = new FileReader();
@@ -2709,12 +2657,12 @@ function loadImage(file) {
                 const img = texture.image;
 
                 if (img.width > MAX_DIMENSION_PX || img.height > MAX_DIMENSION_PX) {
-                    console.warn(`Warning: Image ${filename} has large dimensions (${img.width}x${img.height}). Max recommended: ${MAX_DIMENSION_PX}px.`);
-                    showToast(`⚠️ Large dimensions: ${filename} (${img.width}x${img.height}px). May render slowly`, 'warning', 4000);
+                    logValidation.warn(`Warning: Image ${filename} has large dimensions (${img.width}x${img.height}). Max recommended: ${MAX_DIMENSION_PX}px.`);
+                    showToast(`⚠️ Large dimensions: ${filename} (${img.width}x${img.height}px). May render slowly`, 'warning', TOAST_DURATION_WARNING);
                 }
 
                 if (attempt > 0) {
-                    console.log(`[Retry] Successfully loaded ${filename} on attempt ${attempt + 1}`);
+                    logRetry.info(`Successfully loaded ${filename} on attempt ${attempt + 1}`);
                 }
 
                 addImageToStack(texture, filename);
@@ -2724,23 +2672,23 @@ function loadImage(file) {
                 // Error callback - retry or fail
                 if (attempt < MAX_LOAD_RETRIES) {
                     const delay = RETRY_DELAYS_MS[attempt];
-                    console.warn(`[Retry] Failed to load ${filename} (attempt ${attempt + 1}/${MAX_LOAD_RETRIES + 1}). Retrying in ${delay}ms...`, error);
+                    logRetry.warn(`Failed to load ${filename} (attempt ${attempt + 1}/${MAX_LOAD_RETRIES + 1}). Retrying in ${delay}ms...`, error);
 
                     setTimeout(() => {
                         loadTextureWithRetry(dataURL, filename, attempt + 1);
                     }, delay);
                 } else {
                     // All retries exhausted
-                    console.error(`[Retry] Failed to load ${filename} after ${MAX_LOAD_RETRIES + 1} attempts:`, error);
-                    showToast(`❌ Failed to load: ${filename}. Check file is valid`, 'error', 5000);
+                    logRetry.error(`Failed to load ${filename} after ${MAX_LOAD_RETRIES + 1} attempts:`, error);
+                    showToast(`❌ Failed to load: ${filename}. Check file is valid`, 'error', TOAST_DURATION_ERROR);
                 }
             }
         );
     }
 
     reader.onerror = function(error) {
-        console.error(`Failed to read file ${file.name}:`, error);
-        showToast(`❌ Failed to read file: ${file.name}`, 'error', 5000);
+        logFile.error(`Failed to read file ${file.name}:`, error);
+        showToast(`❌ Failed to read file: ${file.name}`, 'error', TOAST_DURATION_ERROR);
     };
 
     reader.readAsDataURL(file);
@@ -2749,7 +2697,7 @@ function loadImage(file) {
 function addImageToStack(texture, filename) {
     // Check memory before adding
     if (!checkMemoryUsage(true)) {
-        console.log(`[Memory] User declined to add image due to high memory usage`);
+        logMemory.info(` User declined to add image due to high memory usage`);
         showToast('❌ Image not added (memory limit)', 'warning');
         return;
     }
@@ -2873,7 +2821,7 @@ function addImageToStack(texture, filename) {
     // Update UI list
     updateImageList();
 
-    console.log(`Added ${filename} to stack at Z=${zPosition} (${imageStack.length} images total)`);
+    logImages.info(`Added ${filename} to stack at Z=${zPosition} (${imageStack.length} images total)`);
     emitStackUpdated('added');
 }
 
@@ -3017,7 +2965,7 @@ function handleImageListKeydown(e) {
                     mesh.material.emissive.setHex(originalEmissive);
                 }, 500);
 
-                console.log(`[Keyboard] Highlighted image ${index + 1}: ${imageData.filename}`);
+                logKeyboard.info(`Highlighted image ${index + 1}: ${imageData.filename}`);
                 showToast(`✨ Image ${index + 1}: ${imageData.filename}`, 'info', 2000);
             }
             break;
@@ -3065,7 +3013,7 @@ function handleDrop(e) {
         // Update UI
         updateImageList();
 
-        console.log(`Reordered: moved ${draggedIndex} to ${dropIndex}`);
+        logImages.info(`Reordered: moved ${draggedIndex} to ${dropIndex}`);
         emitStackUpdated('reordered');
     }
 
@@ -3106,7 +3054,7 @@ window.deleteImage = function(index) {
     // Update UI
     updateImageList();
 
-    console.log(`Deleted image at index ${index}`);
+    logImages.info(`Deleted image at index ${index}`);
     emitStackUpdated('removed');
     showToast(`🗑️ Deleted ${imageData.filename}`, 'info');
 
@@ -3133,23 +3081,16 @@ function onWindowResize() {
     updateReflectionSettings();
 }
 
-function animate() {
-    requestAnimationFrame(animate);
-    updateFPS();
-    controls.update();
-    const activeCamera = getActiveCamera();
-    renderer.render(scene, activeCamera);
-}
 
 function exportJSON() {
     // Check if images are loaded
     if (imageStack.length === 0) {
-        console.warn('[Export] No images loaded - cannot export empty configuration');
+        logExport.warn(' No images loaded - cannot export empty configuration');
         showToast('⚠️ Load images first', 'warning');
         return;
     }
 
-    console.log('Exporting JSON configuration...');
+    logExport.info('Exporting JSON configuration...');
 
     // Collect configuration
     const config = {
@@ -3203,16 +3144,16 @@ function exportJSON() {
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
 
-    console.log(`JSON exported successfully as ${link.download}`);
+    logExport.info(`JSON exported successfully as ${link.download}`);
 }
 
 function importJSON(file) {
     if (!file) {
-        console.error('No file provided for import');
+        logExport.error('No file provided for import');
         return;
     }
 
-    console.log(`Importing JSON configuration from ${file.name}...`);
+    logExport.info(`Importing JSON configuration from ${file.name}...`);
 
     const reader = new FileReader();
 
@@ -3278,23 +3219,23 @@ function importJSON(file) {
 
                     scene.add(mesh);
 
-                    console.log(`Loaded ${imageConfig.filename} from config`);
+                    logExport.info(`Loaded ${imageConfig.filename} from config`);
                 });
             });
 
             // Refresh Tweakpane to show updated params
             pane.refresh();
 
-            console.log('JSON configuration imported successfully');
+            logExport.info('JSON configuration imported successfully');
 
         } catch (error) {
-            console.error('Failed to import JSON:', error);
+            logExport.error('Failed to import JSON:', error);
             alert(`Failed to import configuration: ${error.message}`);
         }
     };
 
     reader.onerror = function(error) {
-        console.error('Failed to read JSON file:', error);
+        logExport.error('Failed to read JSON file:', error);
     };
 
     reader.readAsText(file);
@@ -3303,12 +3244,12 @@ function importJSON(file) {
 function copyJSON() {
     // Check if images are loaded
     if (imageStack.length === 0) {
-        console.warn('[Export] No images loaded - cannot copy empty configuration');
+        logExport.warn(' No images loaded - cannot copy empty configuration');
         showToast('⚠️ Load images first', 'warning');
         return;
     }
 
-    console.log('Copying JSON configuration to clipboard...');
+    logExport.info('Copying JSON configuration to clipboard...');
 
     // Build config object (same as exportJSON)
     const config = {
@@ -3353,16 +3294,16 @@ function copyJSON() {
     // Copy to clipboard
     const json = JSON.stringify(config, null, 2);
     navigator.clipboard.writeText(json).then(() => {
-        console.log('JSON configuration copied to clipboard');
+        logExport.info('JSON configuration copied to clipboard');
         showToast('📋 Configuration copied to clipboard!', 'success');
     }).catch(err => {
-        console.error('Failed to copy to clipboard:', err);
+        logExport.error('Failed to copy to clipboard:', err);
         showToast('⚠️ Failed to copy to clipboard', 'warning');
     });
 }
 
 function pasteJSON() {
-    console.log('Pasting JSON configuration from clipboard...');
+    logExport.info('Pasting JSON configuration from clipboard...');
 
     navigator.clipboard.readText().then(text => {
         try {
@@ -3430,7 +3371,7 @@ function pasteJSON() {
 
                     scene.add(mesh);
                     updateImageList();
-                    console.log(`Loaded ${imageConfig.filename} from clipboard`);
+                    logExport.info(`Loaded ${imageConfig.filename} from clipboard`);
                     emitStackUpdated('imported');
                 });
             });
@@ -3438,15 +3379,15 @@ function pasteJSON() {
             // Refresh Tweakpane
             pane.refresh();
 
-            console.log('JSON configuration pasted successfully');
+            logExport.info('JSON configuration pasted successfully');
             alert('Configuration pasted from clipboard!');
 
         } catch (error) {
-            console.error('Failed to parse JSON from clipboard:', error);
+            logExport.error('Failed to parse JSON from clipboard:', error);
             alert(`Failed to paste configuration: ${error.message}`);
         }
     }).catch(err => {
-        console.error('Failed to read from clipboard:', err);
+        logExport.error('Failed to read from clipboard:', err);
         alert('Failed to read from clipboard. Check console for details.');
     });
 }

@@ -1,9 +1,47 @@
 // this_file: src/core/AppState.js
 /**
  * Lightweight mutable state container with a predictable API.
- * Keeps track of an initial snapshot so keys can be reset when required.
+ *
+ * Manages application state with built-in reset functionality. Tracks
+ * initial values to enable state rollback. Provides specialized methods
+ * for common state operations (merge, push, filter).
+ *
+ * @class AppState
+ * @example
+ * // Create with initial state
+ * const state = new AppState({
+ *   count: 0,
+ *   user: { name: 'Alice' },
+ *   items: ['a', 'b']
+ * });
+ *
+ * @example
+ * // Basic get/set
+ * state.set('count', 5);
+ * state.get('count'); // => 5
+ *
+ * @example
+ * // Merge objects
+ * state.mergeInto('user', { age: 30 });
+ * state.get('user'); // => { name: 'Alice', age: 30 }
+ *
+ * @example
+ * // Array operations
+ * state.pushTo('items', 'c');
+ * state.removeFrom('items', item => item === 'b');
+ * state.get('items'); // => ['a', 'c']
+ *
+ * @example
+ * // Reset state
+ * state.reset('count'); // Reset single key
+ * state.reset();        // Reset all keys
  */
 export class AppState {
+    /**
+     * Create a new AppState instance.
+     *
+     * @param {Object} [initialState={}] - Initial state values
+     */
     constructor(initialState = {}) {
         this._initial = new Map();
         this._state = new Map();

@@ -1,0 +1,47 @@
+# NPM Package Exclusions
+# Exclude development files from npm package to reduce size
+
+# Test files
+tests/
+*.test.js
+test-results/
+coverage/
+.nyc_output/
+
+# Documentation (already on GitHub Pages)
+docs/
+*.md
+!README.md
+
+# Development files
+.github/
+.git/
+.vscode/
+*.bak
+*.bak*
+
+# Build configuration
+vite.config.js
+playwright.config.js
+.eslintrc*
+.prettierrc*
+
+# Dependencies (users will install their own)
+node_modules/
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Environment files
+.env
+.env.*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+tmp/
+temp/

@@ -3,21 +3,48 @@
   "version": "0.1.0",
   "description": "Browser-based tool for arranging PNG images along Z-axis in 3D space with Three.js",
   "type": "module",
+  "main": "./src/main.js",
+  "module": "./src/main.js",
+  "exports": {
+    ".": "./src/main.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "src",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build --outDir docs",
     "preview": "vite preview",
     "test": "npm run test:unit && playwright test",
-    "test:unit": "node --test"
+    "test:unit": "node --test",
+    "test:coverage": "c8 --reporter=text --reporter=html --reporter=lcov npm run test:unit",
+    "test:coverage:check": "c8 --check-coverage --lines 80 --functions 80 --branches 75 npm run test:unit",
+    "clean": "rm -rf docs/assets coverage .nyc_output test-results playwright-report && echo 'Cleaned: docs/assets, coverage, test-results'",
+    "help": "echo '\n=== Vexy Stax JS - Available Commands ===\nnpm run dev          → Start dev server (http://localhost:5173)\nnpm run build        → Build for production (outputs to docs/)\nnpm run preview      → Preview production build\nnpm test             → Run all tests (unit + E2E)\nnpm run test:unit    → Run unit tests only (208 tests)\nnpm run test:coverage → Generate coverage reports (coverage/index.html)\nnpm run test:coverage:check → Enforce 80% coverage thresholds\nnpm run clean        → Remove build artifacts and coverage reports\n'"
   },
   "keywords": [
     "threejs",
     "3d",
     "image-stack",
-    "visualization"
+    "visualization",
+    "webgl",
+    "image-layers"
   ],
   "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/vexyart/vexy-stax-js.git"
+  },
+  "homepage": "https://vexyart.github.io/vexy-stax-js/",
+  "bugs": {
+    "url": "https://github.com/vexyart/vexy-stax-js/issues"
+  },
   "dependencies": {
     "@kitschpatrol/tweakpane-plugin-essentials": "^0.2.2-beta.3",
     "gsap": "^3.13.0",
@@ -27,6 +54,18 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "c8": "^10.1.3",
     "vite": "^7.1.12"
+  },
+  "c8": {
+    "exclude": [
+      "tests/**",
+      "docs/**",
+      "node_modules/**",
+      "*.config.js",
+      "coverage/**"
+    ],
+    "all": true,
+    "src": "src"
   }
 }

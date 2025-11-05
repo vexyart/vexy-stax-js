@@ -2,57 +2,94 @@
 
 ## [Unreleased]
 
-### Phase 3: Documentation & Code Quality - 2025-11-05
-- **JSDoc annotations** (~300 lines): All constants documented with types, defaults, units, ranges, examples
-- **Immutability tests** (+17 tests): Validates Object.freeze() on all constant objects/arrays
-- **Memory leak audit**: Confirmed ZERO leaks - all 11 event listeners properly tracked and cleaned up
-- **Tests**: 110/110 passing (+17), build: 1,149.47 kB ✅
+### Phase 4: Modularization & Quality - 2025-11-05
 
-### UI & Ambient Mode - 2025-11-04
-- **Ambient mode fixes**: Removed floor rendering, fixed color washout (removed emissive properties, envMapIntensity 0.55→0.0)
-- **UI polish**: Floor transparency 32%→1%, narrower left panel (240px→120px), dark theme (#38383d/#29292e)
-- **Tests**: 93/93 passing ✅
+**Module Extraction**:
+- RenderLoop.js: 244 lines extracted (animation loop, FPS monitoring), integrated into main.js (-88 lines, 3,455→3,367)
+- +20 tests, comprehensive JSDoc with usage examples
 
-### Quality Rounds 1-3 - 2025-11-04
-- **Tests added**: Scene managers (8), helpers (20), CameraAnimator (10), error recovery (23) = +61 tests
-- **Modules created**: SceneManager, LightingManager, FloorManager (758 lines extracted)
-- **Utilities**: src/utils/helpers.js with validation, calculations, cloning
-- **Defensive checks**: Added to all manager modules
-- **Tests**: 93/93 passing ✅
+**Documentation**:
+- JSDoc: 5 core utilities (AppState, EventBus, sharedState, studioSizing, ordering) with examples
+- Metadata: this_file comments (32/32 files), npm help command (208 tests), package.json metadata, .npmignore
+- README: Compressed from 888→194 lines (-78%, now meets <200 line guideline), comprehensive test guide
+- LICENSE: Added copyright notice "Copyright 2025 Adam Twardoch / VexyArt" (was placeholder)
+- DEPENDENCIES.md: All 8 packages documented (5 prod + 3 dev) with why chosen, key features
+- Cleanup: npm run clean script, removed 21 backup files + 7 obsolete/duplicate docs (-119K total), enhanced .gitignore
+  - Obsolete docs removed (Iteration 23): STATUS.md, REFACTOR_PLAN.md, QUICKSTART.md (-51K)
+  - Duplicate AI instruction files removed (Iteration 24): AGENTS.md, GEMINI.md, LLXPRT.md, QWEN.md (-68K)
+- Cross-platform: .gitattributes for consistent LF line endings (complements .editorconfig)
 
-### Retina & Layout - 2025-11-05
-- **Retina sizing**: src/core/studioSizing.js handles DPR-aware rendering
-- **3-column layout**: Thumbnail strip left, studio center, Tweakpane right
-- **Drag/drop**: Global window-level file drop support
-- **Tests**: 32/32 passing ✅
+**Code Quality** (Iterations 13-24):
+- Constants: Added 7 new constants (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), eliminated 25 magic numbers
+- Analysis: main_js_complexity.md (77 functions, 1 >50 lines, complexity hotspots documented)
+- Templates: main_js_jsdoc_templates.md (18 function templates with @param/@returns/examples)
+- Metadata: this_file tracking added to all 31 files (30 source + 1 config)
+- Work history: Tasks 17-28 (Iterations 13-25) fully documented in WORK.md
+- Documentation sync: README compressed 888→194 lines, npm help updated to 208 tests, LICENSE copyright added
+- PLAN.md alignment: Updated Phase 4 status with 25 iterations complete
+- Release preparation: Added v0.2.0 checklist with quality metrics and release notes template
+- Robustness verification: WebGL context recovery, resource cleanup, input validation (Iteration 19)
+- Package configuration: npm entry points (main, module, exports, files), .editorconfig (Iteration 21)
 
-### Code Foundation - 2025-11-04
-- **Constants**: Extracted lighting/floor/retry config to src/core/constants.js
-- **EventBus**: Added EVENTS registry with emit helpers for background/stack/camera changes
-- **SharedState**: src/core/sharedState.js for singleton references (scene, cameras, renderer, etc.)
-- **Tests**: 24/24 passing ✅
+**Testing** (+98 tests: 110→208):
+- Validation: +22 tests (AppState/EventBus/sharedState edge cases, null/undefined/empty inputs)
+- Config: +8 tests (material/viewpoint presets, shader constants, lighting ranges)
+- Helpers: +14 edge cases (calculateLuminance, clamp, lerp, formatFileSize, deepClone, generateId)
+- Error messages: +9 tests (function name prefixes, TypeError/RangeError consistency)
+- Immutability: +5 deep freeze tests (MAIN_LIGHT, FILL_LIGHT, HEMISPHERE, FLOOR_BASE_MATERIAL, EVENTS)
+- Helper coverage: +5 tests (getAdaptiveFloorColor, debounce) → helpers.js 100% coverage
+- Logger: +4 tests (prefix validation)
+- New constants: +5 tests (TOAST_DURATION values/types, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB)
+- Untested constants: +6 tests (FILE_SIZE_*, MAX_HISTORY, FPS_WARNING_THRESHOLD, MEMORY_WARNING_COOLDOWN, FLOOR_*, REFLECTION_*, MAX_LOAD_RETRIES, MAX_DIMENSION_PX, DEBOUNCE_DELAY_MS)
+- Coverage: c8 tool, thresholds 80/80/75%, HTML/text/lcov reports
 
-### Camera & Export - 2025-11-04
-- **Camera modes**: Perspective, Orthographic, Isometric, Telephoto with FOV/zoom/distance controls
-- **Viewpoints**: 7 presets (Beauty, Center, Front, Top, Isometric, 3D Stack, Side)
-- **Front viewpoint fix**: Now uses canvas dimensions (not slide size) for correct framing
-- **Export**: PNG 1x/2x/4x, transparent background, JSON save/load, clipboard copy/paste
-- **Ambience**: Soft reflections (custom shader), VSM shadows, PMREM environment, adaptive floor color
+**Logging** (144 of 145 migrated to logger, 99.3%):
+- logger.js utility with createLogger(), 19 module loggers
+- Migration: 145→7 actual console calls (main.js logger migration complete, RenderLoop uses console for debug output)
+- Modules: Init, Lighting, Floor, Images, Camera, UI, API, File, Export, Cleanup, WebGL, Memory, History, Resize, Retry, Validation, Keyboard, Debug API, Settings
+- Remaining: 7 intentional console calls (1 user-facing help(), 6 RenderLoop debug with [RenderLoop] prefix)
+- Note: 38 console calls in JSDoc examples (not actual code)
 
-### UI Organization - 2025-11-04
-- **Tweakpane structure**: Tabbed interface (File/Image/Video), separate Studio/Camera folders
-- **Image management**: Drag/drop, multi-file, thumbnail list, reordering, individual delete
-- **Controls**: Compact layout with collapsed folders
+**Build Status**:
+- Tests: 208/208 passing ✅ (+98 from baseline of 110)
+- Build: 1,143.27 kB (stable across all iterations)
+- Coverage: helpers.js 100%, core 96.41%, utils 97.22%
+- Main.js: 3,367 lines (-88 from original 3,455)
+- Quality iterations: 25 complete
+- File tracking: 32/32 files with this_file comments (30 source + 2 config)
+- Documentation: README 194 lines (was 888, -78%), LICENSE copyright, all dependencies documented, obsolete/duplicate docs removed (16→9 files, -119K total)
+- Code robustness: WebGL recovery verified, resource cleanup confirmed, input validation audited
+- Constant coverage: All 36 exported constants now have validation tests
+- Package ready: npm entry points configured, .editorconfig for code style consistency
 
-### Initial Release - 2025-11-04
-- **Core**: Three.js r181, Tweakpane 4.0.5, Vite 7.1.12
-- **Scene**: WebGL renderer, OrbitControls, material presets (10 variants)
-- **Images**: Multi-file loading, auto-scaling, Z-stack positioning
-- **Build**: 1,141-1,149 kB bundle, ES modules
+## [0.1.0] - 2025-11-05
 
-## Technical Notes
-- **Test framework**: Node.js built-in test runner
-- **Build tool**: Vite with ES modules
-- **WebGL**: Context loss recovery, alpha channel, high-DPI support
-- **Memory**: Event listener tracking, resource cleanup on beforeunload
-- **Architecture**: ES6 classes, modular structure, EventBus communication
+### Phase 3: Documentation & Code Quality ✅
+- JSDoc: Full type annotations for constants.js (~300 lines)
+- Tests: +17 immutability tests for Object.freeze() validation
+- Memory: Zero leaks confirmed - all 11 event listeners tracked/cleaned
+- Result: 110/110 tests passing, 1,149 kB build
+
+### Phase 2: UI & Ambient Mode ✅
+- Ambient: Removed floor rendering, fixed color washout (envMapIntensity 0.0)
+- UI: Dark theme (#38383d/#29292e), floor 1% opacity, 120px left panel
+- Result: 93/93 tests passing
+
+### Phase 1: Core Refactoring ✅
+- Modules: SceneManager, LightingManager, FloorManager (758 lines extracted)
+- Tests: +61 tests (scene:8, helpers:20, camera:10, recovery:23)
+- Utils: src/utils/helpers.js (validation, calculations, cloning)
+- Layout: 3-column (thumbnails, studio, controls), DPR-aware retina sizing
+- Core: constants.js, EventBus, sharedState.js (singleton references)
+
+### Initial Features ✅
+- Camera: 4 modes (Perspective, Ortho, Iso, Telephoto), 7 viewpoint presets
+- Export: PNG 1x/2x/4x, JSON with base64, clipboard support, transparent BG
+- Materials: 10 PBR presets, custom shader reflections, VSM shadows
+- UI: Tweakpane tabs (File/Image/Video), drag/drop, thumbnail reordering
+- Stack: Three.js r181, Tweakpane 4.0.5, Vite 7.1.12
+
+### Technical
+- Tests: Node.js test runner, 110/110 unit tests passing
+- Build: Vite ES modules, 1,149 kB bundle
+- WebGL: Context recovery, alpha channel, high-DPI, tracked event cleanup
