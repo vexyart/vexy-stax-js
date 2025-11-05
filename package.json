@@ -48,7 +48,14 @@
     "image-layers",
     "3d-graphics",
     "image-viewer",
-    "browser-based"
+    "browser-based",
+    "png-export",
+    "image-export",
+    "camera-animation",
+    "pbr-materials",
+    "3d-renderer",
+    "interactive-3d",
+    "tweakpane"
   ],
   "author": "Adam Twardoch <adam+npm@twardoch.com> (https://twardoch.github.io/)",
   "license": "Apache-2.0",

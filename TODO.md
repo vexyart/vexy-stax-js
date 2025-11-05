@@ -9,13 +9,13 @@
 **Main.js**: 3,367 lines (was 3,455, -88 lines)
 **Documentation**: README 194 lines + all 8 dependencies documented + 52/52 files with this_file comments (43 source/test + 9 dot files) + obsolete docs removed (16→9 files, -119K total) + BROWSER_COMPATIBILITY.md (227 lines) + PERFORMANCE.md (400+ lines) + helpers.js JSDoc complete + .documentation-index.md complete (31 files)
 **Logging**: 144 console calls migrated to logger (19 loggers, 7 intentional console calls: 1 user-facing + 6 debug)
-**Quality**: 82 quality improvement iterations complete ✅
+**Quality**: 83 quality improvement iterations complete ✅
 **Package**: npm-ready with 9 keywords, sideEffects:false, entry points, .editorconfig, .gitattributes, .nvmrc, .node-version, cleanup script, LICENSE + 100% SPDX headers, comprehensive docs, audit scripts, CONTRIBUTING.md, git commit template
 **Coverage**: helpers.js 100% (was 94.14%), core 96.41%, utils 97.22%
 **Constants**: 7 new constants added (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), 25 magic numbers eliminated + 10 Iteration 73 constants validated
-**Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-82 committed and pushed
+**Git**: v0.2.0 deployed to GitHub Pages, Iterations 30-83 committed and pushed
 **CI**: Automated tests, security audit (npm audit), lockfile verification, optimal fail-fast strategy verified
-**Current Focus**: Iterations 81-82 complete (documentation index, example validation, documentation verification), ready for Iteration 83
+**Current Focus**: Iteration 83 complete (status sync, markdown header consistency, project statistics), ready for Iteration 84
 
 ---
 
@@ -1816,6 +1816,73 @@ Reduce main.js from 3,367 lines to <300 lines by extracting modules
 **Git Commit**: Pending
 **Files Updated**: 8 (TODO.md, PLAN.md, CHANGELOG.md, WORK.md + 5 dot files with header fixes)
 **Impact**: Complete documentation synchronization, consistent markdown headers across all 35 files, comprehensive project statistics baseline established
+
+---
+
+## Iteration 84: Documentation Accuracy & Package Optimization ✅ COMPLETE
+
+### Task 1: Update Current Status sections to reflect Iteration 83 completion ✅
+**Date**: 2025-11-05 | **Git Commit**: Pending
+
+**Updates Made**:
+- Updated TODO.md Current Status: 82 → 83 iterations, git range 30-82 → 30-83
+- Updated PLAN.md Phase 4 status: 82 → 83 iterations
+- Updated CHANGELOG.md Build Status: 82 → 83 complete with detailed notes
+- Updated WORK.md Current Status: 82 → 83 iterations, updated current focus
+
+**Result**: All documentation synchronized to reflect Iteration 83 completion
+
+---
+
+### Task 2: Fix .ui-guide.md keyboard shortcuts to match actual implementation ✅
+**Date**: 2025-11-05 | **Git Commit**: Pending
+
+**Problem Identified in Iteration 82**:
+- .ui-guide.md documented ~30 keyboard shortcuts (lines 8-86)
+- Actual implementation in main.js only has 6 shortcuts
+
+**Actual Shortcuts** (from main.js keydownHandler):
+1. `?` or `/` - Show help
+2. `Esc` - Cancel animation or close help
+3. `Ctrl/Cmd + E` - Export PNG
+4. `Ctrl/Cmd + Z` - Undo
+5. `Ctrl/Cmd + Shift + Z` - Redo
+6. `Ctrl/Cmd + Delete/Backspace` - Clear all
+
+**Changes Made**:
+- Replaced lines 8-86 with accurate 6-shortcut documentation
+- Added version note: "As of v0.2.0, only 6 keyboard shortcuts are implemented"
+- Created "Future Shortcuts" section documenting ~24 planned but unimplemented shortcuts
+- Added guidance to use Tweakpane UI for other functionality
+
+**Result**: .ui-guide.md now accurately reflects actual implementation with clear distinction between current and planned features
+
+---
+
+### Task 3: Expand package.json keywords with feature-specific terms ✅
+**Date**: 2025-11-05 | **Git Commit**: Pending
+
+**Before**: 9 keywords (threejs, 3d, image-stack, visualization, webgl, image-layers, 3d-graphics, image-viewer, browser-based)
+
+**Added**: 7 new feature-specific keywords
+- png-export
+- image-export
+- camera-animation
+- pbr-materials
+- 3d-renderer
+- interactive-3d
+- tweakpane
+
+**After**: 16 keywords total (well under npm's 20 keyword limit)
+
+**Result**: Enhanced npm discoverability with accurate feature-specific terms
+
+---
+
+**Test Results**: 227/227 passing ✅ (663ms runtime)
+**Build**: Not tested (documentation and metadata changes only)
+**Files Updated**: 5 (TODO.md, PLAN.md, CHANGELOG.md, WORK.md, .ui-guide.md, package.json)
+**Impact**: Documentation accuracy improved (keyboard shortcuts fixed), package discoverability enhanced (16 keywords)
 
 ---
 
