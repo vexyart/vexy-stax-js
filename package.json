@@ -1,6 +1,6 @@
 {
   "name": "vexy-stax-js",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Browser-based tool for arranging PNG images along Z-axis in 3D space with Three.js",
   "type": "module",
   "main": "./src/main.js",

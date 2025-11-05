@@ -1,8 +1,8 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.0] - 2025-11-05
 
-### Phase 4: Modularization & Quality - 2025-11-05
+### Phase 4: Modularization & Quality
 
 **Module Extraction**:
 - RenderLoop.js: 244 lines extracted (animation loop, FPS monitoring), integrated into main.js (-88 lines, 3,455→3,367)
