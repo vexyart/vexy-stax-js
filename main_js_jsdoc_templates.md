@@ -1,7 +1,4 @@
----
-this_file: main_js_jsdoc_templates.md
----
-
+# <!-- this_file: main_js_jsdoc_templates.md -->
 # main.js JSDoc Templates
 
 **Purpose**: JSDoc templates for the 18 most important functions in main.js

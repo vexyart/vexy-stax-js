@@ -1,7 +1,4 @@
----
-this_file: main_js_complexity.md
----
-
+# <!-- this_file: main_js_complexity.md -->
 # main.js Complexity Analysis
 
 **Generated**: 2025-11-05
