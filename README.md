@@ -54,7 +54,7 @@ Creates **3D visualizations of image stacks** with Z-axis depth positioning:
 - **Three.js r181**: WebGL 3D rendering with PBR materials
 - **Tweakpane 4.0.5**: Parameter controls UI
 - **GSAP**: Camera animations
-- **Vite 7.1.12**: Dev server + bundler
+- **Vite 7.2.0**: Dev server + bundler
 
 **Build**: ES modules, 1,143 kB bundle
 **Tests**: 227/227 passing, 96%+ coverage on core utilities
