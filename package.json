@@ -27,7 +27,7 @@
     "clean": "rm -rf docs/assets coverage .nyc_output test-results playwright-report && echo 'Cleaned: docs/assets, coverage, test-results'",
     "audit:deps": "npm outdated && npm audit",
     "audit:size": "npm run build && du -sh docs/assets/*.js docs/assets/*.css | sort -h",
-    "help": "echo '\n=== Vexy Stax JS - Available Commands ===\nnpm run dev          → Start dev server (http://localhost:5173)\nnpm run build        → Build for production (outputs to docs/)\nnpm run preview      → Preview production build\nnpm test             → Run all tests (unit + E2E)\nnpm run test:unit    → Run unit tests only (218 tests)\nnpm run test:coverage → Generate coverage reports (coverage/index.html)\nnpm run test:coverage:check → Enforce 80% coverage thresholds\nnpm run clean        → Remove build artifacts and coverage reports\nnpm run audit:deps   → Check for outdated/vulnerable dependencies\nnpm run audit:size   → Analyze bundle size breakdown\n'"
+    "help": "echo '\n=== Vexy Stax JS - Available Commands ===\n\nRequirements: Node.js >=18.0.0, npm >=9.0.0\n\nnpm run dev          → Start dev server (http://localhost:5173)\nnpm run build        → Build for production (outputs to docs/)\nnpm run preview      → Preview production build\nnpm test             → Run all tests (unit + E2E)\nnpm run test:unit    → Run unit tests only (218 tests)\nnpm run test:coverage → Generate coverage reports (coverage/index.html)\nnpm run test:coverage:check → Enforce 80% coverage thresholds\nnpm run clean        → Remove build artifacts and coverage reports\nnpm run audit:deps   → Check for outdated/vulnerable dependencies\nnpm run audit:size   → Analyze bundle size breakdown\n'"
   },
   "keywords": [
     "threejs",
@@ -46,6 +46,10 @@
   "homepage": "https://vexyart.github.io/vexy-stax-js/",
   "bugs": {
     "url": "https://github.com/vexyart/vexy-stax-js/issues"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
   },
   "dependencies": {
     "@kitschpatrol/tweakpane-plugin-essentials": "^0.2.2-beta.3",
