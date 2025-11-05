@@ -3,77 +3,23 @@
 
 ## [0.2.0] - 2025-11-05
 
-### Phase 5: main.js Decomposition
-- Introduced `src/files/FileHandler.js` to own drag/drop + browse intake with injected callbacks, size/type checks, and memory gating; rewired `src/main.js` to delegate validation and removed duplicate logic. Added `tests/files_file_handler.test.js` (4 tests) raising total to 231/231 green via `npm run test:unit`.
-- Extracted mesh lifecycle into `src/core/SceneComposition.js`, delegating clear/delete/reorder/material preset logic away from `src/main.js`; added `tests/core_scene_composition.test.js` (4 tests) bringing the suite to 235/235 passing after `npm run test:unit`.
+### Verification
+- `npm run test:unit` → 235/235 passing (Node 22, 2025-11-05); bundle steady at 1,142.72 kB (±0.1 % across 98 iterations, -0.67 kB from vite 7.2.0 upgrade); coverage holds at helpers.js 100 %, core 96.41 %, utils 97.22 %; WebGL recovery, resource cleanup, and API input validation reconfirmed.
+
+### Phase 5 – main.js Decomposition
+- Added `src/files/FileHandler.js` to own drag/drop + browse intake with injected callbacks, size/type validation, and memory gating, removing duplicate logic from `src/main.js`; shipped `tests/files_file_handler.test.js` (+4 tests, suite total 231/231 green via `npm run test:unit`).
+- Extracted mesh lifecycle management into `src/core/SceneComposition.js` handling clear/delete/reorder/material presets; added `tests/core_scene_composition.test.js` (+4 tests, suite total 235/235 green via `npm run test:unit`).
 
 ### Bug Fixes
-- Restored drag-and-drop slide loading after RenderLoop extraction by reinstating FPS overlay state tracking in `src/main.js`; `npm run test:unit` (227 tests) passing.
+- Restored drag-and-drop slide loading after RenderLoop extraction by reinstating FPS overlay state tracking inside `src/main.js`; regression verified with `npm run test:unit` (227 tests at time of fix).
 
-### Phase 4: Modularization & Quality
-
-**Module Extraction**:
-- RenderLoop.js: 244 lines extracted (animation loop, FPS monitoring), integrated into main.js (-88 lines, 3,455→3,367)
-- +20 tests, comprehensive JSDoc with usage examples
-
-**Documentation**:
-- JSDoc: 5 core utilities (AppState, EventBus, sharedState, studioSizing, ordering) with examples
-- Metadata: this_file comments (43/43 files), npm help command (218 tests), package.json metadata, .npmignore
-- README: Compressed from 888→194 lines (-78%, now meets <200 line guideline), comprehensive test guide
-- LICENSE: Added copyright notice "Copyright 2025 Adam Twardoch / VexyArt" (was placeholder)
-- DEPENDENCIES.md: All 8 packages documented (5 prod + 3 dev) with why chosen, key features
-- BROWSER_COMPATIBILITY.md: Comprehensive browser requirements (227 lines) - Chrome 90+, Edge 90+, Firefox 88+, Safari 14+, WebGL 1.0, ES6+ modules, all required APIs
-- PERFORMANCE.md: Comprehensive performance guide (400+ lines) - monitoring tools, optimization techniques, troubleshooting, benchmarks, developer tips, performance checklist
-- Cleanup: npm run clean script, removed 21 backup files + 7 obsolete/duplicate docs (-119K total), enhanced .gitignore
-  - Obsolete docs removed (Iteration 23): STATUS.md, REFACTOR_PLAN.md, QUICKSTART.md (-51K)
-  - Duplicate AI instruction files removed (Iteration 24): AGENTS.md, GEMINI.md, LLXPRT.md, QWEN.md (-68K)
-- Cross-platform: .gitattributes for consistent LF line endings (complements .editorconfig)
-
-**Code Quality** (Iterations 13-24):
-- Constants: Added 7 new constants (TOAST_DURATION_*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), eliminated 25 magic numbers
-- Analysis: main_js_complexity.md (77 functions, 1 >50 lines, complexity hotspots documented)
-- Templates: main_js_jsdoc_templates.md (18 function templates with @param/@returns/examples)
-- Metadata: this_file tracking added to all 31 files (30 source + 1 config)
-- Work history: Tasks 17-28 (Iterations 13-25) fully documented in WORK.md
-- Documentation sync: README compressed 888→194 lines, npm help updated to 208 tests, LICENSE copyright added
-- PLAN.md alignment: Updated Phase 4 status with 25 iterations complete
-- Release preparation: Added v0.2.0 checklist with quality metrics and release notes template
-- Robustness verification: WebGL context recovery, resource cleanup, input validation (Iteration 19)
-- Package configuration: npm entry points (main, module, exports, files), .editorconfig (Iteration 21)
-
-**Testing** (+108 tests: 110→218):
-- Validation: +22 tests (AppState/EventBus/sharedState edge cases, null/undefined/empty inputs)
-- Config: +8 tests (material/viewpoint presets, shader constants, lighting ranges)
-- Helpers: +14 edge cases (calculateLuminance, clamp, lerp, formatFileSize, deepClone, generateId)
-- Error messages: +9 tests (function name prefixes, TypeError/RangeError consistency)
-- Immutability: +5 deep freeze tests (MAIN_LIGHT, FILL_LIGHT, HEMISPHERE, FLOOR_BASE_MATERIAL, EVENTS)
-- Helper coverage: +5 tests (getAdaptiveFloorColor, debounce) → helpers.js 100% coverage
-- Logger: +4 tests (prefix validation)
-- New constants: +5 tests (TOAST_DURATION values/types, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB)
-- Untested constants: +6 tests (FILE_SIZE_*, MAX_HISTORY, FPS_WARNING_THRESHOLD, MEMORY_WARNING_COOLDOWN, FLOOR_*, REFLECTION_*, MAX_LOAD_RETRIES, MAX_DIMENSION_PX, DEBOUNCE_DELAY_MS)
-- API input validation: +10 tests (exportPNG scale validation, showFPS boolean handling, importJSON validation, extreme values, string coercion attacks, NaN edge case)
-- Coverage: c8 tool, thresholds 80/80/75%, HTML/text/lcov reports
-
-**Logging** (144 of 145 migrated to logger, 99.3%):
-- logger.js utility with createLogger(), 19 module loggers
-- Migration: 145→7 actual console calls (main.js logger migration complete, RenderLoop uses console for debug output)
-- Modules: Init, Lighting, Floor, Images, Camera, UI, API, File, Export, Cleanup, WebGL, Memory, History, Resize, Retry, Validation, Keyboard, Debug API, Settings
-- Remaining: 7 intentional console calls (1 user-facing help(), 6 RenderLoop debug with [RenderLoop] prefix)
-- Note: 38 console calls in JSDoc examples (not actual code)
-
-**Build Status**:
-- Tests: 227/227 passing ✅ (+117 from baseline of 110, includes 5 integration tests)
-- Build: 1,142.72 kB (stable, improved -0.67 kB from vite 7.2.0 upgrade)
-- Coverage: helpers.js 100%, core 96.41%, utils 97.22%
-- Main.js: 3,367 lines (-88 from original 3,455)
-- Quality iterations: 98 complete ✅ **Phase 4 COMPLETE** (Iterations 89-98: documentation sync & project health dashboard, documentation completeness & cleanup, end-of-Phase-4 comprehensive metrics baseline, post-Phase-4 quality maintenance with vite 7.2.0 upgrade and test documentation timestamps, project health dashboard updates to Iteration 92, documentation synchronization for Iterations 93-94, final documentation verification with .documentation-index.md and README.md vite version update, Iteration 96: Post-Phase-4 project health verification with package.json validation/test performance baseline/git repository health, Iteration 97: Documentation & Code Quality Refinements with test file timestamp verification/markdown audit/.gitattributes consistency, Iteration 98: Project Health Dashboard & Documentation Maintenance with .project-health.md update to Iteration 97/24 dot files verified with this_file headers/.keyboard-shortcuts-reference.md added to file tree/all 13 npm scripts tested functional)
-- File tracking: 52/52 files with this_file comments (43 source/test + 9 dot documentation files)
-- Test suites: 16 suites with comprehensive JSDoc headers documenting purpose and scope
-- Documentation: README 194 lines (was 888, -78%), LICENSE copyright, all dependencies documented, BROWSER_COMPATIBILITY.md (227 lines), PERFORMANCE.md (400+ lines), obsolete/duplicate docs removed (16→9 files, -119K total)
-- Code robustness: WebGL recovery verified, resource cleanup confirmed, input validation audited, API input validation comprehensive
-- Constant coverage: All 36 exported constants now have validation tests
-- Package ready: npm entry points configured, .editorconfig for code style consistency
-- Recent improvements (Iterations 76-79): Documentation verification, 4 example JSON files added, 9 dot documentation files tracked, git synchronization (pushed to origin), build artifacts updated (index-D0H6xQ20.js)
+### Phase 4 – Modularization & Quality
+- **Module extraction**: Moved animation loop and FPS monitoring into `src/core/RenderLoop.js` (244 lines), shrinking `src/main.js` 3,455→3,367 (-88) and adding 20 dedicated tests plus usage-oriented JSDoc.
+- **Documentation**: Authored full JSDoc (with examples and @throws) for `AppState`, `EventBus`, `sharedState`, `studioSizing`, `ordering`; ensured `this_file` metadata across 43/43 source/test files plus 9 dotfiles; expanded npm help command docs (218 tests), package.json metadata, and `.npmignore`; compressed README 888→194 lines (-78 %); updated LICENSE with “Copyright 2025 Adam Twardoch / VexyArt”; recorded rationale for all 8 dependencies (5 prod, 3 dev) in `DEPENDENCIES.md`; published `BROWSER_COMPATIBILITY.md` (227-line requirements for Chrome 90+/Edge 90+/Firefox 88+/Safari 14+, WebGL 1.0, ES6 modules) and `PERFORMANCE.md` (400+ lines covering monitoring, optimisation, troubleshooting, benchmarks, checklist); added `npm run clean`; deleted 21 backup files plus STATUS.md, REFACTOR_PLAN.md, QUICKSTART.md, AGENTS.md, GEMINI.md, LLXPRT.md, QWEN.md (total -119 KB) and hardened `.gitignore`; introduced `.gitattributes` enforcing LF line endings.
+- **Code quality (Iterations 13–24)**: Added constants TOAST_DURATION_INFO/SUCCESS/WARNING/ERROR, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB (removing 25 magic numbers); produced `main_js_complexity.md` (77 functions, single >50-line handler) and `main_js_jsdoc_templates.md` (18 templates with @param/@returns/examples); extended `this_file` tracking to all 31 monitored files; logged WORK.md tasks 17–28; resynchronised documentation (README compression, npm help 208 tests, LICENSE update); aligned PLAN.md with Phase 4 progress; drafted v0.2.0 release checklist with metrics + notes template; revalidated WebGL recovery, resource cleanup, input validation (Iteration 19); configured npm entry points (main, module, exports, files) and `.editorconfig` guidelines (Iteration 21).
+- **Testing (+108, 110→218)**: Added +22 validation tests (AppState/EventBus/sharedState null/undefined/empty guards), +8 configuration tests (material/viewpoint presets, shader constants, lighting ranges), +14 helper tests (calculateLuminance, clamp, lerp, formatFileSize, deepClone, generateId), +9 error-message tests (function prefixes, TypeError/RangeError consistency), +5 immutability tests (MAIN_LIGHT, FILL_LIGHT, HEMISPHERE, FLOOR_BASE_MATERIAL, EVENTS), +5 helper coverage tests (getAdaptiveFloorColor, debounce → helpers.js 100 %), +4 logger prefix tests, +5 new-constant tests (TOAST_DURATION*, CAMERA_FAR_PLANE, Z_INDEX_MODAL, BYTES_PER_MB), +6 formerly untested constant checks (FILE_SIZE_*, MAX_HISTORY, FPS_WARNING_THRESHOLD, MEMORY_WARNING_COOLDOWN, FLOOR_*, REFLECTION_*, MAX_LOAD_RETRIES, MAX_DIMENSION_PX, DEBOUNCE_DELAY_MS), +10 API guard tests (exportPNG scale/type validation, showFPS boolean coercion, importJSON structure/extreme values/NaN handling); enforced c8 thresholds 80/80/75 with HTML/text/lcov output.
+- **Logging (99.3 % migrated)**: Introduced `src/utils/logger.js` with `createLogger()` powering 19 module loggers (Init, Lighting, Floor, Images, Camera, UI, API, File, Export, Cleanup, WebGL, Memory, History, Resize, Retry, Validation, Keyboard, Debug API, Settings); reduced console usage 145→7 (1 public help overlay, 6 `[RenderLoop]` debug statements); preserved 38 console calls within documentation examples only.
+- **Build & project health**: Maintained 227/227 passing tests (+117 vs. baseline 110, including 5 integration suites); tracked main.js at 3,367 lines; completed 98 quality iterations covering documentation synchronisation, project health dashboards, vite 7.2.0 upgrade verification, timestamp audits, `.documentation-index` alignment, README vite version update, package.json validation, test performance baseline, git hygiene, `.gitattributes` enforcement, `.keyboard-shortcuts` reference; ensured 52/52 files include `this_file`; documented 16 test suites with descriptive JSDoc headers; confirmed README 194 lines, BROWSER/PERFORMANCE guides published, legacy docs trimmed (16→9, -119 KB); revalidated WebGL recovery, resource disposal, and input validation; guaranteed all 36 exported constants have direct tests; finalised npm export map + `.editorconfig`; Iterations 76–79 added documentation verification, four example JSON assets, nine tracked dot-docs, git sync, and refreshed build artefact `index-D0H6xQ20.js`.
 
 ## [0.1.0] - 2025-11-05
 

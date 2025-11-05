@@ -8,11 +8,6 @@
 - Documentation: JSDoc templates ready for 18 public functions (main_js_jsdoc_templates.md).
 
 ## Phase 5: main.js Decomposition – Action Items
-- [x] Document shared callback/state contracts in WORK.md before moving UI bindings.
-- [x] Extract drag/drop + browse flow into `src/files/FileHandler.js` with validation and memory checks.
-- [x] Add focused unit tests for FileHandler covering type/size validation and memory threshold warnings.
-- [x] Move texture/mesh stack logic into `src/core/SceneComposition.js`; keep cleanup and reorder safeguards.
-- [x] Add integration tests for SceneComposition covering add/reorder/clear scenarios.
 - [] Introduce `src/export/ExportManager.js` for PNG/JSON/clipboard routines with dependency injection.
 - [] Add unit tests for ExportManager enforcing scale bounds and JSON round-trip.
 - [] Carve out camera mode + viewpoint logic into `src/camera/CameraController.js` with animator hooks.
