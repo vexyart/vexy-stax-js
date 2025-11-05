@@ -6,9 +6,9 @@
 **Tests**: 218/218 passing ✅ (+108 from baseline: 20 RenderLoop + 22 validation + 4 logger + 8 config + 14 helpers + 9 error messages + 5 deep freeze + 5 helpers coverage + 5 new constants + 6 untested constants + 10 API input validation)
 **Build**: 1,143.27 kB ✅
 **Main.js**: 3,367 lines (-88 from 3,455) → Target: <300 lines (Phase 5)
-**Completed**: 30 iterations (Iteration 30: API validation + browser compatibility + performance docs) ✅
-**Git**: v0.2.0 deployed, Iteration 30 ready for commit
-**Current Focus**: 30 iterations complete | All small-scale quality improvements exhausted
+**Completed**: 31 iterations (Iteration 31: Documentation accuracy fixes) ✅
+**Git**: v0.2.0 deployed, Iterations 30-31 committed and pushed
+**Current Focus**: Continuing small-scale quality improvements
 
 ---
 
@@ -1245,5 +1245,33 @@ console.error(`[Validation] Unsupported file type...`)
 
 ---
 
+### Task 34: Documentation Accuracy Fixes (Iteration 31) ✅
+**Status**: Complete
+**Date**: 2025-11-05
+
+**Task 1: Verify package.json help command accuracy** ✅
+- Checked npm run help output - showed "208 tests" (outdated)
+- Updated to "218 tests" in package.json line 28
+- **Result**: npm run help now correctly shows 218 tests
+
+**Task 2: Add this_file comments to new documentation files** ✅
+- Verified BROWSER_COMPATIBILITY.md already has this_file comment
+- Verified PERFORMANCE.md already has this_file comment
+- All documentation files have consistent tracking
+- **Result**: Already complete - both files created with this_file comments in Iteration 30
+
+**Task 3: Update CHANGELOG.md with Iteration 30 details** ✅
+- Verified CHANGELOG reflects all Iteration 30 changes
+- Confirmed iteration count is accurate (30 complete)
+- Confirmed test count matches (218/218)
+- **Result**: Already accurate - updated in Iteration 30
+
+**Test Results**: 218/218 passing ✅ (+0 tests - documentation fixes only)
+**Build**: 1,143.27 kB (stable)
+**Files Updated**: 2 files (package.json, TODO.md)
+**Impact**: Developer documentation now accurate, npm run help shows correct test count
+
+---
+
 **Last Updated**: 2025-11-05
-**Current Focus**: 30 iterations complete | All small-scale quality improvements exhausted | Ready for Phase 5 or new direction
+**Current Focus**: 31 iterations complete | Continuing small-scale quality improvements
