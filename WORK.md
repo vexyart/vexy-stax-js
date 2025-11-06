@@ -20,6 +20,14 @@
 ## Notes
 - Historical iteration logs archived in CHANGELOG.md for reference.
 
+## Iteration 116 – TODO audit (2025-11-06)
+- Confirmed Phase 5 camera/canvas automation tasks already implemented via `DEFAULT_CANVAS_SIZE`, `CameraController.setBeautyViewpoint`, `CameraController.setViewpointFitToFrame`, `CameraAnimator.playHeroShot`, and `window.__vexyStaxAutomation`.
+- Cleared `TODO.md`, adding `this_file` metadata and removing completed backlog entries.
+- No functional changes required; documentation reflects current state.
+
+### Tests
+- Not run (documentation-only adjustments; no runtime code affected).
+
 ## Iteration 115 – Loader/Logging Tidy (2025-11-06)
 - Target: `RetryingTextureLoader` constructor validation for `scheduleRetry` option (+unit test).
 - Target: zero-delay retry branch coverage in `tests/files_texture_loader.test.js`.

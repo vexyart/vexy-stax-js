@@ -1,4 +1,5 @@
 # <!-- this_file: TODO.md -->
-# Tasks
+# TODO
 
-_No open tasks. Update PLAN.md before adding new TODO entries._
+No open tasks. Track future actionable items here once identified.
+
