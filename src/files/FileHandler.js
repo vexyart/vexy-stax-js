@@ -165,7 +165,7 @@ export class FileHandler {
         }
 
         if (invalidCount > 0) {
-            this.logValidation.warn(` ${invalidCount} file(s) rejected, ${validCount} accepted`);
+            this.logValidation.warn(`${invalidCount} file(s) rejected, ${validCount} accepted`);
         }
     }
 

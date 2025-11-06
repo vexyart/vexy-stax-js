@@ -23,6 +23,12 @@ const greenImage = {
   buffer: loadFixtureBuffer('green.png'),
 };
 
+function fixtureToDataURL(filename, mimeType) {
+  const buffer = loadFixtureBuffer(filename);
+  const base64 = buffer.toString('base64');
+  return `data:${mimeType};base64,${base64}`;
+}
+
 async function captureCanvasMetrics(page) {
   return page.evaluate(() => {
     const canvas = document.getElementById('canvas');
@@ -141,5 +147,26 @@ test.describe('Manual QA checklist automation', () => {
     const tooltipText = await thumbnails.nth(0).getAttribute('title');
     expect(tooltipText).toMatch(/green\.png/);
     expect(tooltipText).toMatch(/1×1px/);
+  });
+});
+
+test('automation bridge exposes slide/viewpoint/heroShot controls', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#canvas');
+
+  await page.waitForFunction(() => typeof window.__vexyStaxAutomation !== 'undefined');
+
+  const dataURL = fixtureToDataURL('red.png', 'image/png');
+
+  await page.evaluate(async ({ dataURL }) => {
+    await window.__vexyStaxAutomation.addSlideFromDataURL(dataURL, 'automation-red.png');
+  }, { dataURL });
+
+  const stackCount = await page.evaluate(() => window.vexyStax.getImageStack().length);
+  expect(stackCount).toBe(1);
+
+  await page.evaluate(async () => {
+    await window.__vexyStaxAutomation.setViewpointPreset('beauty');
+    await window.__vexyStaxAutomation.playHeroShot({ duration: 0.05, holdTime: 0.01, easing: 'linear' });
   });
 });

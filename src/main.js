@@ -15,10 +15,12 @@ import { MemoryMonitor } from './memory/MemoryMonitor.js';
 import { ExportManager } from './export/ExportManager.js';
 import { createLogger } from './utils/logger.js';
 import { FileHandler } from './files/FileHandler.js';
+import { RetryingTextureLoader } from './files/TextureLoader.js';
 import { TweakpaneSetup } from './ui/TweakpaneSetup.js';
 import { setupKeyboardShortcuts } from './ui/KeyboardShortcuts.js';
 import { createToastService } from './ui/ToastService.js';
 import { createSettingsManager } from './settings/SettingsManager.js';
+import { HistoryManager } from './history/HistoryManager.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
@@ -83,6 +85,9 @@ let sceneComposition; // Manages image stack meshes
 let fileHandler = null; // Handles file intake (browse + drag/drop)
 let exportManager = null; // Manages PNG/JSON exports and imports
 let keyboardShortcuts = null; // Handles keyboard shortcut wiring
+const FRONT_VIEW_PADDING = 1.1;
+const BEAUTY_VIEW_PADDING = 1.35;
+const BEAUTY_CAMERA_DIRECTION = new THREE.Vector3(-0.82, -0.18, 1).normalize();
 // Lighting and environment
 let ambientLight, mainLight, fillLight;
 let floorGroup = null;
@@ -99,6 +104,7 @@ let eventListeners = [];
 // History management for undo/redo
 let historyStack = [];
 let historyIndex = -1;
+let historyManager = null;
 
 // FPS monitor tracking
 let showFPSEnabled = false;
@@ -175,6 +181,15 @@ storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
 appState.set('cameraMode', cameraMode);
 appState.set('memoryState', { lastMemoryWarning: 0 });
 
+historyManager = new HistoryManager({
+    maxSize: MAX_HISTORY,
+    captureState: captureHistorySnapshot,
+    applyState: applyHistorySnapshot,
+    onStackChange: handleHistoryStackChange,
+    logger: logHistory,
+    showToast
+});
+
 // UI
 let pane;
 
@@ -193,6 +208,13 @@ function emitStackUpdated(reason) {
         count: imageStack.length,
         filenames: imageStack.map((image) => image.filename)
     });
+}
+
+function handleHistoryStackChange(index, stack) {
+    historyIndex = typeof index === 'number' ? index : -1;
+    historyStack = Array.isArray(stack) ? stack.slice() : [];
+    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
+    storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
 }
 
 function emitCameraUpdated(reason) {
@@ -1008,7 +1030,9 @@ function exposeDebugAPI() {
                     topSlide,
                     canvasSize: params.canvasSize,
                     duration,
-                    easing
+                    easing,
+                    imageStack,
+                    holdTime: config.holdTime
                 });
                 logAPI.info(' Animation complete');
             } catch (error) {
@@ -1380,19 +1404,10 @@ function checkMemoryUsage(isAdding = false) {
     return memoryMonitor.checkMemoryUsage(isAdding);
 }
 
-/**
- * Save current image stack state to history
- * Called before any modification (add, delete, reorder)
- */
-function saveHistory() {
-    // Remove any redo states (history after current index)
-    historyStack = historyStack.slice(0, historyIndex + 1);
-    storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
-
-    // Create deep copy of current state
-    const state = {
+function captureHistorySnapshot() {
+    return {
         timestamp: Date.now(),
-        images: imageStack.map(img => ({
+        images: imageStack.map((img) => ({
             filename: img.filename,
             width: img.width,
             height: img.height,
@@ -1404,127 +1419,96 @@ function saveHistory() {
             mesh: img.mesh
         }))
     };
-
-    historyStack.push(state);
-    historyIndex++;
-    storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
-    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
-
-    // Limit history size
-    if (historyStack.length > MAX_HISTORY) {
-        historyStack.shift();
-        historyIndex--;
-        storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
-        storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
-    }
-
-    logHistory.info(` Saved state (${historyIndex + 1}/${historyStack.length})`);
 }
 
-/**
- * Undo the most recent change in the image stack history.
- * @returns {void}
- *
- * @example
- * undo();
- */
+function clearCurrentImageStack() {
+    if (!scene) {
+        return;
+    }
+    imageStack.forEach((img) => {
+        scene.remove(img.mesh);
+        img.mesh.geometry.dispose();
+        img.mesh.material.dispose();
+        if (img.mesh.material.map) {
+            img.mesh.material.map.dispose();
+        }
+    });
+    imageStack.length = 0;
+    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
+}
+
+function restoreImageStackFromSnapshot(images) {
+    if (!scene || !Array.isArray(images)) {
+        return;
+    }
+    images.forEach((img) => {
+        imageStack.push({
+            filename: img.filename,
+            width: img.width,
+            height: img.height,
+            originalWidth: img.originalWidth,
+            originalHeight: img.originalHeight,
+            thumbnailSrc: img.thumbnailSrc,
+            texture: img.texture,
+            mesh: img.mesh
+        });
+        scene.add(img.mesh);
+        if (img.position) {
+            img.mesh.position.copy(img.position);
+        }
+    });
+}
+
+function applyHistorySnapshot(state, meta = {}) {
+    if (!state || !Array.isArray(state.images)) {
+        logHistory.warn(' History snapshot missing images; skipping apply');
+        return;
+    }
+
+    clearCurrentImageStack();
+    restoreImageStackFromSnapshot(state.images);
+    updateImageList();
+
+    const stackSize = historyManager ? historyManager.size() : historyStack.length;
+    if (meta.action === 'undo') {
+        logHistory.info(` Undo to state ${meta.index + 1}/${stackSize}`);
+    } else if (meta.action === 'redo') {
+        logHistory.info(` Redo to state ${meta.index + 1}/${stackSize}`);
+    }
+
+    if (meta.action) {
+        emitStackUpdated(meta.action);
+    }
+}
+
+function saveHistory() {
+    if (!historyManager) {
+        logHistory.warn(' HistoryManager not initialised; skipping capture');
+        return;
+    }
+    const snapshot = historyManager.capture();
+    if (snapshot === null) {
+        return;
+    }
+    const index = historyManager.getIndex();
+    const size = historyManager.size();
+    logHistory.info(` Saved state (${index + 1}/${size})`);
+}
+
 function undo() {
-    if (historyIndex <= 0) {
-        logHistory.info(' Nothing to undo');
-        showToast('⚠️ Nothing to undo', 'warning');
+    if (!historyManager) {
+        logHistory.warn(' HistoryManager not initialised; cannot undo');
         return;
     }
-
-    historyIndex--;
-    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
-    const state = historyStack[historyIndex];
-
-    // Clear current stack
-    imageStack.forEach(img => {
-        scene.remove(img.mesh);
-        img.mesh.geometry.dispose();
-        img.mesh.material.dispose();
-        // Dispose texture to prevent memory leak
-        if (img.mesh.material.map) {
-            img.mesh.material.map.dispose();
-        }
-    });
-    imageStack.length = 0;
-    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
-
-    // Restore previous state
-    state.images.forEach(img => {
-        imageStack.push({
-            filename: img.filename,
-            width: img.width,
-            height: img.height,
-            originalWidth: img.originalWidth,
-            originalHeight: img.originalHeight,
-            thumbnailSrc: img.thumbnailSrc,
-            texture: img.texture,
-            mesh: img.mesh
-        });
-        scene.add(img.mesh);
-        img.mesh.position.copy(img.position);
-    });
-
-    updateImageList();
-    logHistory.info(` Undo to state ${historyIndex + 1}/${historyStack.length}`);
-    emitStackUpdated('undo');
-    showToast('↶ Undo applied', 'success');
+    historyManager.undo();
 }
 
-/**
- * Redo the next change in the history stack after an undo.
- * @returns {void}
- *
- * @example
- * redo();
- */
 function redo() {
-    if (historyIndex >= historyStack.length - 1) {
-        logHistory.info(' Nothing to redo');
-        showToast('⚠️ Nothing to redo', 'warning');
+    if (!historyManager) {
+        logHistory.warn(' HistoryManager not initialised; cannot redo');
         return;
     }
-
-    historyIndex++;
-    storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
-    const state = historyStack[historyIndex];
-
-    // Clear current stack
-    imageStack.forEach(img => {
-        scene.remove(img.mesh);
-        img.mesh.geometry.dispose();
-        img.mesh.material.dispose();
-        // Dispose texture to prevent memory leak
-        if (img.mesh.material.map) {
-            img.mesh.material.map.dispose();
-        }
-    });
-    imageStack.length = 0;
-    storeSharedRef(SHARED_STATE_KEYS.imageStack, imageStack);
-
-    // Restore next state
-    state.images.forEach(img => {
-        imageStack.push({
-            filename: img.filename,
-            width: img.width,
-            height: img.height,
-            originalWidth: img.originalWidth,
-            originalHeight: img.originalHeight,
-            thumbnailSrc: img.thumbnailSrc,
-            texture: img.texture,
-            mesh: img.mesh
-        });
-        scene.add(img.mesh);
-        img.mesh.position.copy(img.position);
-    });
-
-    updateImageList();
-    logHistory.info(` Redo to state ${historyIndex + 1}/${historyStack.length}`);
-    emitStackUpdated('redo');
-    showToast('↷ Redo applied', 'success');
+    historyManager.redo();
 }
 
 /**
@@ -1574,6 +1558,7 @@ function setupTweakpane() {
             toggleAmbience,
             centerViewOnContent,
             setViewpoint,
+            setBeautyViewpoint,
             setViewpointFitToFrame,
             switchCameraMode,
             updateZoom,
@@ -1893,50 +1878,205 @@ function setViewpointFitToFrame() {
         return;
     }
 
+    params.viewpointPreset = 'front';
+
     if (imageStack.length === 0) {
-        // Default front view if no images
-        setViewpoint(0, 0, 800);
+        setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
         return;
     }
 
-    // Get frontmost slide (last in stack)
     const frontSlide = imageStack[imageStack.length - 1];
-    if (!frontSlide) {
+    const mesh = frontSlide?.mesh;
+    if (!mesh) {
         logCamera.error('No front slide found despite non-empty imageStack');
-        setViewpoint(0, 0, 800);
+        setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
         return;
     }
 
-    // Calculate camera distance to fit studio canvas (not slide) in frame
-    // The viewport should show the entire studio canvas size at the frontmost slide position
-    const fov = params.cameraFOV * (Math.PI / 180); // Convert to radians
-    const canvasHeight = params.canvasSize.y;
-    const canvasWidth = params.canvasSize.x;
+    const box = new THREE.Box3().setFromObject(mesh);
+    if (box.isEmpty()) {
+        logCamera.warn('Front slide bounding box empty, falling back to default viewpoint');
+        setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
+        return;
+    }
 
-    // Calculate distance needed to fit canvas height in frame
-    const distanceForHeight = (canvasHeight / 2) / Math.tan(fov / 2);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const width = size.x || 1;
+    const height = size.y || 1;
 
-    // Calculate distance needed to fit canvas width in frame
-    const aspect = camera.aspect; // Actual viewport aspect ratio
-    const visibleHeightAtDistance = 2 * Math.tan(fov / 2) * distanceForHeight;
-    const visibleWidthAtDistance = visibleHeightAtDistance * aspect;
+    const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
+    const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
+    const halfVerticalTan = Math.max(Math.tan(fov / 2), 1e-6);
+    const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
+    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
 
-    // Adjust if canvas width exceeds visible width
-    const distanceForWidth = canvasWidth > visibleWidthAtDistance ?
-        (canvasWidth / 2) / (Math.tan(fov / 2) * aspect) :
-        distanceForHeight;
+    const distanceForHeight = (height / 2) / halfVerticalTan;
+    const distanceForWidth = (width / 2) / halfHorizontalTan;
+    const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
+    const distance = Math.max(desiredDistance * FRONT_VIEW_PADDING, CAMERA_MIN_DISTANCE);
+    const position = new THREE.Vector3(center.x, center.y, center.z + distance);
 
-    // Use the larger distance to ensure both dimensions fit
-    const distance = Math.max(distanceForHeight, distanceForWidth) * 1.05; // 5% padding
-
-    // Position camera at front of slide stack
-    const frontSlideZ = frontSlide.mesh.position.z;
-    camera.position.set(0, 0, frontSlideZ + distance);
-    camera.lookAt(0, 0, frontSlideZ);
-    controls.target.set(0, 0, frontSlideZ);
+    camera.position.copy(position);
+    camera.lookAt(center);
+    controls.target.copy(center);
     controls.update();
 
-    logCamera.info(`Front view: fitted studio canvas ${canvasWidth}×${canvasHeight}px at distance ${distance.toFixed(1)} from slide`);
+    logCamera.info(`Front view: centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
+        + `with width ${width.toFixed(1)}, height ${height.toFixed(1)}, distance ${distance.toFixed(1)}`);
+    emitCameraUpdated('viewpoint');
+}
+
+/**
+ * Set viewpoint to a dynamic three-quarter "beauty" angle.
+ */
+function setBeautyViewpoint() {
+    if (cameraController) {
+        cameraController.setBeautyViewpoint();
+        return;
+    }
+
+    params.viewpointPreset = 'beauty';
+
+    if (imageStack.length === 0) {
+        setViewpoint(-1280, -40, 1400);
+        return;
+    }
+
+    const box = new THREE.Box3();
+    imageStack.forEach((entry) => {
+        if (entry?.mesh) {
+            box.expandByObject(entry.mesh);
+        }
+    });
+
+    if (box.isEmpty()) {
+        setViewpoint(-1280, -40, 1400);
+        return;
+    }
+
+    const center = box.getCenter(new THREE.Vector3());
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+
+    const radius = Math.max(sphere.radius, 1);
+    const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
+    const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
+    const halfVerticalTan = Math.max(Math.tan(fov / 2), 1e-6);
+    const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
+    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
+
+    const distanceForHeight = radius / halfVerticalTan;
+    const distanceForWidth = radius / halfHorizontalTan;
+    const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
+    const distance = Math.max(desiredDistance * BEAUTY_VIEW_PADDING, CAMERA_MIN_DISTANCE * 2);
+
+    const offset = BEAUTY_CAMERA_DIRECTION.clone().multiplyScalar(distance);
+    const position = center.clone().add(offset);
+
+    camera.position.copy(position);
+    camera.lookAt(center);
+    controls.target.copy(center);
+    controls.update();
+
+    logCamera.info(`Beauty view: centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
+        + `radius ${radius.toFixed(1)}, distance ${distance.toFixed(1)}`);
+    emitCameraUpdated('viewpoint');
+}
+
+function setupPlaywrightBridge() {
+    if (typeof window === 'undefined') {
+        return;
+    }
+
+    const automation = {
+        async addSlideFromDataURL(dataURL, filename = 'playwright-slide.png') {
+            if (typeof dataURL !== 'string' || dataURL.length === 0) {
+                throw new Error('addSlideFromDataURL requires a base64 data URL string');
+            }
+            const response = await fetch(dataURL);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch slide data (status ${response.status})`);
+            }
+            const blob = await response.blob();
+            const type = blob.type || 'image/png';
+            const file = new File([blob], filename, { type });
+            const initialCount = imageStack.length;
+            await new Promise((resolve, reject) => {
+                const unsubscribe = eventBus.once(EVENTS.stackUpdated, () => {
+                    if (imageStack.length > initialCount) {
+                        resolve();
+                    } else {
+                        resolve();
+                    }
+                });
+                try {
+                    loadImage(file);
+                } catch (error) {
+                    unsubscribe();
+                    reject(error);
+                }
+            });
+        },
+        async addSlides(slides = []) {
+            for (const slide of slides) {
+                await automation.addSlideFromDataURL(slide?.dataURL, slide?.filename);
+            }
+        },
+        async setViewpointPreset(preset) {
+            const key = preset;
+            if (key === 'beauty') {
+                setBeautyViewpoint();
+                return;
+            }
+            if (key === 'front') {
+                setViewpointFitToFrame();
+                return;
+            }
+            if (key === 'center' || preset === null) {
+                centerViewOnContent();
+                return;
+            }
+            const presetConfig = VIEWPOINT_PRESETS[key];
+            if (presetConfig === 'fitToFrame') {
+                setViewpointFitToFrame();
+                return;
+            }
+            if (presetConfig && typeof presetConfig === 'object') {
+                setViewpoint(presetConfig.x, presetConfig.y, presetConfig.z);
+                return;
+            }
+            if (Array.isArray(preset) && preset.length === 3) {
+                setViewpoint(preset[0], preset[1], preset[2]);
+                return;
+            }
+            if (typeof preset === 'object' && preset) {
+                const { x = 0, y = 0, z = CAMERA_DEFAULT_DISTANCE } = preset;
+                setViewpoint(x, y, z);
+                return;
+            }
+            throw new Error(`Unknown viewpoint preset: ${preset}`);
+        },
+        async playHeroShot(options = {}) {
+            if (!cameraAnimator) {
+                throw new Error('Camera animator not initialized');
+            }
+            const topSlide = imageStack[imageStack.length - 1];
+            if (!topSlide) {
+                throw new Error('No slides available for hero shot');
+            }
+            await cameraAnimator.playHeroShot({
+                topSlide,
+                canvasSize: params.canvasSize,
+                duration: options.duration ?? params.animDuration,
+                easing: options.easing ?? params.animEasing,
+                imageStack,
+                holdTime: options.holdTime
+            });
+        }
+    };
+
+    window.__vexyStaxAutomation = automation;
 }
 
 /**
@@ -1978,55 +2118,34 @@ function loadImage(file) {
     reader.onload = function(event) {
         const dataURL = event.target.result;
 
-        // Load texture with retry logic
-        loadTextureWithRetry(dataURL, file.name, 0);
-    };
-
-    /**
-     * Load texture with exponential backoff retry
-     * @param {string} dataURL - Data URL of the image
-     * @param {string} filename - Original filename for error messages
-     * @param {number} attempt - Current attempt number (0-based)
-     */
-    function loadTextureWithRetry(dataURL, filename, attempt) {
-        const textureLoader = new THREE.TextureLoader();
-        textureLoader.load(
-            dataURL,
-            function(texture) {
-                // Success callback
-                // Validate image dimensions
+        const retryingLoader = new RetryingTextureLoader({
+            createLoader: () => new THREE.TextureLoader(),
+            maxRetries: MAX_LOAD_RETRIES,
+            retryDelays: RETRY_DELAYS_MS,
+            logRetry,
+            scheduleRetry: (callback, delay) => setTimeout(callback, delay),
+            showToast,
+            toastDurationError: TOAST_DURATION_ERROR,
+            onTextureLoaded: (texture) => {
                 const img = texture.image;
 
-                if (img.width > MAX_DIMENSION_PX || img.height > MAX_DIMENSION_PX) {
-                    logValidation.warn(`Warning: Image ${filename} has large dimensions (${img.width}x${img.height}). Max recommended: ${MAX_DIMENSION_PX}px.`);
-                    showToast(`⚠️ Large dimensions: ${filename} (${img.width}x${img.height}px). May render slowly`, 'warning', TOAST_DURATION_WARNING);
+                if (img?.width > MAX_DIMENSION_PX || img?.height > MAX_DIMENSION_PX) {
+                    logValidation.warn(
+                        `Warning: Image ${file.name} has large dimensions (${img?.width}x${img?.height}). Max recommended: ${MAX_DIMENSION_PX}px.`
+                    );
+                    showToast(
+                        `⚠️ Large dimensions: ${file.name} (${img?.width}x${img?.height}px). May render slowly`,
+                        'warning',
+                        TOAST_DURATION_WARNING
+                    );
                 }
 
-                if (attempt > 0) {
-                    logRetry.info(`Successfully loaded ${filename} on attempt ${attempt + 1}`);
-                }
-
-                sceneComposition?.addImage(texture, filename);
-            },
-            undefined,
-            function(error) {
-                // Error callback - retry or fail
-                if (attempt < MAX_LOAD_RETRIES) {
-                    const delay = RETRY_DELAYS_MS[attempt];
-                    logRetry.warn(`Failed to load ${filename} (attempt ${attempt + 1}/${MAX_LOAD_RETRIES + 1}). Retrying in ${delay}ms...`, error);
-
-                    setTimeout(() => {
-                        loadTextureWithRetry(dataURL, filename, attempt + 1);
-                    }, delay);
-                } else {
-                    // All retries exhausted
-                    logRetry.error(`Failed to load ${filename} after ${MAX_LOAD_RETRIES + 1} attempts:`, error);
-                    showToast(`❌ Failed to load: ${filename}. Check file is valid`, 'error', TOAST_DURATION_ERROR);
-                }
+                sceneComposition?.addImage(texture, file.name);
             }
-        );
-    }
+        });
 
+        retryingLoader.load(dataURL, file.name);
+    };
     reader.onerror = function(error) {
         logFile.error(`Failed to read file ${file.name}:`, error);
         showToast(`❌ Failed to read file: ${file.name}`, 'error', TOAST_DURATION_ERROR);
@@ -2332,3 +2451,4 @@ function pasteJSON() {
 
 // Initialize when DOM is ready
 init();
+setupPlaywrightBridge();

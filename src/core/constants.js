@@ -8,6 +8,11 @@ import * as THREE from 'three';
  * @type {number}
  * @constant
  * @default 10
+ * @example
+ * historyStates.push(snapshot);
+ * if (historyStates.length > MAX_HISTORY) {
+ *     historyStates.shift(); // Drop oldest state to respect undo limit
+ * }
  */
 export const MAX_HISTORY = 10;
 
@@ -17,6 +22,10 @@ export const MAX_HISTORY = 10;
  * @constant
  * @default 30
  * @unit frames per second
+ * @example
+ * if (stats.fps < FPS_WARNING_THRESHOLD) {
+ *     ui.showFpsWarning(stats.fps);
+ * }
  */
 export const FPS_WARNING_THRESHOLD = 30;
 
@@ -162,6 +171,14 @@ export const DEFAULT_BG_COLOR = '#000000';
  * @unit pixels
  */
 export const DEFAULT_Z_SPACING = 100;
+
+/**
+ * Default studio canvas dimensions (HD 16:9 quarter resolution).
+ * @type {{x: number, y: number}}
+ * @constant
+ * @default {x: 960, y: 540}
+ */
+export const DEFAULT_CANVAS_SIZE = Object.freeze({ x: 960, y: 540 });
 
 /**
  * Z-index for modal overlays and UI elements
@@ -313,6 +330,9 @@ export const RETRY_DELAYS_MS = Object.freeze([500, 1500, 3000]);
  * @default 150
  * @unit milliseconds
  * @description Prevents excessive recalculations during window resize
+ * @example
+ * const debouncedResize = debounce(rebuildLayout, DEBOUNCE_DELAY_MS);
+ * window.addEventListener('resize', debouncedResize);
  */
 export const DEBOUNCE_DELAY_MS = 150;
 
@@ -601,7 +621,7 @@ export const SoftReflectorShader = {
  * @type {Object}
  * @private
  * @constant
- * @property {Object} canvasSize - Canvas dimensions (x:1920, y:1080)
+ * @property {Object} canvasSize - Canvas dimensions (x:960, y:540)
  * @property {string} bgColor - Background color hex (#000000 = black)
  * @property {boolean} transparentBg - Transparent background toggle (false)
  * @property {boolean} ambience - Ambient mode toggle (false)
@@ -621,7 +641,7 @@ export const SoftReflectorShader = {
  * @description Master template for default studio parameters
  */
 const PARAM_TEMPLATE = {
-    canvasSize: { x: 1920, y: 1080 },
+    canvasSize: { ...DEFAULT_CANVAS_SIZE },
     bgColor: '#000000',
     transparentBg: false,
     ambience: false,

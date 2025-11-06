@@ -27,31 +27,18 @@ Maintain a browser-based Three.js studio that stacks 2D artwork with accurate co
 3. Apply JSDoc templates (and extend where gaps remain) so every exported function in new modules ships with examples and type hints.
 4. Maintain current test count (294) and performance baselines; prevent regression in memory watchdogs or export fidelity.
 
-### Completed Workstreams
-- **File Handling (`src/files/FileHandler.js`)**: Drag/drop + browse intake orchestrated with validation + memory gating; unit tests (`tests/files_file_handler.test.js`) ensure oversize/type thresholds and warning surfaces.
-- **Scene Composition (`src/core/SceneComposition.js`)**: Mesh lifecycle, material presets, reorder/clear safeguards extracted; integration tests (`tests/core_scene_composition.test.js`) confirm add/reorder/clear flows.
-- **Export Manager (`src/export/ExportManager.js`)**: PNG/JSON export, clipboard copy, and JSON import isolated with dependency injection; unit suite (`tests/export_export_manager.test.js`) verifies scale sanitisation, overlay cleanup, config serialisation, clipboard writes, and import application.
-- **Camera Controller (`src/camera/CameraController.js`)**: Delegated mode switching, telephoto configuration, zoom synchronisation, centering, and viewpoint helpers; new suite (`tests/camera_camera_controller.test.js`) covers mode toggles, telephoto FOV enforcement, zoom sync, bounding-box centering, and `setViewpointFitToFrame` fallback branches; `src/main.js` now calls the controller with temporary fallbacks slated for deletion after UI extraction.
-- **Tweakpane UI (`src/ui/TweakpaneSetup.js`)**: Control surface wiring relocated with dependency injection for callbacks, plugins, and DOM helpers; tests (`tests/ui_tweakpane_setup.test.js`) validate plugin registration and camera folder bindings; `src/main.js` now instantiates the module and attaches the resulting pane to the camera controller.
-- **Keyboard Shortcuts (`src/ui/KeyboardShortcuts.js`)**: Help overlay + shortcut handling extracted with dependency injection; tests (`tests/ui_keyboard_shortcuts.test.js`) cover modifier combinations, animation cancellation, and destructive confirmations; `src/main.js` delegates registration/cleanup to the module.
-- **Keyboard Shortcuts Hardening**: Added teardown overlay removal, post-teardown listener cleanup, `/` alias coverage tests, and the Tweakpane Defaults cancel regression test.
-- **Reliability Sweep (CameraController & ExportManager)**: Added regression tests for invalid camera-mode input, orthographic FOV guardrails, and clipboard/import failure handling; `importJSON`/`pasteJSON` now emit error toasts alongside alerts for malformed payloads.
-- **Memory Monitor (`src/memory/MemoryMonitor.js`)**: Refactored memory estimation, warning/critical handling, and FPS overlay updates into an injectable class with dedicated unit coverage.
-- **Toast Service (`src/ui/ToastService.js`)**: Extracted toast creation into a factory with document/timeout injection and tests for styling and dismissal.
-- **Settings Manager (`src/settings/SettingsManager.js`)**: Moved load/save/reset into a modular manager with storage hooks, confirm/alert integration, and regression tests for quota and defaults.
-- **Quality Hardening (2025-11-05)**: Added FileHandler drag/drop overlay depth regression tests, SceneComposition material rebuild + emissive coverage, and MemoryMonitor confirmation + overlay invalidation tests.
-- **Quality Coverage (2025-11-05)**: Added SceneComposition border mesh + thick-material rebuild tests and FileHandler `dataTransfer.types` drag coverage to push unit suite to 294 tests without altering runtime code.
 
 ### Cross-Cutting Tasks
 - Define shared data contracts (callbacks, state fragments) before extraction to avoid circular imports.
 - Introduce façade helpers in main.js during transition so modules can be integrated incrementally.
 - Ensure every relocated function gains a JSDoc block derived from the templates; add missing templates for memory/watchdog helpers as they become module APIs.
 - Update `WORK.md` and docs after each module lands; note test runs (`npm run test:unit` minimum, add targeted unit suites as they appear).
+- Keep `.github/workflows/docs-build.yml` healthy so every push to `main` refreshes `docs/` without triggering recursive runs (guarded via `github.actor` check; baseline run validated 2025-11-07).
 
 ### Acceptance Criteria
 - main.js orchestrates module wiring, public API exposure, and lifecycle only; internal logic resides elsewhere.
 - Each new module ≤250 lines, internally documented, unit-tested, and referenced in `DEPENDENCIES.md` if new packages appear (avoid unless essential).
-- 294/294 tests stay green; add new suites per module.
+- Unit suite stays green via `npm run test:unit`; add new suites per module.
 - Build size remains ≤1,150 kB; memory guard rails continue to emit warnings at 500 MB.
 - Public API signatures unchanged; templates applied so IDE hints remain accurate.
 
@@ -59,6 +46,11 @@ Maintain a browser-based Three.js studio that stacks 2D artwork with accurate co
 1. Confirm callback/state contract documentation in WORK.md reflects FileHandler, SceneComposition, ExportManager, CameraController, and TweakpaneSetup integrations before keyboard extraction.
 2. Extract keyboard shortcut handling and complete final main.js orchestration pass.
 3. Remove temporary camera fallbacks from `src/main.js` once UI/keyboard extractions ship.
+
+### Next Candidates
+1. Integrate `SceneManager`/`LightingManager` modules to replace remaining scene orchestration in `src/main.js`.
+2. Restore Playwright smoke harness and cover hero-shot/regression journeys end-to-end.
+3. Evaluate floor/lighting extraction coverage to ensure disposals align with new manager wiring.
 
 ### Verification Strategy
 - Unit: Dedicated suites per new module.

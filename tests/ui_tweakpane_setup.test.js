@@ -161,7 +161,7 @@ function createDocument({ controlsElement = null } = {}) {
 
 function createSetupContext(overrides = {}) {
     const params = {
-        canvasSize: { x: 1920, y: 1080 },
+        canvasSize: { x: 960, y: 540 },
         bgColor: '#111111',
         transparentBg: false,
         ambience: false,
@@ -179,7 +179,8 @@ function createSetupContext(overrides = {}) {
         switchCameraMode: [],
         updateZoom: [],
         saveSettings: 0,
-        errors: []
+        errors: [],
+        setBeautyViewpoint: 0
     };
 
     const setup = new TweakpaneSetup({
@@ -201,6 +202,7 @@ function createSetupContext(overrides = {}) {
             toggleAmbience: overrides.toggleAmbience ?? (() => {}),
             centerViewOnContent: overrides.centerViewOnContent ?? (() => {}),
             setViewpoint: overrides.setViewpoint ?? (() => {}),
+            setBeautyViewpoint: overrides.setBeautyViewpoint ?? (() => { calls.setBeautyViewpoint += 1; }),
             setViewpointFitToFrame: overrides.setViewpointFitToFrame ?? (() => {}),
             switchCameraMode: (mode) => calls.switchCameraMode.push(mode),
             updateZoom: (value) => calls.updateZoom.push(value),
@@ -280,6 +282,21 @@ test('TweakpaneSetup_cameraBindings_when_changed_then_delegateToCallbacks', () =
     assert.ok(zoomBinding, 'camera zoom binding should exist');
     zoomBinding.handlers.change({ value: 1.8 });
     assert.deepEqual(calls.updateZoom, [1.8], 'updateZoom should receive new value');
+});
+
+test('TweakpaneSetup_cameraBindings_when_beautySelected_then_usesBeautyCallback', () => {
+    const { setup, calls } = createSetupContext();
+    const pane = setup.setup();
+
+    const cameraFolder = pane.folders.find((folder) => folder.config.title === 'Camera');
+    assert.ok(cameraFolder, 'camera folder should be available');
+
+    const viewpointBinding = cameraFolder.bindings.find((binding) => binding.key === 'viewpointPreset');
+    assert.ok(viewpointBinding, 'viewpoint binding should exist');
+
+    viewpointBinding.handlers.change({ value: 'beauty' });
+
+    assert.equal(calls.setBeautyViewpoint, 1, 'beauty selection should invoke setBeautyViewpoint callback once');
 });
 
 test('TweakpaneSetup_jsonGrid_when_openClicked_then_invokesImportCallback', () => {

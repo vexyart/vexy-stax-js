@@ -40,6 +40,7 @@ export class TweakpaneSetup {
             toggleAmbience: callbacks.toggleAmbience ?? noop,
             centerViewOnContent: callbacks.centerViewOnContent ?? noop,
             setViewpoint: callbacks.setViewpoint ?? noop,
+            setBeautyViewpoint: callbacks.setBeautyViewpoint ?? noop,
             setViewpointFitToFrame: callbacks.setViewpointFitToFrame ?? noop,
             switchCameraMode: callbacks.switchCameraMode ?? noop,
             updateZoom: callbacks.updateZoom ?? noop,
@@ -171,7 +172,9 @@ export class TweakpaneSetup {
         }).on('change', (ev) => {
             const presetKey = ev.value;
             const preset = this.viewpointPresets[presetKey];
-            if (preset === null || presetKey === 'center') {
+            if (presetKey === 'beauty') {
+                this.callbacks.setBeautyViewpoint();
+            } else if (preset === null || presetKey === 'center') {
                 this.callbacks.centerViewOnContent();
             } else if (preset === 'fitToFrame' || presetKey === 'front') {
                 this.callbacks.setViewpointFitToFrame();

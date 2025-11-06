@@ -50,7 +50,7 @@ test('createDefaultParams returns a deep clone each call', () => {
     first.canvasSize.x = 123;
     first.materialPreset = 'glass-slide';
 
-    assert.equal(second.canvasSize.x, 1920, 'mutating one instance must not affect another');
+    assert.equal(second.canvasSize.x, 960, 'mutating one instance must not affect another');
     assert.equal(second.materialPreset, 'metallic-card', 'defaults should remain intact on other clones');
 });
 

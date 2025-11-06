@@ -174,6 +174,7 @@ export class SceneComposition {
             return;
         }
 
+        this.saveHistory();
         reorderList(this.imageStack, fromIndex, toIndex);
         this.#reflowZPositions();
         storeSharedRef(SHARED_STATE_KEYS.imageStack, this.imageStack);

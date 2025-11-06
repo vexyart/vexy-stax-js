@@ -1,17 +1,9 @@
 // tests/utils_helpers.test.js
 // this_file: tests/utils_helpers.test.js
 /**
- * Test Suite: Utils - Helpers
- *
- * Purpose: Tests all utility helper functions for validation, calculations,
- * formatting, and data manipulation. Covers luminance calculations, clamping,
- * interpolation, file validation, deep cloning, ID generation, and debouncing.
- *
- * Modules Tested:
- * - src/utils/helpers.js (all exported utility functions)
- *
- * Test Count: 41 tests
- * @lastTested 2025-11-05 (Iteration 92)
+ * Scope: src/utils/helpers.js utilities (luminance, validation, formatting, debounce).
+ * Guarantees: Error messaging stays actionable (Fix hints) and pure helpers remain deterministic.
+ * Notes: 42 focused cases; updated 2025-11-07 after helper messaging hardening.
  */
 
 import { test } from 'node:test';
@@ -51,6 +43,17 @@ test('calculateLuminance throws TypeError for invalid hex color', () => {
     assert.throws(() => calculateLuminance(null), TypeError, 'Should throw TypeError for null');
 });
 
+test('calculateLuminance error includes fix hint', () => {
+    assert.throws(
+        () => calculateLuminance('rgb(0,0,0)'),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should surface TypeError');
+            assert.match(error.message, /Fix:/, 'Error message should provide corrective guidance');
+            return true;
+        }
+    );
+});
+
 test('isValidHexColor accepts valid hex colors', () => {
     assert.strictEqual(isValidHexColor('#000000'), true, 'Should accept 6-digit hex');
     assert.strictEqual(isValidHexColor('#fff'), true, 'Should accept 3-digit hex');
@@ -75,11 +78,50 @@ test('clamp keeps value within range', () => {
 });
 
 test('clamp validates input types', () => {
-    assert.throws(() => clamp('5', 0, 10), TypeError, 'Should throw TypeError for string value');
-    assert.throws(() => clamp(5, '0', 10), TypeError, 'Should throw TypeError for string min');
-    assert.throws(() => clamp(5, 0, '10'), TypeError, 'Should throw TypeError for string max');
-    assert.throws(() => clamp(NaN, 0, 10), TypeError, 'Should throw TypeError for NaN');
-    assert.throws(() => clamp(5, 10, 0), RangeError, 'Should throw RangeError when min > max');
+    assert.throws(
+        () => clamp('5', 0, 10),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for string value');
+            assert.match(error.message, /Fix:/, 'Value error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => clamp(5, '0', 10),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for string min');
+            assert.match(error.message, /Fix:/, 'Min error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => clamp(5, 0, '10'),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for string max');
+            assert.match(error.message, /Fix:/, 'Max error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => clamp(NaN, 0, 10),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for NaN');
+            assert.match(error.message, /Fix:/, 'NaN error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => clamp(5, 10, 0),
+        (error) => {
+            assert.ok(error instanceof RangeError, 'Should throw RangeError when min > max');
+            assert.match(error.message, /Fix:/, 'Range error should include fix hint');
+            return true;
+        }
+    );
 });
 
 test('lerp interpolates correctly', () => {
@@ -95,10 +137,41 @@ test('lerp clamps t to 0-1 range', () => {
 });
 
 test('lerp validates input types', () => {
-    assert.throws(() => lerp('0', 10, 0.5), TypeError, 'Should throw TypeError for string a');
-    assert.throws(() => lerp(0, '10', 0.5), TypeError, 'Should throw TypeError for string b');
-    assert.throws(() => lerp(0, 10, 'half'), TypeError, 'Should throw TypeError for string t');
-    assert.throws(() => lerp(NaN, 10, 0.5), TypeError, 'Should throw TypeError for NaN');
+    assert.throws(
+        () => lerp('0', 10, 0.5),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for string a');
+            assert.match(error.message, /Fix:/, 'a error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => lerp(0, '10', 0.5),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for string b');
+            assert.match(error.message, /Fix:/, 'b error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => lerp(0, 10, 'half'),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for string t');
+            assert.match(error.message, /Fix:/, 't error should include fix hint');
+            return true;
+        }
+    );
+
+    assert.throws(
+        () => lerp(NaN, 10, 0.5),
+        (error) => {
+            assert.ok(error instanceof TypeError, 'Should throw TypeError for NaN');
+            assert.match(error.message, /Fix:/, 'NaN error should include fix hint');
+            return true;
+        }
+    );
 });
 
 test('isValidNumber accepts finite numbers', () => {

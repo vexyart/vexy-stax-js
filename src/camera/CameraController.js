@@ -4,11 +4,16 @@
 import * as THREE from 'three';
 
 import {
-    CAMERA_DEFAULT_DISTANCE
+    CAMERA_DEFAULT_DISTANCE,
+    CAMERA_MIN_DISTANCE,
+    DEFAULT_CANVAS_SIZE
 } from '../core/constants.js';
 
 const TELEPHOTO_FOV = 30;
 const ISOMETRIC_POSITION = new THREE.Vector3(500, 500, 500);
+const FRONT_VIEW_PADDING = 1.1;
+const BEAUTY_VIEW_PADDING = 1.35;
+const BEAUTY_CAMERA_DIRECTION = new THREE.Vector3(-0.82, -0.18, 1).normalize();
 
 function noop() {}
 
@@ -185,36 +190,119 @@ export class CameraController {
      */
     setViewpointFitToFrame() {
         if (!Array.isArray(this.imageStack) || this.imageStack.length === 0) {
-            this.setViewpoint(0, 0, 800);
+            this.params.viewpointPreset = 'front';
+            this.setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
             return;
         }
 
         const frontSlide = this.imageStack[this.imageStack.length - 1];
-        if (!frontSlide?.mesh) {
+        const mesh = frontSlide?.mesh;
+        if (!mesh) {
             this.logCamera?.error?.('No front slide found despite non-empty image stack');
-            this.setViewpoint(0, 0, 800);
+            this.params.viewpointPreset = 'front';
+            this.setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
             return;
         }
 
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (box.isEmpty()) {
+            this.logCamera?.warn?.('Front slide bounding box empty, falling back to default viewpoint');
+            this.params.viewpointPreset = 'front';
+            this.setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
+            return;
+        }
+
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const width = size.x || 1;
+        const height = size.y || 1;
+
         const fovRadians = (this.params.cameraFOV ?? 60) * (Math.PI / 180);
-        const canvasHeight = this.params.canvasSize?.y ?? 1080;
-        const canvasWidth = this.params.canvasSize?.x ?? 1920;
+        const aspect = this.camera.aspect || (
+            (this.params.canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x) /
+            (this.params.canvasSize?.y ?? DEFAULT_CANVAS_SIZE.y)
+        );
 
-        const distanceForHeight = (canvasHeight / 2) / Math.tan(fovRadians / 2);
-        const aspect = this.camera.aspect || (canvasWidth / canvasHeight);
-        const visibleHeightAtDistance = 2 * Math.tan(fovRadians / 2) * distanceForHeight;
-        const visibleWidthAtDistance = visibleHeightAtDistance * aspect;
-        const distanceForWidth = canvasWidth > visibleWidthAtDistance
-            ? (canvasWidth / 2) / (Math.tan(fovRadians / 2) * aspect)
-            : distanceForHeight;
-        const distance = Math.max(distanceForHeight, distanceForWidth) * 1.05;
+        const halfVerticalTan = Math.max(Math.tan(fovRadians / 2), 1e-6);
+        const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
+        const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
 
-        const frontZ = frontSlide.mesh.position.z;
-        this.camera.position.set(0, 0, frontZ + distance);
-        this.camera.lookAt(0, 0, frontZ);
-        this.controls.target.set(0, 0, frontZ);
+        const distanceForHeight = (height / 2) / halfVerticalTan;
+        const distanceForWidth = (width / 2) / halfHorizontalTan;
+        const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
+        const distance = Math.max(desiredDistance * FRONT_VIEW_PADDING, CAMERA_MIN_DISTANCE);
+
+        const position = new THREE.Vector3(center.x, center.y, center.z + distance);
+
+        this.camera.position.copy(position);
+        this.camera.lookAt(center);
+        this.controls.target.copy(center);
         this.controls.update?.();
-        this.logCamera?.info?.(`Front view: fitted studio canvas ${canvasWidth}×${canvasHeight}px at distance ${distance.toFixed(1)} from slide`);
+        this.params.viewpointPreset = 'front';
+        this.logCamera?.info?.(
+            `Front view centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
+            + `with distance ${distance.toFixed(1)} (width ${width.toFixed(1)}, height ${height.toFixed(1)}, aspect ${aspect.toFixed(2)})`
+        );
+        this.emitCameraUpdated('viewpoint');
+    }
+
+    /**
+     * Position the camera at a three-quarter "beauty" angle while keeping the stack centred.
+     */
+    setBeautyViewpoint() {
+        if (!Array.isArray(this.imageStack) || this.imageStack.length === 0) {
+            this.params.viewpointPreset = 'beauty';
+            this.setViewpoint(-1280, -40, 1400);
+            return;
+        }
+
+        const box = new THREE.Box3();
+        this.imageStack.forEach((entry) => {
+            if (entry?.mesh) {
+                box.expandByObject(entry.mesh);
+            }
+        });
+
+        if (box.isEmpty()) {
+            this.params.viewpointPreset = 'beauty';
+            this.setViewpoint(-1280, -40, 1400);
+            return;
+        }
+
+        const center = box.getCenter(new THREE.Vector3());
+        const sphere = new THREE.Sphere();
+        box.getBoundingSphere(sphere);
+
+        const radius = Math.max(sphere.radius, 1);
+        const fovRadians = (this.params.cameraFOV ?? 60) * (Math.PI / 180);
+        const aspect = this.camera.aspect || (
+            (this.params.canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x) /
+            (this.params.canvasSize?.y ?? DEFAULT_CANVAS_SIZE.y)
+        );
+
+        const halfVerticalTan = Math.max(Math.tan(fovRadians / 2), 1e-6);
+        const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
+        const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
+
+        const distanceForHeight = radius / halfVerticalTan;
+        const distanceForWidth = radius / halfHorizontalTan;
+        const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
+        const distance = Math.max(desiredDistance * BEAUTY_VIEW_PADDING, CAMERA_MIN_DISTANCE * 2);
+
+        const offset = BEAUTY_CAMERA_DIRECTION.clone().multiplyScalar(distance);
+        const position = center.clone().add(offset);
+
+        this.camera.position.copy(position);
+        this.camera.lookAt(center);
+        this.orthoCamera.position.copy(position);
+        this.orthoCamera.lookAt(center);
+        this.controls.target.copy(center);
+        this.controls.update?.();
+        this.params.viewpointPreset = 'beauty';
+        this.logCamera?.info?.(
+            `Beauty view centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
+            + `radius ${radius.toFixed(1)} using distance ${distance.toFixed(1)}`
+        );
         this.emitCameraUpdated('viewpoint');
     }
 

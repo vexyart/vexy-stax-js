@@ -17,6 +17,7 @@ import assert from 'node:assert/strict';
 import * as THREE from 'three';
 
 import { CameraController } from '../src/camera/CameraController.js';
+import { CAMERA_MIN_DISTANCE } from '../src/core/constants.js';
 
 function createContext(overrides = {}) {
     const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 5000);
@@ -47,7 +48,7 @@ function createContext(overrides = {}) {
         cameraMode: 'perspective',
         cameraZoom: 1,
         cameraFOV: 60,
-        canvasSize: { x: 1920, y: 1080 }
+        canvasSize: { x: 960, y: 540 }
     };
 
     const imageStack = [];
@@ -97,6 +98,8 @@ function createSlide({ width, height, position }) {
         mesh
     };
 }
+
+const EPSILON = 1e-6;
 
 test('CameraController_switchMode_when_switchingToOrthographic_then_controlsBindOrthoCamera', () => {
     const ctx = createContext();
@@ -216,6 +219,93 @@ test('CameraController_setViewpointFitToFrame_when_frontSlideMissingMesh_then_lo
     assert.equal(ctx.controls.updateCalls, 1, 'controls.update should still execute');
     assert.ok(errorMessages.some((msg) => msg.includes('No front slide found')), 'error log should note missing mesh');
     assert.deepEqual(ctx.emissions.slice(-1), ['viewpoint'], 'fallback should emit viewpoint update');
+});
+
+test('CameraController_setViewpointFitToFrame_when_slidePresent_then_centresOnSlide', () => {
+    const ctx = createContext();
+    const slide = createSlide({
+        width: 360,
+        height: 220,
+        position: new THREE.Vector3(120, 90, 240)
+    });
+    ctx.imageStack.push(slide);
+
+    ctx.controller.setViewpointFitToFrame();
+
+    const box = new THREE.Box3().setFromObject(slide.mesh);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    assert.ok(ctx.controls.target.equals(center), 'controls target should align with slide centre');
+    assert.ok(Math.abs(ctx.camera.position.x - center.x) < EPSILON, 'camera x should match slide centre');
+    assert.ok(Math.abs(ctx.camera.position.y - center.y) < EPSILON, 'camera y should match slide centre');
+
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const width = size.x;
+    const height = size.y;
+
+    const fovRadians = ctx.params.cameraFOV * (Math.PI / 180);
+    const halfVerticalTan = Math.max(Math.tan(fovRadians / 2), EPSILON);
+    const horizontalFov = 2 * Math.atan(halfVerticalTan * ctx.camera.aspect);
+    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), EPSILON);
+
+    const distanceForHeight = (height / 2) / halfVerticalTan;
+    const distanceForWidth = (width / 2) / halfHorizontalTan;
+    const expectedDistance = Math.max(Math.max(distanceForHeight, distanceForWidth) * 1.1, CAMERA_MIN_DISTANCE);
+    const actualDistance = ctx.camera.position.z - center.z;
+
+    assert.ok(Math.abs(actualDistance - expectedDistance) < 1e-3, 'camera should respect padded distance from slide centre');
+    assert.equal(ctx.controls.updateCalls, 1, 'controls update should be invoked once');
+    assert.equal(ctx.params.viewpointPreset, 'front', 'params should track front preset');
+    assert.deepEqual(ctx.emissions.slice(-1), ['viewpoint'], 'viewpoint change should emit');
+});
+
+test('CameraController_setBeautyViewpoint_when_stackPopulated_then_offsetsAlongBeautyDirection', () => {
+    const ctx = createContext();
+    const first = createSlide({
+        width: 300,
+        height: 200,
+        position: new THREE.Vector3(-60, 40, 0)
+    });
+    const second = createSlide({
+        width: 180,
+        height: 320,
+        position: new THREE.Vector3(90, 120, 180)
+    });
+    ctx.imageStack.push(first, second);
+
+    ctx.controller.setBeautyViewpoint();
+
+    const box = new THREE.Box3();
+    ctx.imageStack.forEach((entry) => box.expandByObject(entry.mesh));
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    assert.ok(ctx.controls.target.equals(center), 'beauty view should centre controls on stack');
+    assert.equal(ctx.params.viewpointPreset, 'beauty', 'params should track beauty preset');
+
+    const sphere = new THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    const radius = Math.max(sphere.radius, 1);
+
+    const fovRadians = ctx.params.cameraFOV * (Math.PI / 180);
+    const halfVerticalTan = Math.max(Math.tan(fovRadians / 2), EPSILON);
+    const horizontalFov = 2 * Math.atan(halfVerticalTan * ctx.camera.aspect);
+    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), EPSILON);
+
+    const distanceForHeight = radius / halfVerticalTan;
+    const distanceForWidth = radius / halfHorizontalTan;
+    const expectedDistance = Math.max(Math.max(distanceForHeight, distanceForWidth) * 1.35, CAMERA_MIN_DISTANCE * 2);
+    const actualDistance = ctx.camera.position.distanceTo(center);
+
+    assert.ok(Math.abs(actualDistance - expectedDistance) < 1e-3, 'beauty view should respect padded bounding-sphere distance');
+
+    const expectedDirection = new THREE.Vector3(-0.82, -0.18, 1).normalize();
+    const actualDirection = ctx.camera.position.clone().sub(center).normalize();
+    assert.ok(actualDirection.distanceTo(expectedDirection) < 1e-3, 'beauty view camera direction should match configured vector');
+    assert.ok(ctx.controls.updateCalls > 0, 'controls should update during beauty viewpoint computation');
+    assert.deepEqual(ctx.emissions.slice(-1), ['viewpoint'], 'beauty viewpoint should emit change');
 });
 
 test('CameraController_setFOV_when_modeOrthographic_then_leavesPerspectiveProjectionUntouched', () => {

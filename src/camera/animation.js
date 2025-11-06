@@ -5,6 +5,11 @@
 import gsap from 'gsap';
 import * as THREE from 'three';
 
+import { DEFAULT_CANVAS_SIZE, CAMERA_MIN_DISTANCE } from '../core/constants.js';
+
+const FRONT_VIEW_PADDING = 1.1;
+const DEFAULT_HOLD_RATIO = 0.35;
+
 /**
  * Handles camera animations for Vexy Stax
  * Provides smooth, GSAP-powered camera tweens for hero shots and transitions
@@ -15,6 +20,8 @@ export class CameraAnimator {
     this.controls = controls;
     this.isAnimating = false;
     this.savedState = null;
+    this.timeline = null;
+    this.activeAnimation = null;
   }
 
   /**
@@ -48,30 +55,35 @@ export class CameraAnimator {
    * @returns {Object} { position: Vector3, target: Vector3 }
    */
   calculateFrontViewpoint(topSlide, canvasSize) {
-    // Get slide dimensions and position
-    const slideHeight = topSlide.height;
-    const slideWidth = topSlide.width;
-    const slideZ = topSlide.mesh.position.z;
+    if (!topSlide?.mesh) {
+      throw new Error('calculateFrontViewpoint: slide mesh missing');
+    }
 
-    // Calculate based on studio frame aspect ratio
-    const aspect = canvasSize.x / canvasSize.y;
-    const fov = this.camera.fov * (Math.PI / 180);
+    const box = new THREE.Box3().setFromObject(topSlide.mesh);
+    if (box.isEmpty()) {
+      throw new Error('calculateFrontViewpoint: slide bounds empty');
+    }
 
-    // Calculate distance needed to fit slide height in frame
-    const distanceForHeight = (slideHeight / 2) / Math.tan(fov / 2);
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+    const width = size.x || 1;
+    const height = size.y || 1;
 
-    // Calculate distance needed to fit slide width in frame
-    const frameWidth = slideHeight * aspect;
-    const distanceForWidth = slideWidth > frameWidth ?
-        (slideWidth / 2) / Math.tan(fov / 2) * (slideWidth / frameWidth) :
-        distanceForHeight;
+    const widthPx = canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x;
+    const heightPx = canvasSize?.y ?? DEFAULT_CANVAS_SIZE.y;
+    const aspect = widthPx / heightPx;
+    const fov = (this.camera.fov ?? 60) * (Math.PI / 180);
 
-    // Use the larger distance with padding
-    const distance = Math.max(distanceForHeight, distanceForWidth) * 1.1;
+    const halfVerticalTan = Math.max(Math.tan(fov / 2), 1e-6);
+    const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
+    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
 
-    // Front view: camera directly in front of slide
-    const position = new THREE.Vector3(0, 0, slideZ + distance);
-    const target = new THREE.Vector3(0, 0, slideZ);
+    const distanceForHeight = (height / 2) / halfVerticalTan;
+    const distanceForWidth = (width / 2) / halfHorizontalTan;
+    const distance = Math.max(distanceForHeight, distanceForWidth, CAMERA_MIN_DISTANCE) * FRONT_VIEW_PADDING;
+
+    const position = new THREE.Vector3(center.x, center.y, center.z + distance);
+    const target = center.clone();
 
     return { position, target };
   }
@@ -87,77 +99,148 @@ export class CameraAnimator {
    * @param {string} params.easing - GSAP easing function (default: "power2.inOut")
    * @returns {Promise} Resolves when animation completes, rejects on error
    */
-  async playHeroShot({ topSlide, canvasSize, duration = 1.5, easing = "power2.inOut" }) {
+  async playHeroShot({
+    topSlide,
+    canvasSize,
+    duration = 1.5,
+    easing = 'power2.inOut',
+    imageStack = [],
+    holdTime
+  }) {
     return new Promise((resolve, reject) => {
+      if (this.isAnimating) {
+        reject(new Error('Animation already in progress'));
+        return;
+      }
+
+      if (!topSlide?.mesh) {
+        reject(new Error('No top slide provided'));
+        return;
+      }
+
+      let frontPos;
       try {
-        // Validation checks
-        if (this.isAnimating) {
-          console.warn('Animation already in progress');
-          reject(new Error('Animation already in progress'));
+        frontPos = this.calculateFrontViewpoint(topSlide, canvasSize);
+      } catch (error) {
+        reject(error);
+        return;
+      }
+
+      this.saveState();
+      const originalState = this.restoreState();
+
+      const stackEntries = Array.isArray(imageStack)
+        ? imageStack
+            .map((entry) => (entry?.mesh ? { mesh: entry.mesh, originalZ: entry.mesh.position?.z ?? 0 } : null))
+            .filter(Boolean)
+        : [];
+
+      const collapseZ = frontPos.target.z;
+      const resolvedHold = typeof holdTime === 'number' && holdTime >= 0
+        ? holdTime
+        : Math.min(Math.max(duration * DEFAULT_HOLD_RATIO, 0.3), 2);
+
+      const restoreStackImmediate = () => {
+        stackEntries.forEach(({ mesh, originalZ }) => {
+          if (mesh?.position) {
+            mesh.position.z = originalZ;
+          }
+        });
+      };
+
+      const restoreCameraInstant = () => {
+        if (!originalState) {
           return;
         }
-
-        if (!topSlide) {
-          console.error('No top slide provided for hero shot');
-          reject(new Error('No top slide provided'));
-          return;
+        this.camera.position.copy(originalState.position);
+        this.controls.target.copy(originalState.target);
+        this.camera.zoom = originalState.zoom;
+        if (typeof this.camera.updateProjectionMatrix === 'function') {
+          this.camera.updateProjectionMatrix();
         }
+        this.controls.update?.();
+      };
 
-        if (!canvasSize) {
-          console.error('No canvas size provided for hero shot');
-          reject(new Error('No canvas size provided'));
-          return;
-        }
-
-        // Mark animation as started
+      try {
         this.isAnimating = true;
         this.controls.enabled = false;
+        this.activeAnimation = { stackEntries, originalState };
 
-        // Calculate Front viewpoint position
-        let frontPos;
-        try {
-          frontPos = this.calculateFrontViewpoint(topSlide, canvasSize);
-        } catch (calcError) {
-          console.error('Failed to calculate Front viewpoint:', calcError);
-          this.cleanup();
-          reject(new Error('Failed to calculate camera position'));
-          return;
-        }
-
-        // Create animation timeline
         const timeline = gsap.timeline();
+        this.timeline = timeline;
 
-        // Tween from current position to Front viewpoint
         timeline.to(this.camera.position, {
           x: frontPos.position.x,
           y: frontPos.position.y,
           z: frontPos.position.z,
-          duration: duration,
-          ease: easing,
+          duration,
+          ease: easing
         });
 
         timeline.to(this.controls.target, {
           x: frontPos.target.x,
           y: frontPos.target.y,
           z: frontPos.target.z,
-          duration: duration,
-          ease: easing,
-        }, "<"); // Start at same time as camera position
+          duration,
+          ease: easing
+        }, '<');
 
-        // Set up completion and error handlers
+        stackEntries.forEach(({ mesh }) => {
+          timeline.to(mesh.position, {
+            z: collapseZ,
+            duration,
+            ease: easing
+          }, '<');
+        });
+
+        timeline.to({}, { duration: resolvedHold });
+
+        if (originalState) {
+          timeline.to(this.camera.position, {
+            x: originalState.position.x,
+            y: originalState.position.y,
+            z: originalState.position.z,
+            duration,
+            ease: easing
+          });
+
+          timeline.to(this.controls.target, {
+            x: originalState.target.x,
+            y: originalState.target.y,
+            z: originalState.target.z,
+            duration,
+            ease: easing
+          }, '<');
+        }
+
+        stackEntries.forEach(({ mesh, originalZ }) => {
+          timeline.to(mesh.position, {
+            z: originalZ,
+            duration,
+            ease: easing
+          }, '<');
+        });
+
+        timeline.eventCallback('onUpdate', () => {
+          this.controls.update?.();
+        });
+
         timeline.eventCallback('onComplete', () => {
+          restoreStackImmediate();
+          restoreCameraInstant();
           this.cleanup();
           resolve();
         });
 
         timeline.eventCallback('onInterrupt', () => {
-          console.log('Animation interrupted');
+          restoreStackImmediate();
+          restoreCameraInstant();
           this.cleanup();
           reject(new Error('Animation interrupted'));
         });
-
       } catch (error) {
-        console.error('Unexpected error in playHeroShot:', error);
+        restoreStackImmediate();
+        restoreCameraInstant();
         this.cleanup();
         reject(error);
       }
@@ -171,6 +254,8 @@ export class CameraAnimator {
   cleanup() {
     this.controls.enabled = true;
     this.isAnimating = false;
+    this.timeline = null;
+    this.activeAnimation = null;
   }
 
   /**
@@ -180,16 +265,34 @@ export class CameraAnimator {
     if (!this.isAnimating) return;
 
     try {
-      // Kill all active tweens
-      gsap.killTweensOf(this.camera.position);
-      gsap.killTweensOf(this.controls.target);
-
-      // Restore camera state
-      const restored = this.restoreState();
-      if (restored) {
-        this.camera.position.copy(restored.position);
-        this.controls.target.copy(restored.target);
+      if (this.timeline?.kill) {
+        this.timeline.eventCallback?.('onComplete', null);
+        this.timeline.eventCallback?.('onInterrupt', null);
+        this.timeline.kill();
+      } else {
+        gsap.killTweensOf(this.camera.position);
+        gsap.killTweensOf(this.controls.target);
       }
+
+      const originalState = this.activeAnimation?.originalState ?? this.restoreState();
+      if (originalState) {
+        this.camera.position.copy(originalState.position);
+        this.controls.target.copy(originalState.target);
+        this.camera.zoom = originalState.zoom;
+        if (typeof this.camera.updateProjectionMatrix === 'function') {
+          this.camera.updateProjectionMatrix();
+        }
+      }
+
+      if (this.activeAnimation?.stackEntries) {
+        this.activeAnimation.stackEntries.forEach(({ mesh, originalZ }) => {
+          if (mesh?.position) {
+            mesh.position.z = originalZ;
+          }
+        });
+      }
+
+      this.controls.update?.();
     } catch (error) {
       console.error('Error during animation cancellation:', error);
     } finally {

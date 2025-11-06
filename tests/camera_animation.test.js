@@ -2,258 +2,186 @@
 /**
  * Test Suite: Camera Animation
  *
- * Purpose: Tests the CameraAnimator class for camera state management,
- * viewpoint calculations, and animation lifecycle. Ensures camera
- * positions and controls are properly saved/restored.
- *
- * Modules Tested:
- * - src/camera/animation.js (CameraAnimator class)
- *
- * Test Count: 10 tests
- * @lastTested 2025-11-05 (Iteration 92)
+ * Purpose: Validates camera animation helpers, including state persistence,
+ * front-view computation, and the hero-shot orchestration (camera travel and
+ * stack spacing collapse/restore).
  */
 
-import { describe, test } from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
+import * as THREE from 'three';
+import gsap from 'gsap';
+
 import { CameraAnimator } from '../src/camera/animation.js';
 
-// Mock Three.js Vector3
-class MockVector3 {
-  constructor(x = 0, y = 0, z = 0) {
-    this.x = x;
-    this.y = y;
-    this.z = z;
-  }
-  clone() {
-    return new MockVector3(this.x, this.y, this.z);
-  }
-  copy(v) {
-    this.x = v.x;
-    this.y = v.y;
-    this.z = v.z;
-    return this;
-  }
+const EPSILON = 1e-6;
+
+function createAnimatorContext() {
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.1, 5000);
+    camera.position.set(0, 0, 800);
+    camera.updateProjectionMatrix();
+
+    const controls = {
+        target: new THREE.Vector3(0, 0, 0),
+        enabled: true,
+        updateCalls: 0,
+        update() {
+            this.updateCalls += 1;
+        }
+    };
+
+    const animator = new CameraAnimator(camera, controls);
+    return { animator, camera, controls };
 }
 
-// Mock camera
-const createMockCamera = () => ({
-  position: new MockVector3(0, 0, 800),
-  zoom: 1,
-  fov: 50,
-});
+function createSlide(width, height, position = new THREE.Vector3()) {
+    const geometry = new THREE.PlaneGeometry(width, height);
+    const material = new THREE.MeshBasicMaterial();
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.position.copy(position);
+    return { width, height, mesh };
+}
 
-// Mock controls
-const createMockControls = () => ({
-  target: new MockVector3(0, 0, 0),
-  enabled: true,
-});
+test('CameraAnimator_saveState_when_called_then_capturesCameraAndControls', () => {
+    const { animator, camera, controls } = createAnimatorContext();
 
-describe('CameraAnimator', () => {
-  test('constructor initializes with camera and controls', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    assert.equal(animator.camera, camera, 'camera should be stored');
-    assert.equal(animator.controls, controls, 'controls should be stored');
-    assert.equal(animator.isAnimating, false, 'isAnimating should start false');
-    assert.equal(animator.savedState, null, 'savedState should start null');
-  });
-
-  test('saveState stores current camera and controls state', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    camera.position.x = 100;
-    camera.position.y = 200;
-    camera.position.z = 300;
-    controls.target.x = 10;
-    controls.target.y = 20;
-    controls.target.z = 30;
-    camera.zoom = 1.5;
+    camera.position.set(120, -45, 640);
+    controls.target.set(25, 10, -30);
+    camera.zoom = 1.35;
 
     animator.saveState();
 
-    assert.ok(animator.savedState, 'savedState should be created');
-    assert.equal(animator.savedState.position.x, 100, 'position.x saved');
-    assert.equal(animator.savedState.position.y, 200, 'position.y saved');
-    assert.equal(animator.savedState.position.z, 300, 'position.z saved');
-    assert.equal(animator.savedState.target.x, 10, 'target.x saved');
-    assert.equal(animator.savedState.target.y, 20, 'target.y saved');
-    assert.equal(animator.savedState.target.z, 30, 'target.z saved');
-    assert.equal(animator.savedState.zoom, 1.5, 'zoom saved');
-  });
+    assert.ok(animator.savedState, 'saved state should be created');
+    assert.equal(animator.savedState.position.x, 120);
+    assert.equal(animator.savedState.position.y, -45);
+    assert.equal(animator.savedState.position.z, 640);
+    assert.equal(animator.savedState.target.x, 25);
+    assert.equal(animator.savedState.target.y, 10);
+    assert.equal(animator.savedState.target.z, -30);
+    assert.equal(animator.savedState.zoom, 1.35);
+});
 
-  test('saveState creates independent clone (not reference)', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    camera.position.x = 100;
-    animator.saveState();
-
-    // Modify original
-    camera.position.x = 999;
-
-    // Saved state should be unchanged
-    assert.equal(animator.savedState.position.x, 100, 'savedState should be independent clone');
-  });
-
-  test('restoreState returns null when no state saved', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
+test('CameraAnimator_restoreState_when_unsaved_then_returnsUndefined', () => {
+    const { animator } = createAnimatorContext();
     const result = animator.restoreState();
+    assert.equal(result, undefined, 'restoreState should return undefined without prior save');
+});
 
-    assert.equal(result, undefined, 'should return undefined when no saved state');
-  });
+test('CameraAnimator_calculateFrontViewpoint_when_slideHasOffset_then_centresOnBounds', () => {
+    const { animator } = createAnimatorContext();
+    const slide = createSlide(360, 220, new THREE.Vector3(80, 140, 280));
+    const front = animator.calculateFrontViewpoint(slide, { x: 960, y: 540 });
 
-  test('restoreState returns cloned saved state', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
+    assert.ok(front.position instanceof THREE.Vector3, 'position should be a Vector3');
+    assert.ok(front.target instanceof THREE.Vector3, 'target should be a Vector3');
+    assert.ok(front.position.z > front.target.z, 'camera should sit in front of slide');
+    assert.ok(Math.abs(front.position.x - front.target.x) < EPSILON, 'camera X should align with target centre');
+    assert.ok(Math.abs(front.position.y - front.target.y) < EPSILON, 'camera Y should align with target centre');
+    assert.ok(Math.abs(front.target.x - 80) < EPSILON, 'target should match slide centre X');
+    assert.ok(Math.abs(front.target.y - 140) < EPSILON, 'target should match slide centre Y');
+    assert.ok(Math.abs(front.target.z - 280) < EPSILON, 'target should match slide centre Z');
+});
 
-    camera.position.x = 100;
-    camera.position.y = 200;
-    camera.position.z = 300;
-    controls.target.x = 10;
-    controls.target.y = 20;
-    controls.target.z = 30;
-    camera.zoom = 1.5;
+test('CameraAnimator_calculateFrontViewpoint_when_slideSizeVaries_then_adjustsDistance', () => {
+    const { animator } = createAnimatorContext();
+    const small = createSlide(200, 150, new THREE.Vector3(0, 0, 0));
+    const large = createSlide(800, 600, new THREE.Vector3(0, 0, 0));
 
-    animator.saveState();
+    const frontSmall = animator.calculateFrontViewpoint(small, { x: 960, y: 540 });
+    const frontLarge = animator.calculateFrontViewpoint(large, { x: 960, y: 540 });
 
-    const restored = animator.restoreState();
+    const smallDistance = frontSmall.position.z - frontSmall.target.z;
+    const largeDistance = frontLarge.position.z - frontLarge.target.z;
 
-    assert.ok(restored, 'restored state should exist');
-    assert.equal(restored.position.x, 100, 'restored position.x');
-    assert.equal(restored.position.y, 200, 'restored position.y');
-    assert.equal(restored.position.z, 300, 'restored position.z');
-    assert.equal(restored.target.x, 10, 'restored target.x');
-    assert.equal(restored.target.y, 20, 'restored target.y');
-    assert.equal(restored.target.z, 30, 'restored target.z');
-    assert.equal(restored.zoom, 1.5, 'restored zoom');
-  });
+    assert.ok(largeDistance > smallDistance, 'larger slide should require greater camera distance');
+});
 
-  test('restoreState returns independent clone', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    camera.position.x = 100;
-    animator.saveState();
-
-    const restored1 = animator.restoreState();
-    const restored2 = animator.restoreState();
-
-    // Modify first restored
-    restored1.position.x = 999;
-
-    // Second restored should be unchanged
-    assert.equal(restored2.position.x, 100, 'each restore should return independent clone');
-  });
-
-  test('calculateFrontViewpoint calculates correct camera position', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    const topSlide = {
-      width: 400,
-      height: 300,
-      mesh: {
-        position: { z: 0 }
-      }
-    };
-
-    const canvasSize = { x: 1920, y: 1080 };
-
-    const result = animator.calculateFrontViewpoint(topSlide, canvasSize);
-
-    assert.ok(result, 'should return result object');
-    assert.ok(result.position, 'should have position');
-    assert.ok(result.target, 'should have target');
-
-    // Camera should be positioned in front of slide (positive z)
-    assert.ok(result.position.z > topSlide.mesh.position.z, 'camera should be in front of slide');
-
-    // Camera should be centered horizontally and vertically
-    assert.equal(result.position.x, 0, 'camera x should be centered');
-    assert.equal(result.position.y, 0, 'camera y should be centered');
-
-    // Target should be at slide position
-    assert.equal(result.target.x, 0, 'target x should be centered');
-    assert.equal(result.target.y, 0, 'target y should be centered');
-    assert.equal(result.target.z, topSlide.mesh.position.z, 'target z should be at slide');
-  });
-
-  test('calculateFrontViewpoint accounts for slide z-position', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    const topSlide = {
-      width: 400,
-      height: 300,
-      mesh: {
-        position: { z: 100 } // Slide at z=100
-      }
-    };
-
-    const canvasSize = { x: 1920, y: 1080 };
-
-    const result = animator.calculateFrontViewpoint(topSlide, canvasSize);
-
-    // Target should be at slide z position
-    assert.equal(result.target.z, 100, 'target should be at slide z position');
-
-    // Camera should be in front of the slide
-    assert.ok(result.position.z > 100, 'camera should be in front of slide z position');
-  });
-
-  test('calculateFrontViewpoint uses slide dimensions for distance calculation', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
-
-    const smallSlide = {
-      width: 200,
-      height: 150,
-      mesh: { position: { z: 0 } }
-    };
-
-    const largeSlide = {
-      width: 800,
-      height: 600,
-      mesh: { position: { z: 0 } }
-    };
-
-    const canvasSize = { x: 1920, y: 1080 };
-
-    const smallResult = animator.calculateFrontViewpoint(smallSlide, canvasSize);
-    const largeResult = animator.calculateFrontViewpoint(largeSlide, canvasSize);
-
-    // Larger slide should require camera to be further away
-    assert.ok(
-      largeResult.position.z > smallResult.position.z,
-      'camera should be further for larger slide'
+test('CameraAnimator_calculateFrontViewpoint_when_meshMissing_then_throws', () => {
+    const { animator } = createAnimatorContext();
+    assert.throws(
+        () => animator.calculateFrontViewpoint({ width: 200, height: 150 }, { x: 960, y: 540 }),
+        /slide mesh missing/i,
+        'missing mesh should raise descriptive error'
     );
-  });
+});
 
-  test('cleanup re-enables controls and clears animation flag', () => {
-    const camera = createMockCamera();
-    const controls = createMockControls();
-    const animator = new CameraAnimator(camera, controls);
+test('CameraAnimator_playHeroShot_when_stackProvided_then_collapsesAndRestoresSpacing', async () => {
+    const { animator, camera, controls } = createAnimatorContext();
+    const slides = [
+        createSlide(240, 180, new THREE.Vector3(-40, 60, 0)),
+        createSlide(320, 200, new THREE.Vector3(20, 110, 140))
+    ];
+    const topSlide = slides[slides.length - 1];
+    const originalCameraPosition = camera.position.clone();
+    const originalTarget = controls.target.clone();
+    const originalZoom = camera.zoom;
+    const originalPositions = slides.map(({ mesh }) => mesh.position.z);
 
-    // Simulate animation state
-    animator.isAnimating = true;
-    controls.enabled = false;
+    const frontView = animator.calculateFrontViewpoint(topSlide, { x: 960, y: 540 });
 
-    animator.cleanup();
+    const timelineCalls = [];
+    const callbacks = {};
+    const originalTimeline = gsap.timeline;
+    const originalKillTweensOf = gsap.killTweensOf;
 
-    assert.equal(controls.enabled, true, 'controls should be re-enabled');
-    assert.equal(animator.isAnimating, false, 'isAnimating should be false');
-  });
+    gsap.killTweensOf = () => {};
+    gsap.timeline = () => {
+        return {
+            to(target, vars, position) {
+                timelineCalls.push({ target, vars: { ...vars }, position });
+                return this;
+            },
+            eventCallback(event, callback) {
+                callbacks[event] = callback;
+                return this;
+            },
+            kill() {
+                callbacks.killed = true;
+                return this;
+            }
+        };
+    };
+
+    try {
+        const animationPromise = animator.playHeroShot({
+            topSlide,
+            canvasSize: { x: 960, y: 540 },
+            duration: 0.2,
+            easing: 'linear',
+            imageStack: slides,
+            holdTime: 0.05
+        });
+
+        callbacks.onUpdate?.();
+        callbacks.onComplete?.();
+        await animationPromise;
+
+        const cameraTweens = timelineCalls.filter(({ target }) => target === camera.position);
+        assert.equal(cameraTweens.length, 2, 'camera should tween forward and return');
+        assert.ok(Math.abs(cameraTweens[0].vars.x - frontView.position.x) < EPSILON, 'forward camera tween X should match front view');
+        assert.ok(Math.abs(cameraTweens[0].vars.y - frontView.position.y) < EPSILON, 'forward camera tween Y should match front view');
+        assert.ok(Math.abs(cameraTweens[1].vars.x - originalCameraPosition.x) < EPSILON, 'return camera tween X should restore original');
+
+        const meshPositions = slides.map(({ mesh }) => mesh.position);
+        const meshTweens = timelineCalls.filter(({ target }) => meshPositions.includes(target));
+        slides.forEach(({ mesh }, index) => {
+            const collapseTweens = meshTweens.filter(({ target, vars }) =>
+                target === mesh.position && Math.abs(vars.z - frontView.target.z) < EPSILON
+            );
+            assert.ok(collapseTweens.length >= 1, `slide ${index} should have tween collapsing to front target`);
+        });
+        slides.forEach(({ mesh }, index) => {
+            assert.ok(Math.abs(mesh.position.z - originalPositions[index]) < EPSILON, 'slide should return to original spacing');
+        });
+
+        assert.equal(animator.isAnimating, false, 'animator should reset animation flag');
+        assert.equal(controls.enabled, true, 'controls should be re-enabled after animation');
+        assert.equal(camera.zoom, originalZoom, 'camera zoom should remain unchanged');
+        assert.ok(camera.position.distanceTo(originalCameraPosition) < EPSILON, 'camera should end at original position');
+        assert.ok(controls.target.distanceTo(originalTarget) < EPSILON, 'controls target should be restored');
+        assert.ok(controls.updateCalls > 0, 'controls.update should be called during animation');
+    } finally {
+        gsap.timeline = originalTimeline;
+        gsap.killTweensOf = originalKillTweensOf;
+    }
 });

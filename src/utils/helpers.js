@@ -22,7 +22,7 @@ import * as THREE from 'three';
 export function calculateLuminance(hexColor) {
     // Input validation
     if (!isValidHexColor(hexColor)) {
-        throw new TypeError(`calculateLuminance: expected valid hex color, got "${hexColor}"`);
+        throw new TypeError(`calculateLuminance: expected valid hex color, got "${hexColor}". Fix: pass a hex string such as "#ffffff".`);
     }
 
     // Parse hex color to RGB
@@ -89,16 +89,16 @@ export function isValidHexColor(color) {
 export function clamp(value, min, max) {
     // Input validation
     if (!isValidNumber(value)) {
-        throw new TypeError(`clamp: value must be a valid number, got ${typeof value}`);
+        throw new TypeError(`clamp: value must be a valid number, got ${typeof value}. Fix: pass a finite numeric value.`);
     }
     if (!isValidNumber(min)) {
-        throw new TypeError(`clamp: min must be a valid number, got ${typeof min}`);
+        throw new TypeError(`clamp: min must be a valid number, got ${typeof min}. Fix: pass a finite numeric lower bound.`);
     }
     if (!isValidNumber(max)) {
-        throw new TypeError(`clamp: max must be a valid number, got ${typeof max}`);
+        throw new TypeError(`clamp: max must be a valid number, got ${typeof max}. Fix: pass a finite numeric upper bound.`);
     }
     if (min > max) {
-        throw new RangeError(`clamp: min (${min}) must be <= max (${max})`);
+        throw new RangeError(`clamp: min (${min}) must be <= max (${max}). Fix: swap the arguments or choose a wider range.`);
     }
 
     return Math.min(Math.max(value, min), max);
@@ -120,13 +120,13 @@ export function clamp(value, min, max) {
 export function lerp(a, b, t) {
     // Input validation
     if (!isValidNumber(a)) {
-        throw new TypeError(`lerp: a must be a valid number, got ${typeof a}`);
+        throw new TypeError(`lerp: a must be a valid number, got ${typeof a}. Fix: pass a finite numeric start value.`);
     }
     if (!isValidNumber(b)) {
-        throw new TypeError(`lerp: b must be a valid number, got ${typeof b}`);
+        throw new TypeError(`lerp: b must be a valid number, got ${typeof b}. Fix: pass a finite numeric end value.`);
     }
     if (!isValidNumber(t)) {
-        throw new TypeError(`lerp: t must be a valid number, got ${typeof t}`);
+        throw new TypeError(`lerp: t must be a valid number, got ${typeof t}. Fix: pass a finite interpolation factor between 0 and 1.`);
     }
 
     return a + (b - a) * clamp(t, 0, 1);

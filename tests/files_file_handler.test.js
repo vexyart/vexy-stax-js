@@ -9,8 +9,8 @@
  * Modules Tested:
  * - src/files/FileHandler.js (FileHandler class)
  *
- * Test Count: 8 tests
- * @lastTested 2025-11-05 (Phase 5 Iteration 5)
+ * Test Count: 9 tests
+ * @lastTested 2025-11-06 (Phase 5 Iteration 115)
  */
 
 import test from 'node:test';
@@ -179,6 +179,21 @@ test('FileHandler_processFiles_when_memoryGuardDeclines_then_skipsAndWarns', () 
         /memory limit/i,
         'toast should mention memory limit'
     );
+});
+
+test('FileHandler_processFiles_when_mixedValidity_then_logsSummaryWithoutLeadingSpace', () => {
+    const ctx = createTestContext();
+    const invalidFile = { name: 'vector.svgz', type: 'application/gzip', size: 2 * BYTES_PER_MB };
+    const validFile = { name: 'stack.png', type: 'image/png', size: 1 * BYTES_PER_MB };
+
+    ctx.handler.processFiles([invalidFile, validFile]);
+
+    const summaryCalls = ctx.logValidationWarn.getCalls();
+    assert.equal(summaryCalls.length, 1, 'summary warning should be logged once');
+    const [message] = summaryCalls[0];
+    assert.equal(typeof message, 'string', 'summary message should be a string');
+    assert.equal(message.startsWith(' '), false, 'summary message must not start with a space');
+    assert.equal(message, '1 file(s) rejected, 1 accepted', 'summary should report counts without extra whitespace');
 });
 
 test('FileHandler_dragEvents_when_nestedEnterLeave_then_overlayVisibilityTracksDepth', () => {

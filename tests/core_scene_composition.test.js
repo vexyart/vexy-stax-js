@@ -8,8 +8,8 @@
  * Modules Tested:
  * - src/core/SceneComposition.js (SceneComposition class)
  *
- * Test Count: 7 tests
- * @lastTested 2025-11-05 (Phase 5 Iteration 5)
+ * Test Count: 10 tests
+ * @lastTested 2025-11-06 (Phase 5 Iteration 6)
  */
 
 import test from 'node:test';
@@ -18,6 +18,8 @@ import * as THREE from 'three';
 
 import { SceneComposition } from '../src/core/SceneComposition.js';
 import { FLOOR_Y } from '../src/core/constants.js';
+import { appState } from '../src/core/AppState.js';
+import { getSharedRef, SHARED_STATE_KEYS } from '../src/core/sharedState.js';
 
 function createTexture(width, height) {
     return {
@@ -32,6 +34,8 @@ function createTexture(width, height) {
 }
 
 function createContext(overrides = {}) {
+    appState.reset();
+
     const scene = {
         added: [],
         removed: [],
@@ -137,6 +141,14 @@ test('SceneComposition_clearAll_when_stackPopulated_then_resourcesRemovedAndStac
     ctx.composition.addImage(createTexture(400, 400), 'square.png');
     ctx.composition.addImage(createTexture(200, 800), 'poster.png');
 
+    const sharedBeforeClear = getSharedRef(SHARED_STATE_KEYS.imageStack);
+    assert.strictEqual(
+        sharedBeforeClear,
+        ctx.imageStack,
+        'shared state should reference the live image stack before clearing'
+    );
+    const memoryCallsBefore = ctx.calls.checkMemoryUsage.length;
+
     ctx.composition.clearAll();
 
     assert.equal(ctx.imageStack.length, 0, 'clearAll should empty the stack');
@@ -152,6 +164,19 @@ test('SceneComposition_clearAll_when_stackPopulated_then_resourcesRemovedAndStac
         ctx.calls.showToast.slice(-1)[0].type,
         'info',
         'clearAll should surface informational toast'
+    );
+    const sharedAfterClear = getSharedRef(SHARED_STATE_KEYS.imageStack);
+    assert.strictEqual(sharedAfterClear, ctx.imageStack, 'shared state should reference the same array instance after clearing');
+    assert.equal(sharedAfterClear.length, 0, 'shared state image stack should be empty after clearing');
+    assert.equal(
+        ctx.calls.checkMemoryUsage.length,
+        memoryCallsBefore + 1,
+        'clearAll should invoke memory guard exactly once'
+    );
+    assert.equal(
+        ctx.calls.checkMemoryUsage.at(-1),
+        false,
+        'memory guard should run with false flag when clearing'
     );
 });
 
@@ -196,6 +221,86 @@ test('SceneComposition_reorder_when_indicesDiffer_then_stackOrderUpdated', () =>
         ctx.calls.emitStackUpdated.slice(-1),
         ['reordered'],
         'reorder should notify listeners with reason reordered'
+    );
+});
+
+test('SceneComposition_deleteAt_when_called_then_disposesResourcesAndChecksMemory', () => {
+    const ctx = createContext();
+    ctx.composition.addImage(createTexture(320, 180), 'first.png');
+    ctx.composition.addImage(createTexture(320, 180), 'second.png');
+
+    const target = ctx.imageStack[1];
+    let geometryDisposed = 0;
+    let materialDisposed = 0;
+    let textureDisposed = 0;
+    target.mesh.geometry.dispose = () => {
+        geometryDisposed += 1;
+    };
+    target.mesh.material.dispose = () => {
+        materialDisposed += 1;
+    };
+    if (target.mesh.material.map) {
+        target.mesh.material.map.dispose = () => {
+            textureDisposed += 1;
+        };
+    }
+
+    const memoryCallsBefore = ctx.calls.checkMemoryUsage.length;
+
+    ctx.composition.deleteAt(1);
+
+    assert.equal(geometryDisposed, 1, 'deleting an image should dispose its geometry exactly once');
+    assert.equal(materialDisposed, 1, 'deleting an image should dispose its material exactly once');
+    assert.equal(textureDisposed, 1, 'deleting an image should dispose the texture map exactly once');
+    assert.equal(
+        ctx.calls.checkMemoryUsage.length,
+        memoryCallsBefore + 1,
+        'memory guard should run once after deletion'
+    );
+    assert.equal(
+        ctx.calls.checkMemoryUsage.at(-1),
+        false,
+        'memory guard should flag deletion as a non-add operation'
+    );
+});
+
+test('SceneComposition_reorder_when_validIndices_then_recordsHistorySnapshot', () => {
+    const ctx = createContext();
+    ctx.composition.addImage(createTexture(120, 120), 'first.png');
+    ctx.composition.addImage(createTexture(120, 120), 'second.png');
+    ctx.composition.addImage(createTexture(120, 120), 'third.png');
+
+    const historyBefore = ctx.calls.saveHistory;
+
+    ctx.composition.reorder(0, 2);
+
+    assert.equal(
+        ctx.calls.saveHistory,
+        historyBefore + 1,
+        'reorder should capture history exactly once when indices are valid'
+    );
+    assert.equal(
+        ctx.calls.updateImageList,
+        4,
+        'reorder should still trigger UI update callback once on top of prior additions'
+    );
+});
+
+test('SceneComposition_reorder_when_indicesInvalid_then_skipHistoryCapture', () => {
+    const ctx = createContext();
+    ctx.composition.addImage(createTexture(80, 80), 'first.png');
+    ctx.composition.addImage(createTexture(80, 80), 'second.png');
+
+    const historyBefore = ctx.calls.saveHistory;
+
+    ctx.composition.reorder(-1, 1);
+    ctx.composition.reorder(0, 5);
+    ctx.composition.reorder(0, 0);
+
+    assert.equal(
+        ctx.calls.saveHistory,
+        historyBefore,
+        'invalid reorder requests should not capture history'
     );
 });
 
