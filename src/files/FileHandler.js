@@ -16,10 +16,11 @@ import {
     FILE_SIZE_WARN_MB,
     FILE_SIZE_REJECT_MB,
     TOAST_DURATION_ERROR,
-    TOAST_DURATION_WARNING
+    TOAST_DURATION_WARNING,
+    TOAST_DURATION_INFO
 } from '../core/constants.js';
 
-const SUPPORTED_TYPES = [
+const SUPPORTED_IMAGE_TYPES = [
     'image/png',
     'image/jpeg',
     'image/jpg',
@@ -27,6 +28,8 @@ const SUPPORTED_TYPES = [
     'image/webp',
     'image/svg+xml'
 ];
+
+const SUPPORTED_JSON_TYPE = 'application/json';
 
 const BYTES_PER_MB = 1024 * 1024;
 const UNSUPPORTED_TYPE_DURATION = 4000;
@@ -37,6 +40,7 @@ const MEMORY_LIMIT_MESSAGE = '❌ Image not added (memory limit)';
  * @property {{ imageInput: HTMLInputElement | null, browseButton: HTMLElement | null, dropOverlay: HTMLElement | null, slidesPanel: HTMLElement | null }} elements
  * @property {(target: EventTarget, type: string, handler: EventListenerOrEventListenerObject, options?: AddEventListenerOptions) => void} addTrackedEventListener
  * @property {(file: File) => void} onFileAccepted
+ * @property {(file: File) => void} [onJSONFileAccepted] - Callback for JSON files (imports scene)
  * @property {() => boolean} shouldProceedAfterMemoryCheck
  * @property {(message: string, type?: string, duration?: number) => void} showToast
  * @property {{ logFile: { info: Function, warn: Function, error: Function }, logValidation: { warn: Function, error: Function } }} loggers
@@ -51,6 +55,7 @@ export class FileHandler {
             elements,
             addTrackedEventListener,
             onFileAccepted,
+            onJSONFileAccepted,
             shouldProceedAfterMemoryCheck,
             showToast,
             loggers
@@ -69,6 +74,7 @@ export class FileHandler {
         this.slidesPanel = elements?.slidesPanel ?? null;
         this.addTrackedEventListener = addTrackedEventListener ?? (() => {});
         this.onFileAccepted = onFileAccepted;
+        this.onJSONFileAccepted = onJSONFileAccepted ?? null;
         this.shouldProceedAfterMemoryCheck = shouldProceedAfterMemoryCheck;
         this.showToast = showToast ?? (() => {});
         this.logFile = loggers?.logFile ?? {
@@ -139,10 +145,28 @@ export class FileHandler {
         const fileList = Array.from(files);
         let invalidCount = 0;
         let validCount = 0;
+        let jsonCount = 0;
 
         this.logFile.info(`Loading ${fileList.length} file(s)...`);
 
+        // Show loading indicator for multiple files
+        if (fileList.length > 1) {
+            this.showToast(`Loading ${fileList.length} files...`, 'info', TOAST_DURATION_INFO);
+        }
+
         for (const file of fileList) {
+            // Check for JSON files first
+            if (this.isJSONFile(file)) {
+                if (this.onJSONFileAccepted) {
+                    jsonCount += 1;
+                    this.logFile.info(`Loading JSON scene: ${file.name}`);
+                    this.onJSONFileAccepted(file);
+                } else {
+                    this.logValidation.warn(`JSON file ${file.name} dropped but no handler configured`);
+                }
+                continue;
+            }
+
             if (!this.validateFileType(file)) {
                 invalidCount += 1;
                 continue;
@@ -165,8 +189,22 @@ export class FileHandler {
         }
 
         if (invalidCount > 0) {
-            this.logValidation.warn(`${invalidCount} file(s) rejected, ${validCount} accepted`);
+            this.logValidation.warn(`${invalidCount} file(s) rejected, ${validCount} accepted${jsonCount > 0 ? `, ${jsonCount} JSON` : ''}`);
         }
+    }
+
+    /**
+     * Check if file is a JSON file
+     * @param {File} file
+     * @returns {boolean}
+     */
+    isJSONFile(file) {
+        if (file.type === SUPPORTED_JSON_TYPE) {
+            return true;
+        }
+        // Also check by extension for files without proper MIME type
+        const extension = (file.name || '').split('.').pop()?.toLowerCase();
+        return extension === 'json';
     }
 
     /**
@@ -257,13 +295,14 @@ export class FileHandler {
      * @returns {boolean}
      */
     validateFileType(file) {
-        if (SUPPORTED_TYPES.includes(file.type)) {
+        if (SUPPORTED_IMAGE_TYPES.includes(file.type)) {
             return true;
         }
 
         const extension = (file.name || '').split('.').pop()?.toLowerCase() ?? 'unknown';
         this.logValidation.error(`Unsupported file type: ${file.name} (${file.type || 'unknown type'})`);
-        this.showToast(`❌ Unsupported file type: .${extension} (only images supported)`, 'error', UNSUPPORTED_TYPE_DURATION);
+        // Provide actionable error with specific fix suggestion (WCAG-friendly)
+        this.showToast(`❌ ${file.name} not supported. Try PNG, JPG, GIF, WebP, or SVG`, 'error', UNSUPPORTED_TYPE_DURATION);
         return false;
     }
 
@@ -279,7 +318,8 @@ export class FileHandler {
         if (file.size > rejectThresholdBytes) {
             const sizeMB = (file.size / BYTES_PER_MB).toFixed(1);
             this.logValidation.error(`File ${file.name} is too large (${sizeMB}MB). Maximum size is ${FILE_SIZE_REJECT_MB}MB.`);
-            this.showToast(`❌ File too large: ${file.name} (${sizeMB}MB). Max: ${FILE_SIZE_REJECT_MB}MB`, 'error', TOAST_DURATION_ERROR);
+            // Actionable error: tell user exactly what to do
+            this.showToast(`❌ ${file.name} too large (${sizeMB}MB). Resize to under ${FILE_SIZE_REJECT_MB}MB`, 'error', TOAST_DURATION_ERROR);
             return false;
         }
 

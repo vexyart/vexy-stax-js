@@ -2,7 +2,17 @@
 # this_file: vexy-stax-js/build.sh
 # Build script for vexy-stax-js
 
+cd "$(dirname "$0")"
+
 set -e  # Exit on error
+
+# Parse flags
+NO_SERVE=false
+for arg in "$@"; do
+    case $arg in
+        --no-serve) NO_SERVE=true ;;
+    esac
+done
 
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  Building vexy-stax-js"
@@ -65,6 +75,12 @@ echo "To deploy:"
 echo "  git add docs/ && git commit -m 'Build for production'"
 echo "  git push"
 echo
-echo "Or preview locally:"
-echo "  npm run preview"
-echo
+if [ "$NO_SERVE" = false ]; then
+    echo "Starting preview server..."
+    echo "   Press Ctrl+C to stop"
+    echo
+
+    # Open browser after short delay, then start server (foreground, blocks until Ctrl+C)
+    (sleep 1 && open "http://localhost:4173") &
+    npm run preview
+fi

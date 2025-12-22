@@ -12,6 +12,29 @@ const COLORS = {
     info: { bg: 'rgba(23, 162, 184, 0.95)', text: 'white' }
 };
 
+/**
+ * Icons for each toast type (WCAG: don't rely on color alone).
+ * Using Unicode symbols for zero-dependency solution.
+ */
+const ICONS = {
+    success: '✓',
+    error: '✕',
+    warning: '⚠',
+    info: 'ℹ'
+};
+
+/**
+ * ARIA roles for screen reader announcements.
+ * - 'alert' for errors: assertive, interrupts current speech
+ * - 'status' for info/success/warning: polite, waits for pause
+ */
+const ARIA_ROLES = {
+    success: 'status',
+    error: 'alert',
+    warning: 'status',
+    info: 'status'
+};
+
 function getDefaultDocument() {
     return typeof document !== 'undefined' ? document : null;
 }
@@ -62,7 +85,15 @@ export function createToastService(options = {}) {
         const palette = COLORS[type] ?? COLORS.info;
         toast.style.background = palette.bg;
         toast.style.color = palette.text;
-        toast.textContent = message;
+
+        // Add icon prefix for accessibility (don't rely on color alone)
+        const icon = ICONS[type] ?? ICONS.info;
+        toast.textContent = `${icon} ${message}`;
+
+        // ARIA live region for screen reader announcements
+        const ariaRole = ARIA_ROLES[type] ?? ARIA_ROLES.info;
+        toast.setAttribute('role', ariaRole);
+        toast.setAttribute('aria-live', ariaRole === 'alert' ? 'assertive' : 'polite');
 
         documentRef.body.appendChild(toast);
 

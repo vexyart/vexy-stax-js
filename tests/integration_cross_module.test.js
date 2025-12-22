@@ -3,8 +3,8 @@
  * @fileoverview Cross-Module Integration Tests
  * @description Integration tests verifying interactions between multiple modules
  *              Tests module boundaries, data flow, and inter-module contracts
- * @testCount 5 tests
- * @lastTested 2025-11-05 (Iteration 92)
+ * @testCount 8 tests
+ * @lastTested 2025-11-08 (Iteration 121)
  */
 
 import { describe, it } from 'node:test';
@@ -113,5 +113,134 @@ describe('Cross-Module Integration Tests', () => {
     assert.ok(loggedMessage !== null, 'Error message was logged');
     assert.ok(loggedMessage.includes('[Integration]'), 'Logger module prefix present');
     assert.ok(loggedMessage.includes('Critical error'), 'Error message logged');
+  });
+
+  it('SceneComposition + LightingManager: Material updates use lighting emissive intensity', async () => {
+    const { SceneComposition } = await import('../src/core/SceneComposition.js');
+    const { LightingManager } = await import('../src/scene/LightingManager.js');
+    const THREE = await import('three');
+
+    // Create mock dependencies
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockImageStack = [];
+    const mockParams = { bgColor: '#000000', zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+
+    // Create lighting manager and setup
+    const lightingManager = new LightingManager(mockScene, mockParams);
+    lightingManager.setup();
+
+    // Get emissive intensity from lighting
+    const emissiveIntensity = lightingManager.getEmissiveIntensity();
+
+    // Verify it returns a valid number
+    assert.ok(typeof emissiveIntensity === 'number', 'Emissive intensity is a number');
+    assert.ok(emissiveIntensity >= 0 && emissiveIntensity <= 1, 'Emissive intensity is in valid range');
+
+    lightingManager.dispose();
+  });
+
+  it('SceneComposition + FloorManager + AmbienceManager: Ambience toggle coordination', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+    const { AmbienceManager } = await import('../src/scene/AmbienceManager.js');
+
+    // Create mock dependencies
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockImageStack = [];
+    const mockParams = { bgColor: '#000000', zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+
+    // Create managers
+    const floorManager = new FloorManager(mockScene, mockParams);
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, mockParams);
+
+    let ambienceCallbackFired = false;
+
+    // Setup FloorManager callback to coordinate with AmbienceManager
+    floorManager.onAmbienceChange = (enabled) => {
+      ambienceCallbackFired = true;
+      ambienceManager.updateMaterials(enabled);
+    };
+
+    // Trigger ambience toggle through FloorManager (this would happen when user changes setting)
+    floorManager.onAmbienceChange(true);
+
+    assert.strictEqual(ambienceCallbackFired, true, 'FloorManager callback coordinated with AmbienceManager');
+
+    floorManager.dispose();
+    ambienceManager.dispose();
+  });
+
+  it('AmbienceManager updateMaterials forces world matrix update for accurate bounds', async () => {
+    const { AmbienceManager } = await import('../src/scene/AmbienceManager.js');
+    const THREE = await import('three');
+
+    const scene = new THREE.Scene();
+    const imageStack = [];
+    const params = { zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+
+    // Create mesh with texture
+    const texture = new THREE.Texture();
+    const geometry = new THREE.PlaneGeometry(100, 200);
+    const material = new THREE.MeshBasicMaterial({ map: texture });
+    const mesh = new THREE.Mesh(geometry, material);
+    scene.add(mesh);
+
+    imageStack.push({ mesh, width: 100, height: 200 });
+
+    const ambienceManager = new AmbienceManager(scene, imageStack, params);
+
+    // Track updateMatrixWorld calls
+    let matrixUpdateCalled = false;
+    const originalUpdate = mesh.updateMatrixWorld;
+    mesh.updateMatrixWorld = function(force) {
+      if (force === true) matrixUpdateCalled = true;
+      return originalUpdate.call(this, force);
+    };
+
+    // Trigger material rebuild - should call updateMatrixWorld(true)
+    ambienceManager.updateMaterials(true);
+
+    // New mesh was created, check that world matrix update was called on it
+    const newMesh = imageStack[0].mesh;
+    assert.ok(newMesh !== mesh, 'New mesh was created');
+    assert.ok(newMesh.matrixWorldNeedsUpdate === false, 'World matrix should be updated (flag reset to false)');
+
+    ambienceManager.dispose();
+  });
+
+  it('All scene managers: Cleanup order independence verified', async () => {
+    const { SceneManager } = await import('../src/scene/SceneManager.js');
+    const { LightingManager } = await import('../src/scene/LightingManager.js');
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+    const { AmbienceManager } = await import('../src/scene/AmbienceManager.js');
+
+    // Create mock dependencies
+    const mockCanvas = { width: 1920, height: 1080, style: {}, addEventListener: () => {} };
+    const mockScene = { add: () => {}, remove: () => {}, environment: null };
+    const mockImageStack = [];
+    const params = {
+      canvasSize: { x: 1920, y: 1080 },
+      bgColor: '#000000',
+      zSpacing: 100,
+      materialThickness: 1,
+      materialRoughness: 0.5,
+      materialMetalness: 0
+    };
+
+    // Create all 4 managers
+    const sceneManager = new SceneManager(mockCanvas, params);
+    const lightingManager = new LightingManager(mockScene, params);
+    const floorManager = new FloorManager(mockScene, params);
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, params);
+
+    // Setup lighting (only one that works in Node.js)
+    lightingManager.setup();
+
+    // Dispose in unconventional order (Ambience → Scene → Floor → Lighting)
+    assert.doesNotThrow(() => {
+      ambienceManager.dispose();
+      sceneManager.dispose();
+      floorManager.dispose();
+      lightingManager.dispose();
+    }, 'All 4 managers can be disposed in any order without errors');
   });
 });

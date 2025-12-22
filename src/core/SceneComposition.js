@@ -8,7 +8,6 @@
 
 import * as THREE from 'three';
 
-import { FLOOR_Y } from './constants.js';
 import { reorderList } from './ordering.js';
 import { storeSharedRef, SHARED_STATE_KEYS } from './sharedState.js';
 
@@ -28,6 +27,9 @@ const MAX_THUMBNAIL_DIMENSION = 400;
  * @property {{ info: Function }} logMemory
  * @property {(hex: string) => number} [calculateLuminance]
  * @property {(luminance: number) => number} [getAdaptiveEmissiveIntensity]
+ * @property {() => number} [getEffectiveZSpacing]
+ * @property {(slideCount: number) => void} [onFirstSlide] - Called when first slide is added (SCENE.md §2)
+ * @property {(floorY: number) => void} [onLayoutChanged] - Called when vertical layout changes (SCENE.md §1)
  */
 
 export class SceneComposition {
@@ -47,6 +49,12 @@ export class SceneComposition {
         this.logMemory = options.logMemory ?? { info: () => {} };
         this.calculateLuminance = options.calculateLuminance ?? (() => 0.5);
         this.getAdaptiveEmissiveIntensity = options.getAdaptiveEmissiveIntensity ?? (() => 0.25);
+        // Default to params.zSpacing if no getter provided, but prefer the getter for null handling
+        this.getEffectiveZSpacing = options.getEffectiveZSpacing ?? (() => this.params.zSpacing ?? 100);
+        // SCENE.md §2: Called when first slide added to empty stack
+        this.onFirstSlide = options.onFirstSlide ?? null;
+        // SCENE.md §1: Called when vertical layout changes (floor needs repositioning)
+        this.onLayoutChanged = options.onLayoutChanged ?? null;
     }
 
     /**
@@ -58,14 +66,10 @@ export class SceneComposition {
     addImage(texture, filename) {
         this.saveHistory();
 
-        const { mesh, planeWidth, planeHeight } = this.#createMeshFromTexture(texture);
-        const index = this.imageStack.length;
-        const zPosition = index * this.params.zSpacing;
+        // SCENE.md §2: Detect if this is the first slide (stack was empty)
+        const wasEmpty = this.imageStack.length === 0;
 
-        if (this.params.ambience) {
-            mesh.position.y = FLOOR_Y + (planeHeight / 2);
-        }
-        mesh.position.z = zPosition;
+        const { mesh, planeWidth, planeHeight } = this.#createMeshFromTexture(texture);
 
         this.scene.add(mesh);
 
@@ -84,12 +88,20 @@ export class SceneComposition {
         this.imageStack.push(imageData);
         storeSharedRef(SHARED_STATE_KEYS.imageStack, this.imageStack);
 
+        // SCENE.md §1: Recalculate layout to center tallest slide and bottom-align all
+        this.#recalculateLayout();
+
         this.updateImageList();
         this.emitStackUpdated('added');
-        this.logImages.info(`Added ${filename} to stack at Z=${zPosition} (${this.imageStack.length} images total)`);
+        this.logImages.info(`Added ${filename} to stack (${this.imageStack.length} images total)`);
 
         if (typeof this.checkMemoryUsage === 'function') {
             this.checkMemoryUsage(false);
+        }
+
+        // SCENE.md §2: Trigger first-slide defaults when first slide added
+        if (wasEmpty && typeof this.onFirstSlide === 'function') {
+            this.onFirstSlide(this.imageStack.length);
         }
     }
 
@@ -145,7 +157,7 @@ export class SceneComposition {
             imageData.mesh.material.map.dispose();
         }
 
-        this.#reflowZPositions();
+        this.#recalculateLayout();
         storeSharedRef(SHARED_STATE_KEYS.imageStack, this.imageStack);
 
         this.updateImageList();
@@ -176,7 +188,7 @@ export class SceneComposition {
 
         this.saveHistory();
         reorderList(this.imageStack, fromIndex, toIndex);
-        this.#reflowZPositions();
+        this.#recalculateLayout();
         storeSharedRef(SHARED_STATE_KEYS.imageStack, this.imageStack);
 
         this.updateImageList();
@@ -194,38 +206,37 @@ export class SceneComposition {
         this.params.materialThickness = preset.thickness;
         this.params.materialBorderWidth = preset.borderWidth;
 
-        this.imageStack.forEach((imageData, index) => {
-        this.scene.remove(imageData.mesh);
-        imageData.mesh.geometry?.dispose();
-        imageData.mesh.material?.dispose();
+        this.imageStack.forEach((imageData) => {
+            this.scene.remove(imageData.mesh);
+            imageData.mesh.geometry?.dispose();
+            imageData.mesh.material?.dispose();
 
-        const { mesh } = this.#createMeshFromTexture(imageData.texture, {
-            width: imageData.originalWidth,
-            height: imageData.originalHeight
+            // Use current display dimensions (width/height) not original pixel dimensions
+            // This preserves mesh size when changing materials, even for JSON-imported images
+            const { mesh } = this.#createMeshFromTexture(imageData.texture, {
+                width: imageData.width,
+                height: imageData.height
+            });
+
+            const texture = imageData.texture;
+            if (this.params.ambience && mesh.material instanceof THREE.MeshStandardMaterial) {
+                const bgLuminance = this.calculateLuminance(this.params.bgColor);
+                const emissiveIntensity = this.getAdaptiveEmissiveIntensity(bgLuminance);
+                mesh.material.emissive = new THREE.Color(0xffffff);
+                mesh.material.emissiveMap = texture;
+                mesh.material.emissiveIntensity = emissiveIntensity;
+                mesh.material.envMapIntensity = 0.55;
+                mesh.material.needsUpdate = true;
+            }
+
+            imageData.mesh = mesh;
+            imageData.width = mesh.geometry.parameters.width ?? imageData.width;
+            imageData.height = mesh.geometry.parameters.height ?? imageData.height;
+            this.scene.add(mesh);
         });
 
-        mesh.position.z = index * this.params.zSpacing;
-        if (this.params.ambience) {
-            const planeHeight = mesh.geometry.parameters.height ?? imageData.height;
-            mesh.position.y = FLOOR_Y + (planeHeight / 2);
-        }
-
-        const texture = imageData.texture;
-        if (this.params.ambience && mesh.material instanceof THREE.MeshStandardMaterial) {
-            const bgLuminance = this.calculateLuminance(this.params.bgColor);
-            const emissiveIntensity = this.getAdaptiveEmissiveIntensity(bgLuminance);
-            mesh.material.emissive = new THREE.Color(0xffffff);
-            mesh.material.emissiveMap = texture;
-            mesh.material.emissiveIntensity = emissiveIntensity;
-            mesh.material.envMapIntensity = 0.55;
-            mesh.material.needsUpdate = true;
-        }
-
-        imageData.mesh = mesh;
-        imageData.width = mesh.geometry.parameters.width ?? imageData.width;
-        imageData.height = mesh.geometry.parameters.height ?? imageData.height;
-        this.scene.add(mesh);
-        });
+        // SCENE.md §1: Recalculate layout after mesh recreation
+        this.#recalculateLayout();
 
         this.logImages.info(`Material applied to ${this.imageStack.length} images`);
     }
@@ -238,6 +249,14 @@ export class SceneComposition {
         return this.imageStack;
     }
 
+    /**
+     * Force recalculation of vertical layout.
+     * SCENE.md §1: Called externally after bulk operations (e.g., JSON import).
+     */
+    recalculateLayout() {
+        this.#recalculateLayout();
+    }
+
     #createMeshFromTexture(texture, overrideDimensions) {
         const sourceWidth = overrideDimensions?.width ?? texture.image.width;
         const sourceHeight = overrideDimensions?.height ?? texture.image.height;
@@ -245,12 +264,16 @@ export class SceneComposition {
         let planeWidth = sourceWidth;
         let planeHeight = sourceHeight;
 
-        if (sourceWidth >= sourceHeight && sourceWidth > MAX_THUMBNAIL_DIMENSION) {
-            planeWidth = MAX_THUMBNAIL_DIMENSION;
-            planeHeight = (sourceHeight / sourceWidth) * MAX_THUMBNAIL_DIMENSION;
-        } else if (sourceHeight > MAX_THUMBNAIL_DIMENSION) {
-            planeHeight = MAX_THUMBNAIL_DIMENSION;
-            planeWidth = (sourceWidth / sourceHeight) * MAX_THUMBNAIL_DIMENSION;
+        // Only apply MAX_THUMBNAIL_DIMENSION clamping for NEW images (no override)
+        // When overrideDimensions provided, preserve exact size (e.g., material change)
+        if (!overrideDimensions) {
+            if (sourceWidth >= sourceHeight && sourceWidth > MAX_THUMBNAIL_DIMENSION) {
+                planeWidth = MAX_THUMBNAIL_DIMENSION;
+                planeHeight = (sourceHeight / sourceWidth) * MAX_THUMBNAIL_DIMENSION;
+            } else if (sourceHeight > MAX_THUMBNAIL_DIMENSION) {
+                planeHeight = MAX_THUMBNAIL_DIMENSION;
+                planeWidth = (sourceWidth / sourceHeight) * MAX_THUMBNAIL_DIMENSION;
+            }
         }
 
         const geometry = this.params.materialThickness > 1
@@ -305,13 +328,52 @@ export class SceneComposition {
         return { mesh, planeWidth, planeHeight };
     }
 
-    #reflowZPositions() {
+    /**
+     * Get the height of the tallest slide in the stack.
+     * @returns {number} Tallest slide height, or 0 if stack is empty
+     */
+    #getTallestHeight() {
+        if (this.imageStack.length === 0) return 0;
+        return Math.max(...this.imageStack.map(img => img.height));
+    }
+
+    /**
+     * Get the current floor Y position.
+     * SCENE.md §1: Floor is 1px below the bottom of the tallest slide.
+     * @returns {number} The Y position for the floor
+     */
+    getFloorY() {
+        const tallestHeight = this.#getTallestHeight();
+        if (tallestHeight === 0) return 0; // Default when no slides
+        // Tallest slide centered at Y=0, bottom at -tallestHeight/2
+        // Floor is 1px below that
+        return -tallestHeight / 2 - 1;
+    }
+
+    /**
+     * Recalculate Z and Y positions for all slides and notify floor.
+     * SCENE.md §1:
+     * - Tallest slide is vertically centered in scene (center at Y=0)
+     * - All slides are bottom-aligned to the tallest slide's bottom
+     * - Floor is positioned 1px below the slides
+     */
+    #recalculateLayout() {
+        if (this.imageStack.length === 0) return;
+
+        const tallestHeight = this.#getTallestHeight();
+        // Tallest slide center at Y=0, so bottom at -tallestHeight/2
+        const bottomY = -tallestHeight / 2;
+
         this.imageStack.forEach((imageData, index) => {
-            imageData.mesh.position.z = index * this.params.zSpacing;
-            if (this.params.ambience) {
-                const height = imageData.mesh.geometry.parameters.height ?? imageData.height;
-                imageData.mesh.position.y = FLOOR_Y + (height / 2);
-            }
+            imageData.mesh.position.z = index * this.getEffectiveZSpacing();
+            // Bottom-align: bottom edge at bottomY, center at bottomY + height/2
+            const height = imageData.mesh.geometry.parameters.height ?? imageData.height;
+            imageData.mesh.position.y = bottomY + (height / 2);
         });
+
+        // Notify floor manager to update position (1px below slides)
+        if (typeof this.onLayoutChanged === 'function') {
+            this.onLayoutChanged(bottomY - 1);
+        }
     }
 }

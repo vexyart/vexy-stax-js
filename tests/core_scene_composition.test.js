@@ -8,8 +8,8 @@
  * Modules Tested:
  * - src/core/SceneComposition.js (SceneComposition class)
  *
- * Test Count: 10 tests
- * @lastTested 2025-11-06 (Phase 5 Iteration 6)
+ * Test Count: 12 tests
+ * @lastTested 2025-12-22 (Session 17 - SCENE.md §2 onFirstSlide)
  */
 
 import test from 'node:test';
@@ -365,9 +365,10 @@ test('SceneComposition_applyMaterialPreset_when_ambienceEnabled_then_rebuildsMes
     assert.deepEqual(emissiveCalls, [0.62], 'adaptive emissive helper should receive luminance output');
 
     const geometryParams = newMesh.geometry.parameters;
-    const expectedY = FLOOR_Y + ((geometryParams.height ?? 0) / 2);
+    // SCENE.md §1: Tallest slide (only slide) is centered at Y=0
+    // bottomY = -height/2, mesh.position.y = bottomY + height/2 = 0
     assert.equal(newMesh.position.z, 0, 'z position should remain aligned with index 0');
-    assert.equal(newMesh.position.y, expectedY, 'ambience should elevate mesh to rest on the floor plane');
+    assert.equal(newMesh.position.y, 0, 'single slide (tallest) should be centered at Y=0');
     assert.equal(
         geometryParams.depth ?? geometryParams.height,
         preset.thickness,
@@ -470,4 +471,91 @@ test('SceneComposition_applyMaterialPreset_when_thicknessGreaterThanOne_then_use
 
     assert.equal(imageData.width, newMesh.geometry.parameters.width, 'stack width metadata should reflect box width');
     assert.equal(imageData.height, newMesh.geometry.parameters.height, 'stack height metadata should reflect box height');
+});
+
+test('SceneComposition_addImage_when_firstSlide_then_onFirstSlideCallbackFires', () => {
+    appState.reset();
+
+    const scene = {
+        added: [],
+        removed: [],
+        add(mesh) { this.added.push(mesh); },
+        remove(mesh) { this.removed.push(mesh); }
+    };
+
+    const params = {
+        materialThickness: 1,
+        ambience: false,
+        materialRoughness: 0.5,
+        materialMetalness: 0.3,
+        materialBorderWidth: 0,
+        zSpacing: 50
+    };
+
+    const imageStack = [];
+    const onFirstSlideCalls = [];
+
+    const composition = new SceneComposition({
+        scene,
+        params,
+        imageStack,
+        saveHistory: () => {},
+        emitStackUpdated: () => {},
+        updateImageList: () => {},
+        showToast: () => {},
+        checkMemoryUsage: () => true,
+        onFirstSlide: (count) => {
+            onFirstSlideCalls.push(count);
+        }
+    });
+
+    // Add first slide - should trigger onFirstSlide
+    composition.addImage(createTexture(400, 300), 'first.png');
+
+    assert.equal(onFirstSlideCalls.length, 1, 'onFirstSlide should fire once for first slide');
+    assert.equal(onFirstSlideCalls[0], 1, 'onFirstSlide should receive slide count of 1');
+
+    // Add second slide - should NOT trigger onFirstSlide
+    composition.addImage(createTexture(400, 300), 'second.png');
+
+    assert.equal(onFirstSlideCalls.length, 1, 'onFirstSlide should NOT fire for subsequent slides');
+});
+
+test('SceneComposition_addImage_when_noOnFirstSlideCallback_then_doesNotThrow', () => {
+    appState.reset();
+
+    const scene = {
+        added: [],
+        add(mesh) { this.added.push(mesh); },
+        remove() {}
+    };
+
+    const params = {
+        materialThickness: 1,
+        ambience: false,
+        materialRoughness: 0.5,
+        materialMetalness: 0.3,
+        materialBorderWidth: 0,
+        zSpacing: 50
+    };
+
+    const imageStack = [];
+
+    // Create composition WITHOUT onFirstSlide callback
+    const composition = new SceneComposition({
+        scene,
+        params,
+        imageStack,
+        saveHistory: () => {},
+        emitStackUpdated: () => {},
+        updateImageList: () => {},
+        showToast: () => {},
+        checkMemoryUsage: () => true
+        // onFirstSlide omitted - should use null default
+    });
+
+    // Should not throw when adding first slide
+    assert.doesNotThrow(() => {
+        composition.addImage(createTexture(400, 300), 'first.png');
+    }, 'addImage should handle missing onFirstSlide callback gracefully');
 });

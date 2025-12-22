@@ -24,7 +24,6 @@ import {
     MAIN_LIGHT_SETTINGS,
     FILL_LIGHT_SETTINGS,
     HEMISPHERE_LIGHT_SETTINGS,
-    FLOOR_BASE_MATERIAL,
     EVENTS
 } from '../src/core/constants.js';
 
@@ -34,7 +33,7 @@ describe('Constants Immutability', () => {
 
         // Attempt to modify top-level object should fail silently in non-strict mode
         // or throw in strict mode
-        const originalKey = 'flat-matte';
+        const originalKey = 'matte';
         const originalValue = MATERIAL_PRESETS[originalKey];
 
         assert.throws(() => {
@@ -46,7 +45,7 @@ describe('Constants Immutability', () => {
     });
 
     test('MATERIAL_PRESETS nested objects are NOT deeply frozen (documented limitation)', () => {
-        const preset = MATERIAL_PRESETS['flat-matte'];
+        const preset = MATERIAL_PRESETS['matte'];
         const originalRoughness = preset.roughness;
 
         // Note: Object.freeze() is shallow - nested objects are mutable
@@ -179,20 +178,6 @@ describe('Constants Immutability', () => {
         }, TypeError, 'Modifying intensity should throw');
     });
 
-    test('FLOOR_BASE_MATERIAL is frozen', () => {
-        assert.ok(Object.isFrozen(FLOOR_BASE_MATERIAL), 'FLOOR_BASE_MATERIAL should be frozen');
-
-        assert.throws(() => {
-            'use strict';
-            FLOOR_BASE_MATERIAL.roughness = 0.9;
-        }, TypeError, 'Modifying roughness should throw');
-
-        assert.throws(() => {
-            'use strict';
-            FLOOR_BASE_MATERIAL.metalness = 0.5;
-        }, TypeError, 'Modifying metalness should throw');
-    });
-
     test('EVENTS is frozen', () => {
         assert.ok(Object.isFrozen(EVENTS), 'EVENTS should be frozen');
 
@@ -213,8 +198,8 @@ describe('Constants Immutability', () => {
         assert.strictEqual(RETRY_DELAYS_MS[0], 500, 'First retry delay should be 500');
         assert.strictEqual(RETRY_DELAYS_MS[1], 1500, 'Second retry delay should be 1500');
         assert.strictEqual(RETRY_DELAYS_MS[2], 3000, 'Third retry delay should be 3000');
-        assert.strictEqual(MATERIAL_PRESETS['flat-matte'].roughness, 1.0, 'flat-matte roughness should be 1.0');
-        assert.strictEqual(MATERIAL_PRESETS['flat-matte'].metalness, 0, 'flat-matte metalness should be 0');
+        assert.strictEqual(MATERIAL_PRESETS['matte'].roughness, 0.7, 'matte roughness should be 0.7');
+        assert.strictEqual(MATERIAL_PRESETS['matte'].metalness, 0, 'matte metalness should be 0');
         assert.strictEqual(VIEWPOINT_PRESETS.beauty.x, -1280, 'beauty viewpoint x should be -1280');
         assert.strictEqual(VIEWPOINT_PRESETS.beauty.y, -40, 'beauty viewpoint y should be -40');
         assert.strictEqual(VIEWPOINT_PRESETS.beauty.z, 1400, 'beauty viewpoint z should be 1400');

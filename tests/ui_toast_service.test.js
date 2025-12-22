@@ -8,8 +8,8 @@
  * Modules Tested:
  * - src/ui/ToastService.js (createToastService)
  *
- * Test Count: 3 tests
- * @lastTested 2025-11-05 (Phase 5 Iteration 3)
+ * Test Count: 6 tests
+ * @lastTested 2025-12-21 (Added ARIA accessibility tests)
  */
 
 import test from 'node:test';
@@ -43,6 +43,13 @@ function createFakeDocument() {
                 },
                 textContent: '',
                 removed: false,
+                _attributes: {},
+                setAttribute(name, value) {
+                    this._attributes[name] = value;
+                },
+                getAttribute(name) {
+                    return this._attributes[name];
+                },
                 remove() {
                     this.removed = true;
                 }
@@ -86,7 +93,7 @@ test('createToastService_showToast_when_success_then_configuresElementAndRemoval
     const toast = fakeDocument.appended[0];
     assert.ok(toast.style.cssText.includes('position: fixed'), 'toast style should fix element');
     assert.ok(toast.style.cssText.includes('z-index: 9000'), 'toast style should apply injected z-index');
-    assert.equal(toast.textContent, 'Saved!', 'toast text should match message');
+    assert.equal(toast.textContent, '✓ Saved!', 'toast text should include icon prefix');
 
     assert.equal(timers.length, 1, 'initial call should schedule primary timer');
     assert.equal(timers[0].delay, 400, 'primary timer should honour provided duration');
@@ -117,4 +124,80 @@ test('createToastService_showToast_when_warningUsesDefaultDuration_then_colorsAn
     assert.equal(toast.style.background, 'rgba(255, 193, 7, 0.95)', 'warning toast should use warning background');
     assert.equal(toast.style.color, 'black', 'warning toast should use provided text colour');
     assert.equal(timers[0].delay, 600, 'default duration should drive hide timer');
+});
+
+test('createToastService_showToast_when_error_then_ariaAlertRole', () => {
+    const fakeDocument = createFakeDocument();
+    const { setTimeoutFn } = createTimerHarness();
+
+    const service = createToastService({
+        documentRef: fakeDocument,
+        setTimeoutFn
+    });
+
+    service('Something went wrong', 'error');
+
+    const toast = fakeDocument.appended[0];
+    assert.equal(toast.getAttribute('role'), 'alert', 'error toast should have role="alert"');
+    assert.equal(toast.getAttribute('aria-live'), 'assertive', 'error toast should be assertive');
+});
+
+test('createToastService_showToast_when_success_then_ariaStatusRole', () => {
+    const fakeDocument = createFakeDocument();
+    const { setTimeoutFn } = createTimerHarness();
+
+    const service = createToastService({
+        documentRef: fakeDocument,
+        setTimeoutFn
+    });
+
+    service('Saved successfully', 'success');
+
+    const toast = fakeDocument.appended[0];
+    assert.equal(toast.getAttribute('role'), 'status', 'success toast should have role="status"');
+    assert.equal(toast.getAttribute('aria-live'), 'polite', 'success toast should be polite');
+});
+
+test('createToastService_showToast_when_info_then_ariaStatusRole', () => {
+    const fakeDocument = createFakeDocument();
+    const { setTimeoutFn } = createTimerHarness();
+
+    const service = createToastService({
+        documentRef: fakeDocument,
+        setTimeoutFn
+    });
+
+    service('Just FYI', 'info');
+
+    const toast = fakeDocument.appended[0];
+    assert.equal(toast.getAttribute('role'), 'status', 'info toast should have role="status"');
+    assert.equal(toast.getAttribute('aria-live'), 'polite', 'info toast should be polite');
+});
+
+test('createToastService_showToast_when_anyType_then_includesIconPrefix', () => {
+    const fakeDocument = createFakeDocument();
+    const { setTimeoutFn } = createTimerHarness();
+
+    const service = createToastService({
+        documentRef: fakeDocument,
+        setTimeoutFn
+    });
+
+    // Test all four types have icons (WCAG: don't rely on color alone)
+    const types = [
+        { type: 'success', icon: '✓' },
+        { type: 'error', icon: '✕' },
+        { type: 'warning', icon: '⚠' },
+        { type: 'info', icon: 'ℹ' }
+    ];
+
+    types.forEach(({ type, icon }) => {
+        fakeDocument.appended.length = 0; // Reset
+        service('Test message', type);
+        const toast = fakeDocument.appended[0];
+        assert.ok(
+            toast.textContent.startsWith(icon),
+            `${type} toast should start with ${icon} icon`
+        );
+    });
 });

@@ -5,7 +5,12 @@ import { Pane as DefaultPane } from 'tweakpane';
 import * as EssentialsPlugin from '@kitschpatrol/tweakpane-plugin-essentials';
 import * as ColorPlusPlugin from 'tweakpane-plugin-color-plus';
 
-import { MATERIAL_PRESETS, VIEWPOINT_PRESETS } from '../core/constants.js';
+import {
+    MATERIAL_PRESETS,
+    VIEWPOINT_PRESETS,
+    CAMERA_MIN_DISTANCE,
+    CAMERA_MAX_DISTANCE
+} from '../core/constants.js';
 
 const noop = () => {};
 
@@ -41,9 +46,12 @@ export class TweakpaneSetup {
             centerViewOnContent: callbacks.centerViewOnContent ?? noop,
             setViewpoint: callbacks.setViewpoint ?? noop,
             setBeautyViewpoint: callbacks.setBeautyViewpoint ?? noop,
+            setHeroViewpoint: callbacks.setHeroViewpoint ?? noop,
             setViewpointFitToFrame: callbacks.setViewpointFitToFrame ?? noop,
             switchCameraMode: callbacks.switchCameraMode ?? noop,
             updateZoom: callbacks.updateZoom ?? noop,
+            updateCameraDistance: callbacks.updateCameraDistance ?? noop,
+            updateCameraOffset: callbacks.updateCameraOffset ?? noop,
             setCameraFOV: callbacks.setCameraFOV ?? noop,
             applyMaterialPreset: callbacks.applyMaterialPreset ?? noop,
             updateZSpacing: callbacks.updateZSpacing ?? noop,
@@ -59,7 +67,8 @@ export class TweakpaneSetup {
             loadImage: callbacks.loadImage ?? noop,
             showToast: callbacks.showToast ?? noop,
             saveSettings: callbacks.saveSettings ?? noop,
-            playHeroShot: callbacks.playHeroShot ?? (async () => {})
+            playHeroShot: callbacks.playHeroShot ?? (async () => {}),
+            loadExample: callbacks.loadExample ?? noop
         };
         this.cameraAnimator = dependencies.cameraAnimator ?? { playHeroShot: async () => {} };
         this.logUI = dependencies.logUI ?? { info: noop, error: noop };
@@ -102,6 +111,12 @@ export class TweakpaneSetup {
         this.#buildTabs(pane);
 
         this.pane = pane;
+
+        // Apply tooltips after DOM is ready (browser only)
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => this.#applyTooltips());
+        }
+
         return pane;
     }
 
@@ -128,12 +143,21 @@ export class TweakpaneSetup {
         });
 
         studioFolder.addBinding(this.params, 'bgColor', {
-            label: 'Color',
+            label: 'Background',
             view: 'color',
             picker: 'inline',
             expanded: false
         }).on('change', () => {
             this.callbacks.updateBackground();
+            this.callbacks.saveSettings();
+        });
+
+        studioFolder.addBinding(this.params, 'floorColor', {
+            label: 'Floor',
+            picker: 'inline',
+            expanded: false
+        }).on('change', () => {
+            this.callbacks.updateFloorColor();
             this.callbacks.saveSettings();
         });
 
@@ -158,12 +182,16 @@ export class TweakpaneSetup {
             expanded: true
         });
 
+        // Store bindings for later refresh
+        this.cameraBindings = {};
+
         cameraFolder.addBinding(this.params, 'viewpointPreset', {
             label: 'Viewpoint',
             options: {
+                Hero: 'hero',
                 Beauty: 'beauty',
-                Center: 'center',
                 Front: 'front',
+                Center: 'center',
                 Top: 'top',
                 Isometric: 'isometric',
                 '3D Stack': '3d-stack',
@@ -172,7 +200,9 @@ export class TweakpaneSetup {
         }).on('change', (ev) => {
             const presetKey = ev.value;
             const preset = this.viewpointPresets[presetKey];
-            if (presetKey === 'beauty') {
+            if (presetKey === 'hero') {
+                this.callbacks.setHeroViewpoint?.();
+            } else if (presetKey === 'beauty') {
                 this.callbacks.setBeautyViewpoint();
             } else if (preset === null || presetKey === 'center') {
                 this.callbacks.centerViewOnContent();
@@ -181,6 +211,8 @@ export class TweakpaneSetup {
             } else if (preset) {
                 this.callbacks.setViewpoint(preset.x, preset.y, preset.z);
             }
+            // Refresh pane to show reset offset values
+            pane.refresh();
             this.callbacks.saveSettings();
         });
 
@@ -197,8 +229,20 @@ export class TweakpaneSetup {
             this.callbacks.saveSettings();
         });
 
+        // FOV slider (field of view in degrees)
+        cameraFolder.addBinding(this.params, 'cameraFOV', {
+            label: 'FOV',
+            min: 30,
+            max: 120,
+            step: 1
+        }).on('change', (ev) => {
+            this.callbacks.setCameraFOV(ev.value);
+            this.callbacks.saveSettings();
+        });
+
+        // Tele slider (projection zoom multiplier)
         cameraFolder.addBinding(this.params, 'cameraZoom', {
-            label: 'Zoom',
+            label: 'Tele',
             min: 0.1,
             max: 3.0,
             step: 0.1
@@ -207,14 +251,40 @@ export class TweakpaneSetup {
             this.callbacks.saveSettings();
         });
 
-        cameraFolder.addBinding(this.params, 'cameraFOV', {
-            label: 'FOV',
-            min: 15,
-            max: 120,
-            step: 5
+        // Z slider (camera distance from scene)
+        this.cameraBindings.distance = cameraFolder.addBinding(this.params, 'cameraDistance', {
+            label: 'Z',
+            min: CAMERA_MIN_DISTANCE,
+            max: CAMERA_MAX_DISTANCE,
+            step: 10
         }).on('change', (ev) => {
-            this.params.cameraFOV = ev.value;
-            this.callbacks.setCameraFOV(ev.value);
+            this.callbacks.updateCameraDistance(ev.value);
+            this.callbacks.saveSettings();
+        });
+
+        // X/Y offset controls - applied additively after viewpoint preset
+        const canvasWidth = this.params.canvasSize?.x ?? 960;
+        const canvasHeight = this.params.canvasSize?.y ?? 540;
+
+        this.cameraBindings.offsetX = cameraFolder.addBinding(this.params, 'cameraOffsetX', {
+            label: 'X',
+            min: -canvasWidth / 2,
+            max: canvasWidth / 2,
+            step: 10
+        }).on('change', (ev) => {
+            // Don't set params here - CameraController.setOffset handles it
+            this.callbacks.updateCameraOffset(ev.value, this.params.cameraOffsetY);
+            this.callbacks.saveSettings();
+        });
+
+        this.cameraBindings.offsetY = cameraFolder.addBinding(this.params, 'cameraOffsetY', {
+            label: 'Y',
+            min: -canvasHeight / 2,
+            max: canvasHeight / 2,
+            step: 10
+        }).on('change', (ev) => {
+            // Don't set params here - CameraController.setOffset handles it
+            this.callbacks.updateCameraOffset(this.params.cameraOffsetX, ev.value);
             this.callbacks.saveSettings();
         });
     }
@@ -228,16 +298,9 @@ export class TweakpaneSetup {
         slidesFolder.addBinding(this.params, 'materialPreset', {
             label: 'Material',
             options: {
-                'Metallic Card': 'metallic-card',
-                'Flat Matte': 'flat-matte',
-                'Glossy Photo': 'glossy-photo',
-                'Plastic Card': 'plastic-card',
-                'Thick Board': 'thick-board',
-                'Metal Sheet': 'metal-sheet',
-                'Glass Slide': 'glass-slide',
-                'Matte Print': 'matte-print',
-                Bordered: 'bordered',
-                '3D Box': '3d-box'
+                Glossy: 'glossy',
+                Neutral: 'neutral',
+                Matte: 'matte'
             }
         }).on('change', (ev) => {
             const preset = this.materialPresets[ev.value];
@@ -248,7 +311,7 @@ export class TweakpaneSetup {
         });
 
         slidesFolder.addBinding(this.params, 'zSpacing', {
-            label: 'Distance',
+            label: 'Layer Depth',
             min: 0,
             max: 500,
             step: 10
@@ -309,13 +372,15 @@ export class TweakpaneSetup {
 
         tab.addBlade({
             view: 'buttongrid',
-            size: [2, 1],
+            size: [3, 1],
             cells: (x, y) => ({
-                title: [['Defaults', 'Clear']][y][x]
+                title: [['Example', 'Defaults', 'Clear']][y][x]
             }),
             label: 'Tools'
         }).on('click', (ev) => {
             if (ev.index[0] === 0) {
+                this.callbacks.loadExample();
+            } else if (ev.index[0] === 1) {
                 if (this.confirm('Reset all settings to defaults? This will clear saved preferences.')) {
                     this.callbacks.resetSettings();
                 }
@@ -359,7 +424,9 @@ export class TweakpaneSetup {
                     topSlide,
                     canvasSize: this.params.canvasSize,
                     duration: this.params.animDuration,
-                    easing: this.params.animEasing
+                    easing: this.params.animEasing,
+                    imageStack: this.imageStack,
+                    holdTime: this.params.animHold ?? 0.5
                 });
                 this.callbacks.showToast('Animation complete', 'success');
             } catch (error) {
@@ -389,6 +456,51 @@ export class TweakpaneSetup {
             }
         }).on('change', () => {
             this.callbacks.saveSettings();
+        });
+    }
+
+    /**
+     * Apply native HTML title tooltips to Tweakpane controls.
+     * Maps label text to descriptive help messages.
+     */
+    #applyTooltips() {
+        const tooltips = {
+            // Studio folder
+            'Size': 'Canvas dimensions in pixels (width × height)',
+            'Background': 'Scene background color',
+            'Floor': 'Floor plane color and opacity',
+            'Transparent': 'Enable transparent background for PNG export',
+            'Ambience': 'Toggle ambient lighting mode',
+            // Camera folder
+            'Viewpoint': 'Camera position preset (Hero collapses slides)',
+            'Mode': 'Camera projection type',
+            'FOV': 'Field of view in degrees (30-120°)',
+            'Tele': 'Telephoto zoom multiplier (0.1-3×)',
+            'Z': 'Camera distance from scene in pixels',
+            'X': 'Horizontal pan offset in pixels',
+            'Y': 'Vertical pan offset in pixels',
+            // Slides folder
+            'Material': 'Surface appearance preset',
+            'Layer Depth': 'Z-spacing between slides in pixels',
+            // Video tab
+            'Duration': 'Animation duration in seconds',
+            'Easing': 'Animation timing curve'
+        };
+
+        const container = this.document?.getElementById?.('controls');
+        if (!container) return;
+
+        // Tweakpane renders labels inside .tp-lblv_l elements
+        const labels = container.querySelectorAll('.tp-lblv_l');
+        labels.forEach(labelEl => {
+            const text = labelEl.textContent?.trim();
+            if (text && tooltips[text]) {
+                // Set title on the parent row element for larger hover area
+                const row = labelEl.closest('.tp-lblv');
+                if (row) {
+                    row.title = tooltips[text];
+                }
+            }
         });
     }
 }

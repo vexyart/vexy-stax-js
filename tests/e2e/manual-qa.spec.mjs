@@ -170,3 +170,180 @@ test('automation bridge exposes slide/viewpoint/heroShot controls', async ({ pag
     await window.__vexyStaxAutomation.playHeroShot({ duration: 0.05, holdTime: 0.01, easing: 'linear' });
   });
 });
+
+test('tallest slide centered, all slides bottom-aligned (SCENE.md §1)', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#canvas');
+  await page.waitForFunction(() => typeof window.__vexyStaxAutomation !== 'undefined');
+
+  // Create two images of different heights via canvas
+  const images = await page.evaluate(() => {
+    function createDataURL(width, height, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, width, height);
+      return canvas.toDataURL('image/png');
+    }
+    return {
+      tall: createDataURL(100, 200, '#ff0000'),   // 200px tall (tallest)
+      short: createDataURL(100, 100, '#00ff00'),  // 100px tall
+    };
+  });
+
+  // Add tall slide first
+  await page.evaluate(async (dataURL) => {
+    await window.__vexyStaxAutomation.addSlideFromDataURL(dataURL, 'tall.png');
+  }, images.tall);
+
+  // Add short slide
+  await page.evaluate(async (dataURL) => {
+    await window.__vexyStaxAutomation.addSlideFromDataURL(dataURL, 'short.png');
+  }, images.short);
+
+  // Get mesh positions from the scene
+  // getImageStack() returns: { index, filename, width, height, position: {x,y,z} }
+  const positions = await page.evaluate(() => {
+    const stack = window.vexyStax.getImageStack();
+    return stack.map(img => ({
+      filename: img.filename,
+      height: img.height,
+      y: img.position.y,
+      bottomY: img.position.y - img.height / 2,
+    }));
+  });
+
+  expect(positions).toHaveLength(2);
+
+  // Find tallest and shortest
+  const tallSlide = positions.find(p => p.filename === 'tall.png');
+  const shortSlide = positions.find(p => p.filename === 'short.png');
+
+  expect(tallSlide).toBeDefined();
+  expect(shortSlide).toBeDefined();
+
+  // All slides bottom-aligned means bottomY should be equal
+  expect(tallSlide.bottomY).toBeCloseTo(shortSlide.bottomY, 0);
+
+  // Tallest slide should be taller
+  expect(tallSlide.height).toBeGreaterThan(shortSlide.height);
+});
+
+test('first slide triggers auto-defaults (SCENE.md §2)', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#canvas');
+  await page.waitForFunction(() => typeof window.__vexyStaxAutomation !== 'undefined');
+
+  // Create and add first slide
+  const dataURL = await page.evaluate(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#ff0000';
+    ctx.fillRect(0, 0, 100, 100);
+    return canvas.toDataURL('image/png');
+  });
+
+  await page.evaluate(async (dataURL) => {
+    await window.__vexyStaxAutomation.addSlideFromDataURL(dataURL, 'first.png');
+  }, dataURL);
+
+  // Wait for first-slide callback to trigger
+  await page.waitForTimeout(200);
+
+  // Verify slide was added
+  const stackCount = await page.evaluate(() => window.vexyStax.getImageStack().length);
+  expect(stackCount).toBe(1);
+
+  // Verify slide is positioned correctly per SCENE.md §1:
+  // Single slide is the "tallest", so its center is at Y=0
+  const slidePos = await page.evaluate(() => {
+    const stack = window.vexyStax.getImageStack();
+    return stack[0]?.position ?? null;
+  });
+
+  expect(slidePos).not.toBeNull();
+  // Single tallest slide's center is at Y=0
+  expect(slidePos.y).toBeCloseTo(0, 0);
+});
+
+test('Hero→Beauty restores layer depth (SCENE.md §5)', async ({ page }) => {
+  await page.goto('/');
+  await page.waitForSelector('#canvas');
+  await page.waitForFunction(() => typeof window.__vexyStaxAutomation !== 'undefined');
+
+  // Create and add two slides
+  const images = await page.evaluate(() => {
+    function createDataURL(width, height, color) {
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, width, height);
+      return canvas.toDataURL('image/png');
+    }
+    return {
+      first: createDataURL(100, 100, '#ff0000'),
+      second: createDataURL(100, 100, '#00ff00'),
+    };
+  });
+
+  await page.evaluate(async (dataURL) => {
+    await window.__vexyStaxAutomation.addSlideFromDataURL(dataURL, 'slide1.png');
+  }, images.first);
+
+  await page.evaluate(async (dataURL) => {
+    await window.__vexyStaxAutomation.addSlideFromDataURL(dataURL, 'slide2.png');
+  }, images.second);
+
+  // Wait for layout to settle
+  await page.waitForTimeout(200);
+
+  // Get initial z-positions (with layer depth spacing)
+  const initialPositions = await page.evaluate(() => {
+    return window.vexyStax.getImageStack().map(img => img.position.z);
+  });
+
+  // Z positions should be different (layer depth applied)
+  expect(initialPositions[0]).not.toBe(initialPositions[1]);
+  const initialSpacing = Math.abs(initialPositions[0] - initialPositions[1]);
+  expect(initialSpacing).toBeGreaterThan(10); // Should be ~243 (960/4 + 3)
+
+  // Switch to Hero viewpoint (collapses layer depth)
+  await page.evaluate(async () => {
+    await window.__vexyStaxAutomation.setViewpointPreset('hero');
+  });
+
+  // Wait for viewpoint change and layout to settle
+  await page.waitForTimeout(300);
+
+  // Get positions after Hero (should be collapsed)
+  const heroPositions = await page.evaluate(() => {
+    return window.vexyStax.getImageStack().map(img => img.position.z);
+  });
+
+  const heroSpacing = Math.abs(heroPositions[0] - heroPositions[1]);
+  // Hero viewpoint collapses slides to MIN_LAYER_GAP (3px)
+  expect(heroSpacing).toBeLessThan(10);
+
+  // Switch to Beauty viewpoint (should restore layer depth)
+  await page.evaluate(async () => {
+    await window.__vexyStaxAutomation.setViewpointPreset('beauty');
+  });
+
+  // Wait for viewpoint change and layout to settle
+  await page.waitForTimeout(300);
+
+  // Get positions after Beauty (should be restored)
+  const beautyPositions = await page.evaluate(() => {
+    return window.vexyStax.getImageStack().map(img => img.position.z);
+  });
+
+  const beautySpacing = Math.abs(beautyPositions[0] - beautyPositions[1]);
+  // Should be approximately back to initial spacing (tolerance of 10%)
+  expect(beautySpacing).toBeGreaterThan(initialSpacing * 0.9);
+});

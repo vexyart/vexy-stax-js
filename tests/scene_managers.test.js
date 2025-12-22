@@ -62,6 +62,16 @@ test('getAdaptiveEmissiveIntensity has inverse relationship with luminance', asy
     assert.ok(result1 > result2, 'Lower luminance should produce higher emissive intensity');
 });
 
+test('calculateLuminance reports 0 for black and 1 for white backgrounds', async () => {
+    const { calculateLuminance } = await import('../src/scene/LightingManager.js');
+
+    const black = calculateLuminance('#000000');
+    const white = calculateLuminance('#ffffff');
+
+    assert.strictEqual(black, 0, 'Black should yield luminance 0');
+    assert.ok(white > 0.99 && white <= 1, 'White should approach luminance 1');
+});
+
 test('LightingManager class exports with expected structure', async () => {
     const { LightingManager } = await import('../src/scene/LightingManager.js');
 
@@ -115,7 +125,17 @@ test('FloorManager class exports with expected structure', async () => {
     assert.ok(manager, 'Should be able to instantiate FloorManager');
     assert.strictEqual(manager.scene, mockScene, 'Should store scene reference');
     assert.strictEqual(manager.params, mockParams, 'Should store params reference');
-    assert.strictEqual(manager.floorGroup, null, 'Floor group should be null before create');
+    assert.strictEqual(manager.floor, null, 'Floor should be null before create');
+});
+
+test('FloorManager.updateColor is a no-op for simplified floor', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+
+    const mockScene = { add: () => {}, remove: () => {} };
+    const manager = new FloorManager(mockScene, { bgColor: '#101010' });
+
+    // updateColor should not throw and should be safe to call
+    assert.doesNotThrow(() => manager.updateColor('#222222'), 'updateColor should not throw');
 });
 
 test('FloorManager isActive returns false before create', async () => {
@@ -154,4 +174,148 @@ test('Scene managers have dispose methods', async () => {
     assert.doesNotThrow(() => sceneManager.dispose(), 'SceneManager.dispose should not throw');
     assert.doesNotThrow(() => lightingManager.dispose(), 'LightingManager.dispose should not throw');
     assert.doesNotThrow(() => floorManager.dispose(), 'FloorManager.dispose should not throw');
+});
+
+// ============================================================
+// FloorManager color normalization tests (added 2025-12-22)
+// Tests the #normalizeColorComponent private method behavior
+// via the public updateColor() API
+// ============================================================
+
+test('FloorManager_updateColor_when_colorIs0to255_then_normalizesCorrectly', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+
+    let capturedColor = null;
+    const mockScene = { add: () => {}, remove: () => {} };
+    // 0-255 format: red (255, 0, 0) with alpha 0.5
+    const mockParams = {
+        floorColor: { r: 255, g: 128, b: 0, a: 0.5 }
+    };
+
+    const manager = new FloorManager(mockScene, mockParams);
+
+    // Create a mock floor mesh to test updateColor behavior
+    manager.floor = {
+        material: {
+            color: {
+                setRGB: (r, g, b) => {
+                    capturedColor = { r, g, b };
+                }
+            },
+            opacity: 1,
+            needsUpdate: false
+        }
+    };
+
+    manager.updateColor();
+
+    // 0-255 values should be normalized to 0-1
+    assert.ok(capturedColor, 'setRGB should have been called');
+    assert.ok(Math.abs(capturedColor.r - 1.0) < 0.01, 'r=255 should normalize to 1.0');
+    assert.ok(Math.abs(capturedColor.g - 0.502) < 0.01, 'g=128 should normalize to ~0.5');
+    assert.ok(Math.abs(capturedColor.b - 0) < 0.01, 'b=0 should normalize to 0');
+});
+
+test('FloorManager_updateColor_when_colorIs0to1_then_passesThrough', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+
+    let capturedColor = null;
+    const mockScene = { add: () => {}, remove: () => {} };
+    // 0-1 format (already normalized)
+    const mockParams = {
+        floorColor: { r: 0.8, g: 0.5, b: 0.2, a: 0.7 }
+    };
+
+    const manager = new FloorManager(mockScene, mockParams);
+
+    manager.floor = {
+        material: {
+            color: {
+                setRGB: (r, g, b) => {
+                    capturedColor = { r, g, b };
+                }
+            },
+            opacity: 1,
+            needsUpdate: false
+        }
+    };
+
+    manager.updateColor();
+
+    // 0-1 values should pass through unchanged
+    assert.ok(capturedColor, 'setRGB should have been called');
+    assert.ok(Math.abs(capturedColor.r - 0.8) < 0.01, 'r=0.8 should remain 0.8');
+    assert.ok(Math.abs(capturedColor.g - 0.5) < 0.01, 'g=0.5 should remain 0.5');
+    assert.ok(Math.abs(capturedColor.b - 0.2) < 0.01, 'b=0.2 should remain 0.2');
+});
+
+test('FloorManager_updateColor_when_alphaProvided_then_setsOpacity', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockParams = {
+        floorColor: { r: 100, g: 100, b: 100, a: 0.42 }
+    };
+
+    const manager = new FloorManager(mockScene, mockParams);
+
+    manager.floor = {
+        material: {
+            color: { setRGB: () => {} },
+            opacity: 1,
+            needsUpdate: false
+        }
+    };
+
+    manager.updateColor();
+
+    assert.strictEqual(manager.floor.material.opacity, 0.42, 'Opacity should be set from alpha');
+    assert.strictEqual(manager.floor.material.needsUpdate, true, 'needsUpdate should be true');
+});
+
+test('FloorManager_updateColor_when_floorNull_then_silentNoOp', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockParams = {
+        floorColor: { r: 255, g: 0, b: 0, a: 1 }
+    };
+
+    const manager = new FloorManager(mockScene, mockParams);
+    // floor is null by default
+
+    // Should not throw
+    assert.doesNotThrow(() => manager.updateColor(), 'updateColor should not throw when floor is null');
+});
+
+test('FloorManager_updateColor_when_floorColorMissing_then_usesDefault', async () => {
+    const { FloorManager } = await import('../src/scene/FloorManager.js');
+
+    let capturedColor = null;
+    const mockScene = { add: () => {}, remove: () => {} };
+    // No floorColor in params - should use default
+    const mockParams = {};
+
+    const manager = new FloorManager(mockScene, mockParams);
+
+    manager.floor = {
+        material: {
+            color: {
+                setRGB: (r, g, b) => {
+                    capturedColor = { r, g, b };
+                }
+            },
+            opacity: 1,
+            needsUpdate: false
+        }
+    };
+
+    manager.updateColor();
+
+    // Default is { r: 236, g: 236, b: 236, a: 0.05 }
+    assert.ok(capturedColor, 'setRGB should have been called with default color');
+    assert.ok(Math.abs(capturedColor.r - 236 / 255) < 0.01, 'Should use default r=236');
+    assert.ok(Math.abs(capturedColor.g - 236 / 255) < 0.01, 'Should use default g=236');
+    assert.ok(Math.abs(capturedColor.b - 236 / 255) < 0.01, 'Should use default b=236');
+    assert.strictEqual(manager.floor.material.opacity, 0.05, 'Should use default alpha=0.05');
 });

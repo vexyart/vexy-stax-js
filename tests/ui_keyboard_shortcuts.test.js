@@ -37,7 +37,7 @@ test('KeyboardShortcuts_setup_when_called_then_attachesKeydownListener', () => {
 
 test('KeyboardShortcuts_keydown_when_questionMark_then_togglesHelpOverlay', () => {
     const listeners = [];
-    const overlay = { style: { display: 'none' } };
+    const overlay = { style: { display: 'none' }, setAttribute: () => {} };
     const documentStub = {
         createElement: () => overlay,
         body: { appendChild: () => { overlay.appended = true; } }
@@ -70,7 +70,7 @@ test('KeyboardShortcuts_keydown_when_questionMark_then_togglesHelpOverlay', () =
 
 test('KeyboardShortcuts_keydown_when_slashAlias_then_togglesHelpOverlay', () => {
     const listeners = [];
-    const overlay = { style: { display: 'none' } };
+    const overlay = { style: { display: 'none' }, setAttribute: () => {} };
 
     setupKeyboardShortcuts({
         addTrackedEventListener: (target, type, handler) => listeners.push(handler),
@@ -134,7 +134,7 @@ test('KeyboardShortcuts_keydown_when_escapeDuringAnimation_then_cancelsAndToasts
 
 test('KeyboardShortcuts_keydown_when_escapeWithOverlayVisible_then_hidesOverlay', () => {
     const listeners = [];
-    const overlay = { style: { display: 'none' } };
+    const overlay = { style: { display: 'none' }, setAttribute: () => {} };
 
     setupKeyboardShortcuts({
         addTrackedEventListener: (target, type, handler) => listeners.push(handler),
@@ -260,6 +260,7 @@ test('KeyboardShortcuts_teardown_when_called_then_removesOverlay', () => {
     const documentStub = {
         createElement: () => ({
             style: { display: 'none' },
+            setAttribute: () => {},
             remove: () => {
                 removed = true;
             }
@@ -332,4 +333,134 @@ test('KeyboardShortcuts_teardown_when_called_then_removesListenerAndStopsShortcu
 
     assert.equal(tracker.exportPNG, 1, 'shortcut should not fire after teardown');
     assert.equal(windowStub.listeners.length, 0, 'keydown listener should be removed after teardown');
+});
+
+test('KeyboardShortcuts_keydown_when_arrowKey_then_rotatesCamera', () => {
+    const listeners = [];
+    const rotateCalls = [];
+
+    setupKeyboardShortcuts({
+        addTrackedEventListener: (target, type, handler) => listeners.push(handler),
+        document: {
+            createElement: () => ({ style: { display: 'none' } }),
+            body: { appendChild: () => {} }
+        },
+        windowRef: {},
+        logCamera: { info: () => {} },
+        cameraControls: {
+            rotateCamera: (azimuth, polar) => rotateCalls.push({ azimuth, polar })
+        }
+    });
+
+    const handler = listeners[0];
+    const event = createEvent();
+    event.key = 'ArrowLeft';
+    handler(event);
+
+    assert.equal(rotateCalls.length, 1, 'rotateCamera should be called for ArrowLeft');
+    assert.ok(rotateCalls[0].azimuth > 0, 'ArrowLeft should rotate with positive azimuth');
+});
+
+test('KeyboardShortcuts_keydown_when_shiftArrow_then_pansCamera', () => {
+    const listeners = [];
+    const panCalls = [];
+
+    setupKeyboardShortcuts({
+        addTrackedEventListener: (target, type, handler) => listeners.push(handler),
+        document: {
+            createElement: () => ({ style: { display: 'none' } }),
+            body: { appendChild: () => {} }
+        },
+        windowRef: {},
+        logCamera: { info: () => {} },
+        cameraControls: {
+            panCamera: (x, y) => panCalls.push({ x, y })
+        }
+    });
+
+    const handler = listeners[0];
+    const event = createEvent();
+    event.key = 'ArrowUp';
+    event.shiftKey = true;
+    handler(event);
+
+    assert.equal(panCalls.length, 1, 'panCamera should be called for Shift+ArrowUp');
+    assert.ok(panCalls[0].y > 0, 'Shift+ArrowUp should pan with positive Y');
+});
+
+test('KeyboardShortcuts_keydown_when_plusKey_then_zoomsIn', () => {
+    const listeners = [];
+    const zoomCalls = [];
+
+    setupKeyboardShortcuts({
+        addTrackedEventListener: (target, type, handler) => listeners.push(handler),
+        document: {
+            createElement: () => ({ style: { display: 'none' } }),
+            body: { appendChild: () => {} }
+        },
+        windowRef: {},
+        logCamera: { info: () => {} },
+        cameraControls: {
+            zoomCamera: (delta) => zoomCalls.push(delta)
+        }
+    });
+
+    const handler = listeners[0];
+    const event = createEvent();
+    event.key = '+';
+    handler(event);
+
+    assert.equal(zoomCalls.length, 1, 'zoomCamera should be called for +');
+    assert.ok(zoomCalls[0] < 0, '+ key should zoom in (negative delta)');
+});
+
+test('KeyboardShortcuts_keydown_when_minusKey_then_zoomsOut', () => {
+    const listeners = [];
+    const zoomCalls = [];
+
+    setupKeyboardShortcuts({
+        addTrackedEventListener: (target, type, handler) => listeners.push(handler),
+        document: {
+            createElement: () => ({ style: { display: 'none' } }),
+            body: { appendChild: () => {} }
+        },
+        windowRef: {},
+        logCamera: { info: () => {} },
+        cameraControls: {
+            zoomCamera: (delta) => zoomCalls.push(delta)
+        }
+    });
+
+    const handler = listeners[0];
+    const event = createEvent();
+    event.key = '-';
+    handler(event);
+
+    assert.equal(zoomCalls.length, 1, 'zoomCamera should be called for -');
+    assert.ok(zoomCalls[0] > 0, '- key should zoom out (positive delta)');
+});
+
+test('KeyboardShortcuts_keydown_when_arrowInInput_then_skips', () => {
+    const listeners = [];
+    const rotateCalls = [];
+
+    setupKeyboardShortcuts({
+        addTrackedEventListener: (target, type, handler) => listeners.push(handler),
+        document: {
+            createElement: () => ({ style: { display: 'none' } }),
+            body: { appendChild: () => {} }
+        },
+        windowRef: {},
+        cameraControls: {
+            rotateCamera: (azimuth, polar) => rotateCalls.push({ azimuth, polar })
+        }
+    });
+
+    const handler = listeners[0];
+    const event = createEvent();
+    event.key = 'ArrowLeft';
+    event.target = { tagName: 'INPUT' };
+    handler(event);
+
+    assert.equal(rotateCalls.length, 0, 'rotateCamera should not be called when in INPUT');
 });

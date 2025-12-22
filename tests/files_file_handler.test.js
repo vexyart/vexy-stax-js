@@ -115,8 +115,8 @@ test('FileHandler_processFiles_when_fileTypeUnsupported_then_rejectsWithToast', 
     assert.equal(ctx.showToastCalls[0].type, 'error', 'unsupported type toast must be error');
     assert.match(
         ctx.showToastCalls[0].message,
-        /unsupported file type/i,
-        'toast message should mention unsupported file type'
+        /not supported\. Try PNG/,
+        'toast message should suggest supported formats'
     );
     assert.equal(ctx.logValidationError.getCalls().length, 1, 'error logger must capture rejection');
 });

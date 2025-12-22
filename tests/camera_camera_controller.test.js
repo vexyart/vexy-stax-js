@@ -2,14 +2,14 @@
 /**
  * Test Suite: Camera - CameraController
  *
- * Purpose: Verifies camera mode orchestration, zoom/FOV coordination, and
- * centering logic provided by the CameraController abstraction.
+ * Purpose: Verifies camera mode orchestration, zoom/FOV coordination,
+ * distance/offset control, and centering logic provided by the CameraController.
  *
  * Modules Tested:
  * - src/camera/CameraController.js (CameraController class)
  *
- * Test Count: 9 tests
- * @lastTested 2025-11-06 (Quality Improvements - Iteration 106)
+ * Test Count: 15 tests
+ * @lastTested 2025-12-22 (Camera Controls - setDistance, setOffset, resetOffset)
  */
 
 import test from 'node:test';
@@ -336,4 +336,76 @@ test('CameraController_setViewpoint_when_presetProvided_then_positionsCamera', (
     );
     const actualDistance = ctx.camera.position.length();
     assert.ok(Math.abs(actualDistance - distance) < 0.01, 'camera should be at expected distance from origin');
+});
+
+test('CameraController_setViewpoint_when_called_then_resetsOffsets', () => {
+    const ctx = createContext();
+    ctx.params.cameraOffsetX = 100;
+    ctx.params.cameraOffsetY = 50;
+
+    ctx.controller.setViewpoint(0, 0, 800);
+
+    assert.strictEqual(ctx.params.cameraOffsetX, 0, 'X offset should be reset to 0');
+    assert.strictEqual(ctx.params.cameraOffsetY, 0, 'Y offset should be reset to 0');
+});
+
+test('CameraController_setDistance_when_called_then_movesCameraAlongLookVector', () => {
+    const ctx = createContext();
+    ctx.camera.position.set(0, 0, 800);
+    ctx.controls.target.set(0, 0, 0);
+
+    ctx.controller.setDistance(1200);
+
+    assert.strictEqual(ctx.params.cameraDistance, 1200, 'cameraDistance param should be updated');
+    const actualDistance = ctx.camera.position.distanceTo(ctx.controls.target);
+    assert.ok(Math.abs(actualDistance - 1200) < EPSILON, 'camera should be at new distance from target');
+    assert.deepEqual(ctx.emissions.slice(-1), ['distance'], 'distance change should emit');
+});
+
+test('CameraController_setOffset_when_called_then_pansCameraAndTarget', () => {
+    const ctx = createContext();
+    ctx.camera.position.set(0, 0, 800);
+    ctx.controls.target.set(0, 0, 0);
+    const originalCameraX = ctx.camera.position.x;
+    const originalTargetX = ctx.controls.target.x;
+
+    // Apply offset of 100 in X direction
+    ctx.controller.setOffset(100, 0);
+
+    assert.strictEqual(ctx.params.cameraOffsetX, 100, 'cameraOffsetX param should be updated');
+    assert.strictEqual(ctx.params.cameraOffsetY, 0, 'cameraOffsetY param should be 0');
+    // Camera and target should both move by approximately 100 in screen-right direction
+    assert.ok(ctx.camera.position.x !== originalCameraX, 'camera X should have changed');
+    assert.ok(ctx.controls.target.x !== originalTargetX, 'target X should have changed');
+    assert.deepEqual(ctx.emissions.slice(-1), ['offset'], 'offset change should emit');
+});
+
+test('CameraController_setOffset_when_calledTwice_then_appliesDelta', () => {
+    const ctx = createContext();
+    ctx.camera.position.set(0, 0, 800);
+    ctx.controls.target.set(0, 0, 0);
+
+    // First offset
+    ctx.controller.setOffset(50, 0);
+    const posAfterFirst = ctx.camera.position.x;
+
+    // Second offset - should only move by delta (100 - 50 = 50 more)
+    ctx.controller.setOffset(100, 0);
+    const posAfterSecond = ctx.camera.position.x;
+
+    // The second call should move approximately the same amount as the first
+    const firstMove = Math.abs(posAfterFirst - 0);
+    const secondMove = Math.abs(posAfterSecond - posAfterFirst);
+    assert.ok(Math.abs(firstMove - secondMove) < 1, 'second offset should apply delta, not absolute');
+});
+
+test('CameraController_resetOffset_when_called_then_setsOffsetsToZero', () => {
+    const ctx = createContext();
+    ctx.params.cameraOffsetX = 150;
+    ctx.params.cameraOffsetY = -75;
+
+    ctx.controller.resetOffset();
+
+    assert.strictEqual(ctx.params.cameraOffsetX, 0, 'X offset should be reset to 0');
+    assert.strictEqual(ctx.params.cameraOffsetY, 0, 'Y offset should be reset to 0');
 });

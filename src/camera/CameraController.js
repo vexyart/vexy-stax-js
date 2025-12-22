@@ -53,6 +53,10 @@ export class CameraController {
             this.controls.target = new THREE.Vector3();
         }
 
+        // Track applied offsets separately (Tweakpane updates params before our handlers run)
+        this._appliedOffsetX = 0;
+        this._appliedOffsetY = 0;
+
         this.#initialiseMode();
     }
 
@@ -169,19 +173,50 @@ export class CameraController {
     }
 
     /**
+     * Calculate the center point of the image stack content.
+     * Returns the bounding box center if images exist, otherwise (0,0,0).
+     * @returns {THREE.Vector3}
+     */
+    getContentCenter() {
+        if (!Array.isArray(this.imageStack) || this.imageStack.length === 0) {
+            return new THREE.Vector3(0, 0, 0);
+        }
+
+        const box = new THREE.Box3();
+        this.imageStack.forEach((entry) => {
+            if (entry?.mesh) {
+                box.expandByObject(entry.mesh);
+            }
+        });
+
+        if (box.isEmpty()) {
+            return new THREE.Vector3(0, 0, 0);
+        }
+
+        return box.getCenter(new THREE.Vector3());
+    }
+
+    /**
      * Position cameras at provided coordinates and emit viewpoint update.
+     * Camera looks at content center (not origin) for proper framing.
      * @param {number} x
      * @param {number} y
      * @param {number} z
      */
     setViewpoint(x, y, z) {
+        // Reset offsets when setting a new viewpoint (offsets are additive corrections)
+        this.resetOffset();
+
         const position = new THREE.Vector3(x, y, z);
+        const target = this.getContentCenter();
+
         this.camera.position.copy(position);
-        this.camera.lookAt(0, 0, 0);
+        this.camera.lookAt(target);
         this.orthoCamera.position.copy(position);
-        this.orthoCamera.lookAt(0, 0, 0);
+        this.orthoCamera.lookAt(target);
+        this.controls.target.copy(target);
         this.controls.update?.();
-        this.logCamera?.info?.(`Viewpoint set to (${x}, ${y}, ${z})`);
+        this.logCamera?.info?.(`Viewpoint set to (${x}, ${y}, ${z}), target (${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)})`);
         this.emitCameraUpdated('viewpoint');
     }
 
@@ -189,6 +224,9 @@ export class CameraController {
      * Move perspective camera to fit the studio canvas in frame.
      */
     setViewpointFitToFrame() {
+        // Reset offsets when setting a new viewpoint
+        this.resetOffset();
+
         if (!Array.isArray(this.imageStack) || this.imageStack.length === 0) {
             this.params.viewpointPreset = 'front';
             this.setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
@@ -250,6 +288,9 @@ export class CameraController {
      * Position the camera at a three-quarter "beauty" angle while keeping the stack centred.
      */
     setBeautyViewpoint() {
+        // Reset offsets when setting a new viewpoint
+        this.resetOffset();
+
         if (!Array.isArray(this.imageStack) || this.imageStack.length === 0) {
             this.params.viewpointPreset = 'beauty';
             this.setViewpoint(-1280, -40, 1400);
@@ -307,9 +348,78 @@ export class CameraController {
     }
 
     /**
+     * Update camera distance from target along look vector.
+     * @param {number} distance - Distance from camera to target
+     */
+    setDistance(distance) {
+        this.params.cameraDistance = distance;
+        const activeCamera = this.getActiveCamera();
+        const target = this.controls.target.clone();
+        const direction = new THREE.Vector3()
+            .subVectors(activeCamera.position, target)
+            .normalize();
+
+        activeCamera.position.copy(target).add(direction.multiplyScalar(distance));
+        this.controls.update?.();
+        this.logCamera?.info?.(`Camera distance updated to ${distance.toFixed(0)}`);
+        this.emitCameraUpdated('distance');
+    }
+
+    /**
+     * Update camera X/Y offset in screen-relative directions.
+     * Moves both camera and target together to maintain viewing direction.
+     * @param {number} offsetX - X offset (positive = right in screen space)
+     * @param {number} offsetY - Y offset (positive = up in screen space)
+     */
+    setOffset(offsetX, offsetY) {
+        // Use internal tracking (Tweakpane updates params before our handler runs)
+        const deltaX = offsetX - this._appliedOffsetX;
+        const deltaY = offsetY - this._appliedOffsetY;
+
+        // Update internal tracking
+        this._appliedOffsetX = offsetX;
+        this._appliedOffsetY = offsetY;
+
+        // Also sync params (may already be set by Tweakpane, but ensure consistency)
+        this.params.cameraOffsetX = offsetX;
+        this.params.cameraOffsetY = offsetY;
+
+        const activeCamera = this.getActiveCamera();
+        const forward = new THREE.Vector3();
+        activeCamera.getWorldDirection(forward);
+
+        const right = new THREE.Vector3().crossVectors(forward, activeCamera.up).normalize();
+        const up = new THREE.Vector3().crossVectors(right, forward).normalize();
+
+        const offsetVector = new THREE.Vector3()
+            .addScaledVector(right, deltaX)
+            .addScaledVector(up, deltaY);
+
+        activeCamera.position.add(offsetVector);
+        this.controls.target.add(offsetVector);
+        this.controls.update?.();
+
+        this.logCamera?.info?.(`Camera offset updated to (${offsetX.toFixed(0)}, ${offsetY.toFixed(0)})`);
+        this.emitCameraUpdated('offset');
+    }
+
+    /**
+     * Reset camera offset to zero (used when switching viewpoints).
+     */
+    resetOffset() {
+        this.params.cameraOffsetX = 0;
+        this.params.cameraOffsetY = 0;
+        this._appliedOffsetX = 0;
+        this._appliedOffsetY = 0;
+    }
+
+    /**
      * Center the active camera and controls target on the image stack bounds.
      */
     centerOnContent() {
+        // Reset offsets when centering
+        this.resetOffset();
+
         if (!Array.isArray(this.imageStack) || this.imageStack.length === 0) {
             this.logCamera?.info?.('No content to center on');
             return;

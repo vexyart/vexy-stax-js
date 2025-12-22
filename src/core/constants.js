@@ -57,13 +57,22 @@ export const MEMORY_CRITICAL_THRESHOLD_MB = 1000;
 export const MEMORY_WARNING_COOLDOWN = 30000;
 
 /**
- * Duration for error toast notifications
+ * Interval for auto-saving settings to localStorage
  * @type {number}
  * @constant
- * @default 5000
+ * @default 30000
  * @unit milliseconds
  */
-export const TOAST_DURATION_ERROR = 5000;
+export const AUTO_SAVE_INTERVAL = 30000;
+
+/**
+ * Duration for error toast notifications (10s for readability)
+ * @type {number}
+ * @constant
+ * @default 10000
+ * @unit milliseconds
+ */
+export const TOAST_DURATION_ERROR = 10000;
 
 /**
  * Duration for warning toast notifications
@@ -173,6 +182,20 @@ export const DEFAULT_BG_COLOR = '#000000';
 export const DEFAULT_Z_SPACING = 100;
 
 /**
+ * Minimum gap between slides to prevent z-fighting when Layer Depth is 0.
+ * Added to the effective z-spacing regardless of user setting.
+ * Set to 0.1 to ensure slides never perfectly overlap.
+ * @type {number}
+ * @constant
+ * @default 0.1
+ * @unit world units (pixels)
+ * @example
+ * // In getEffectiveZSpacing():
+ * return (params.zSpacing ?? autoDistance) + MIN_LAYER_GAP;
+ */
+export const MIN_LAYER_GAP = 0.1;
+
+/**
  * Default studio canvas dimensions (HD 16:9 quarter resolution).
  * @type {{x: number, y: number}}
  * @constant
@@ -200,10 +223,11 @@ export const BYTES_PER_MB = 1024 * 1024;
  * Vertical position of floor plane in world coordinates
  * @type {number}
  * @constant
- * @default -250
+ * @default 0
  * @unit pixels
+ * @description Floor at Y=0 so slides sit on top of it
  */
-export const FLOOR_Y = -250;
+export const FLOOR_Y = 0;
 
 /**
  * Floor plane dimensions (width and depth)
@@ -214,56 +238,6 @@ export const FLOOR_Y = -250;
  * @description Large enough to extend beyond camera frustum
  */
 export const FLOOR_SIZE = 2000;
-
-/**
- * Base resolution multiplier for reflection texture sizing
- * @type {number}
- * @constant
- * @default 0.65
- * @range 0.0-1.0
- * @description Multiplied by window dimensions to determine reflection texture size
- */
-export const REFLECTION_TEXTURE_BASE = 0.65;
-
-/**
- * Minimum resolution for reflection render target
- * @type {number}
- * @constant
- * @default 512
- * @unit pixels
- * @description Ensures acceptable reflection quality on small viewports
- */
-export const REFLECTION_MIN_RESOLUTION = 512;
-
-/**
- * Reflection texture opacity (0.0 = invisible, 1.0 = opaque)
- * @type {number}
- * @constant
- * @default 0.01
- * @range 0.0-1.0
- * @description Reduced to 1% for subtle depth cue without visual distraction
- */
-export const REFLECTION_OPACITY = 0.01;
-
-/**
- * Blur radius for soft reflection sampling in shader
- * @type {number}
- * @constant
- * @default 0.003
- * @range 0.0-0.1
- * @description Controls the softness of reflected edges
- */
-export const REFLECTION_BLUR_RADIUS = 0.003;
-
-/**
- * Exponential fade strength for radial reflection falloff
- * @type {number}
- * @constant
- * @default 2.7
- * @range 0.0-10.0
- * @description Higher values create sharper fade from center to edges
- */
-export const REFLECTION_FADE_STRENGTH = 2.7;
 
 /**
  * Orthographic camera frustum size (half-width)
@@ -435,32 +409,6 @@ export const HEMISPHERE_LIGHT_SETTINGS = Object.freeze({
 });
 
 /**
- * Floor base material properties (MeshStandardMaterial)
- * @type {Object}
- * @constant
- * @property {number} roughness - Surface roughness (0.45)
- * @property {number} metalness - Metallic property (0.08)
- * @property {number} envMapIntensity - Environment map intensity (0.35)
- * @range roughness: 0.0-1.0, metalness: 0.0-1.0, envMapIntensity: 0.0-1.0
- * @description Slightly rough, mostly non-metallic surface
- */
-export const FLOOR_BASE_MATERIAL = Object.freeze({
-    roughness: 0.45,
-    metalness: 0.08,
-    envMapIntensity: 0.35
-});
-
-/**
- * Vertical offset for floor reflector mesh above base plane
- * @type {number}
- * @constant
- * @default 0.1
- * @unit pixels
- * @description Prevents z-fighting between floor and reflector
- */
-export const FLOOR_REFLECTOR_OFFSET = 0.1;
-
-/**
  * Event names for EventBus communication
  * @type {Object}
  * @constant
@@ -479,29 +427,15 @@ export const EVENTS = Object.freeze({
  * Material preset configurations for slide appearance
  * @type {Object.<string, {roughness: number, metalness: number, thickness: number, borderWidth: number}>}
  * @constant
- * @property {Object} flat-matte - Completely matte, no reflections (roughness: 1.0)
- * @property {Object} glossy-photo - High gloss finish (roughness: 0.1)
- * @property {Object} plastic-card - Semi-glossy plastic appearance (roughness: 0.4, thickness: 2px)
- * @property {Object} thick-board - Thick matte board (roughness: 0.9, thickness: 8px)
- * @property {Object} metal-sheet - Reflective metal surface (roughness: 0.2, metalness: 0.8)
- * @property {Object} metallic-card - Metallic card with depth (roughness: 0.2, metalness: 0.8, thickness: 2px)
- * @property {Object} glass-slide - Very glossy glass (roughness: 0.05)
- * @property {Object} matte-print - Semi-matte print (roughness: 0.7)
- * @property {Object} bordered - Glossy with white border (borderWidth: 20px)
- * @property {Object} 3d-box - Thick 3D appearance (thickness: 15px)
+ * @property {Object} glossy - Reflective glossy finish (roughness: 0.2, metalness: 0.8)
+ * @property {Object} neutral - Flat neutral appearance (roughness: 0.05, metalness: 0)
+ * @property {Object} matte - Diffuse matte finish (roughness: 0.7, metalness: 0)
  * @description Each preset defines roughness, metalness, thickness, and border width
  */
 export const MATERIAL_PRESETS = Object.freeze({
-    'flat-matte': { roughness: 1.0, metalness: 0, thickness: 1, borderWidth: 0 },
-    'glossy-photo': { roughness: 0.1, metalness: 0, thickness: 1, borderWidth: 0 },
-    'plastic-card': { roughness: 0.4, metalness: 0.1, thickness: 2, borderWidth: 0 },
-    'thick-board': { roughness: 0.9, metalness: 0, thickness: 8, borderWidth: 0 },
-    'metal-sheet': { roughness: 0.2, metalness: 0.8, thickness: 1, borderWidth: 0 },
-    'metallic-card': { roughness: 0.2, metalness: 0.8, thickness: 2, borderWidth: 0 },
-    'glass-slide': { roughness: 0.05, metalness: 0, thickness: 1, borderWidth: 0 },
-    'matte-print': { roughness: 0.7, metalness: 0, thickness: 1, borderWidth: 0 },
-    'bordered': { roughness: 0.2, metalness: 0, thickness: 1, borderWidth: 20 },
-    '3d-box': { roughness: 0.6, metalness: 0, thickness: 15, borderWidth: 0 }
+    'glossy': { roughness: 0.2, metalness: 0.8, thickness: 1, borderWidth: 0 },
+    'neutral': { roughness: 0.05, metalness: 0, thickness: 1, borderWidth: 0 },
+    'matte': { roughness: 0.7, metalness: 0, thickness: 1, borderWidth: 0 }
 });
 
 /**
@@ -510,6 +444,7 @@ export const MATERIAL_PRESETS = Object.freeze({
  * @constant
  * @property {null} center - Returns camera to centered default position
  * @property {string} front - Special 'fitToFrame' mode that calculates distance to fit canvas
+ * @property {string} hero - Hero shot view with slides collapsed to front (culmination view)
  * @property {Object} beauty - Readable 3/4 view with clear layer separation (x:-1280, y:-40, z:1400)
  * @property {Object} top - Top-down view with slight depth (x:0, y:1200, z:200)
  * @property {Object} isometric - True isometric angle (x:-900, y:900, z:900)
@@ -521,100 +456,13 @@ export const MATERIAL_PRESETS = Object.freeze({
 export const VIEWPOINT_PRESETS = Object.freeze({
     center: null,
     front: 'fitToFrame',
+    hero: 'heroView',
     beauty: { x: -1280, y: -40, z: 1400 },
     top: { x: 0, y: 1200, z: 200 },
     isometric: { x: -900, y: 900, z: 900 },
     '3d-stack': { x: -800, y: 400, z: 1000 },
     side: { x: -1400, y: 0, z: 200 }
 });
-
-/**
- * Custom shader for soft floor reflections with radial fade
- * @type {Object}
- * @constant
- * @property {string} name - Shader identifier
- * @property {Object} uniforms - Shader uniform parameters
- * @property {Object} uniforms.color - Base tint color (white)
- * @property {Object} uniforms.tDiffuse - Reflection texture sampler
- * @property {Object} uniforms.textureMatrix - UV transform matrix for reflection mapping
- * @property {Object} uniforms.opacity - Overall reflection opacity
- * @property {Object} uniforms.blurRadius - Blur sampling radius
- * @property {Object} uniforms.fadeStrength - Exponential fade strength
- * @property {Object} uniforms.floorSize - Floor dimensions for fade calculation
- * @property {string} vertexShader - GLSL vertex shader source
- * @property {string} fragmentShader - GLSL fragment shader with 9-tap blur and radial fade
- * @description Implements soft reflections with 9-sample box blur and distance-based fade
- */
-export const SoftReflectorShader = {
-    name: 'SoftReflectorShader',
-    uniforms: {
-        color: { value: new THREE.Color(0xffffff) },
-        tDiffuse: { value: null },
-        textureMatrix: { value: null },
-        opacity: { value: REFLECTION_OPACITY },
-        blurRadius: { value: REFLECTION_BLUR_RADIUS },
-        fadeStrength: { value: REFLECTION_FADE_STRENGTH },
-        floorSize: { value: FLOOR_SIZE }
-    },
-    vertexShader: /* glsl */`
-        uniform mat4 textureMatrix;
-        varying vec4 vUv;
-        varying vec3 vWorldPosition;
-
-        #include <common>
-        #include <logdepthbuf_pars_vertex>
-
-        void main() {
-            vUv = textureMatrix * vec4( position, 1.0 );
-            vWorldPosition = ( modelMatrix * vec4( position, 1.0 ) ).xyz;
-            gl_Position = projectionMatrix * modelViewMatrix * vec4( position, 1.0 );
-            #include <logdepthbuf_vertex>
-        }
-    `,
-    fragmentShader: /* glsl */`
-        uniform vec3 color;
-        uniform sampler2D tDiffuse;
-        uniform float opacity;
-        uniform float blurRadius;
-        uniform float fadeStrength;
-        uniform float floorSize;
-
-        varying vec4 vUv;
-        varying vec3 vWorldPosition;
-
-        #include <logdepthbuf_pars_fragment>
-
-        vec4 sampleReflection( vec2 offset ) {
-            vec4 offsetUv = vUv;
-            offsetUv.xy += offset * vUv.w;
-            return texture2DProj( tDiffuse, offsetUv );
-        }
-
-        void main() {
-            #include <logdepthbuf_fragment>
-
-            vec4 reflection = sampleReflection( vec2( 0.0 ) );
-            reflection += sampleReflection( vec2(  blurRadius, 0.0 ) );
-            reflection += sampleReflection( vec2( -blurRadius, 0.0 ) );
-            reflection += sampleReflection( vec2( 0.0,  blurRadius ) );
-            reflection += sampleReflection( vec2( 0.0, -blurRadius ) );
-            reflection += sampleReflection( vec2(  blurRadius,  blurRadius ) );
-            reflection += sampleReflection( vec2( -blurRadius,  blurRadius ) );
-            reflection += sampleReflection( vec2(  blurRadius, -blurRadius ) );
-            reflection += sampleReflection( vec2( -blurRadius, -blurRadius ) );
-            reflection /= 9.0;
-
-            float radialDistance = length( vWorldPosition.xz ) / max( floorSize * 0.5, 0.0001 );
-            float falloff = clamp( exp( -radialDistance * fadeStrength ), 0.0, 1.0 );
-
-            vec3 tinted = mix( color, reflection.rgb, 0.6 * falloff );
-            gl_FragColor = vec4( tinted, opacity * falloff );
-
-            #include <tonemapping_fragment>
-            #include <colorspace_fragment>
-        }
-    `
-};
 
 /**
  * Default parameter values for studio configuration
@@ -628,6 +476,8 @@ export const SoftReflectorShader = {
  * @property {string} cameraMode - Camera projection mode ('perspective')
  * @property {number} cameraFOV - Field of view in degrees (75)
  * @property {number} cameraZoom - Camera zoom level (1.0)
+ * @property {number} cameraOffsetX - Additive X offset from viewpoint (-WIDTH/2 to +WIDTH/2)
+ * @property {number} cameraOffsetY - Additive Y offset from viewpoint (-HEIGHT/2 to +HEIGHT/2)
  * @property {number} zSpacing - Stack spacing in pixels (100)
  * @property {string} materialPreset - Material preset key ('metallic-card')
  * @property {number} materialRoughness - Surface roughness (0.2)
@@ -642,20 +492,24 @@ export const SoftReflectorShader = {
  */
 const PARAM_TEMPLATE = {
     canvasSize: { ...DEFAULT_CANVAS_SIZE },
-    bgColor: '#000000',
+    bgColor: '#ffffff',
+    floorColor: { r: 236, g: 236, b: 236, a: 0.05 },
     transparentBg: false,
     ambience: false,
     cameraMode: 'perspective',
     cameraFOV: 75,
     cameraZoom: 1.0,
-    zSpacing: 100,
-    materialPreset: 'metallic-card',
-    materialRoughness: 0.2,
-    materialMetalness: 0.8,
-    materialThickness: 2.0,
+    cameraDistance: 800,
+    cameraOffsetX: 0,
+    cameraOffsetY: 0,
+    zSpacing: null,
+    materialPreset: 'neutral',
+    materialRoughness: 0.05,
+    materialMetalness: 0,
+    materialThickness: 1.0,
     materialBorderWidth: 0,
     materialBorderColor: '#ffffff',
-    viewpointPreset: 'front',
+    viewpointPreset: 'beauty',
     animDuration: 1.5,
     animEasing: 'power2.inOut'
 };

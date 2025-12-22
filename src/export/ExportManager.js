@@ -67,6 +67,7 @@ export class ExportManager {
      * @param {(file: File) => Promise<string>} [options.readFileAsText]
      * @param {{ createObjectURL?: Function, revokeObjectURL?: Function }} [options.urlAPI]
      * @param {() => Date} [options.now]
+     * @param {() => number} [options.getEffectiveZSpacing]
      */
     constructor(options) {
         this.renderer = options.renderer;
@@ -84,6 +85,7 @@ export class ExportManager {
         this.updateBackground = options.updateBackground ?? (() => {});
         this.pane = options.pane ?? { refresh: () => {} };
         this.getActiveCamera = options.getActiveCamera ?? (() => this.camera);
+        this.getEffectiveZSpacing = options.getEffectiveZSpacing ?? (() => this.params.zSpacing ?? 100);
 
         this.document = options.document ?? globalThis.document;
         this.window = options.window ?? globalThis;
@@ -128,7 +130,8 @@ export class ExportManager {
 
         this.logExport?.info?.(`Exporting PNG at ${safeScale}x resolution...`);
 
-        const overlayNode = safeScale >= 2 ? this.#createOverlay(safeScale) : null;
+        // Always show overlay for visual feedback during export
+        const overlayNode = this.#createOverlay(safeScale);
 
         await new Promise((resolve) => {
             this.setTimeout?.(() => {
@@ -338,6 +341,11 @@ export class ExportManager {
         }
 
         const overlay = this.document.createElement('div');
+        // ARIA: Modal dialog for export progress
+        overlay.setAttribute('role', 'dialog');
+        overlay.setAttribute('aria-modal', 'true');
+        overlay.setAttribute('aria-labelledby', 'export-overlay-title');
+        overlay.setAttribute('aria-describedby', 'export-overlay-desc');
         overlay.style.cssText = [
             'position: fixed',
             'top: 0',
@@ -355,8 +363,8 @@ export class ExportManager {
         ].join(';');
         overlay.innerHTML = `
             <div style="text-align: center;">
-                <div style="font-size: 24px; margin-bottom: 10px;">Exporting...</div>
-                <div style="font-size: 16px; opacity: 0.7;">Rendering at ${scale}x resolution</div>
+                <div id="export-overlay-title" style="font-size: 24px; margin-bottom: 10px;">Exporting...</div>
+                <div id="export-overlay-desc" style="font-size: 16px; opacity: 0.7;">Rendering at ${scale}x resolution</div>
                 <div style="margin-top: 20px; font-size: 14px; opacity: 0.5;">Please wait...</div>
             </div>
         `;
@@ -498,7 +506,7 @@ export class ExportManager {
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
-                mesh.position.z = index * this.params.zSpacing;
+                mesh.position.z = index * this.getEffectiveZSpacing();
 
                 const imageData = {
                     mesh,

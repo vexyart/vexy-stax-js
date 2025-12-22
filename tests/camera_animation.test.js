@@ -70,7 +70,7 @@ test('CameraAnimator_restoreState_when_unsaved_then_returnsUndefined', () => {
 test('CameraAnimator_calculateFrontViewpoint_when_slideHasOffset_then_centresOnBounds', () => {
     const { animator } = createAnimatorContext();
     const slide = createSlide(360, 220, new THREE.Vector3(80, 140, 280));
-    const front = animator.calculateFrontViewpoint(slide, { x: 960, y: 540 });
+    const front = animator.calculateFrontViewpoint(slide, { x: 960, y: 540 }, 3);
 
     assert.ok(front.position instanceof THREE.Vector3, 'position should be a Vector3');
     assert.ok(front.target instanceof THREE.Vector3, 'target should be a Vector3');
@@ -79,7 +79,13 @@ test('CameraAnimator_calculateFrontViewpoint_when_slideHasOffset_then_centresOnB
     assert.ok(Math.abs(front.position.y - front.target.y) < EPSILON, 'camera Y should align with target centre');
     assert.ok(Math.abs(front.target.x - 80) < EPSILON, 'target should match slide centre X');
     assert.ok(Math.abs(front.target.y - 140) < EPSILON, 'target should match slide centre Y');
-    assert.ok(Math.abs(front.target.z - 280) < EPSILON, 'target should match slide centre Z');
+    // Target Z is 0 (front slide position), not slide's current Z - slides collapse to origin
+    assert.ok(Math.abs(front.target.z - 0) < EPSILON, 'target Z should be 0');
+    // collapsePositions is array with positions for each slide (front slide at 0, others offset)
+    assert.ok(Array.isArray(front.collapsePositions), 'collapsePositions should be an array');
+    assert.equal(front.collapsePositions.length, 3, 'collapsePositions should have 3 entries');
+    assert.ok(Math.abs(front.collapsePositions[2]) < EPSILON, 'front slide (index 2) should collapse to 0');
+    assert.ok(front.collapsePositions[0] < 0, 'back slide (index 0) should collapse to negative z');
 });
 
 test('CameraAnimator_calculateFrontViewpoint_when_slideSizeVaries_then_adjustsDistance', () => {

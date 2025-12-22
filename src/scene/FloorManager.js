@@ -4,55 +4,15 @@
 // this_file: src/scene/FloorManager.js
 
 import * as THREE from 'three';
-import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
-import {
-    FLOOR_Y,
-    FLOOR_SIZE,
-    REFLECTION_TEXTURE_BASE,
-    REFLECTION_MIN_RESOLUTION,
-    REFLECTION_OPACITY,
-    REFLECTION_BLUR_RADIUS,
-    REFLECTION_FADE_STRENGTH,
-    FLOOR_BASE_MATERIAL,
-    FLOOR_REFLECTOR_OFFSET,
-    SoftReflectorShader
-} from '../core/constants.js';
+import { FLOOR_SIZE, FLOOR_Y } from '../core/constants.js';
 
 /**
- * Get reflection render target resolution based on viewport and pixel ratio
- * @returns {{width: number, height: number, pixelRatio: number}}
- */
-function getReflectionResolution() {
-    const pixelRatio = window.devicePixelRatio || 1;
-    const width = Math.max(
-        REFLECTION_MIN_RESOLUTION,
-        Math.round(window.innerWidth * pixelRatio * REFLECTION_TEXTURE_BASE)
-    );
-    const height = Math.max(
-        REFLECTION_MIN_RESOLUTION,
-        Math.round(window.innerHeight * pixelRatio * REFLECTION_TEXTURE_BASE)
-    );
-    return { width, height, pixelRatio };
-}
-
-/**
- * Floor color should MATCH background exactly for seamless ambience
- * Depth comes from shadows and reflections, not floor color contrast
- * @param {string} bgColor - Hex color string
- * @returns {THREE.Color}
- */
-function getAdaptiveFloorColor(bgColor) {
-    return new THREE.Color(bgColor);
-}
-
-/**
- * FloorManager - Manages reflective floor with ambience mode
+ * FloorManager - Manages simple transparent floor plane
  *
  * Responsibilities:
- * - Create floor plane with reflective shader
- * - Toggle ambience mode on/off
- * - Update floor color to match background
- * - Update reflection resolution on resize
+ * - Create floor plane at Y=0 with semi-transparent color
+ * - Update floor color/opacity from params
+ * - Toggle floor on/off
  * - Dispose floor resources
  */
 export class FloorManager {
@@ -60,85 +20,68 @@ export class FloorManager {
         this.scene = scene;
         this.params = params;
 
-        /** @type {THREE.Group|null} */
-        this.floorGroup = null;
-
         /** @type {THREE.Mesh|null} */
-        this.floorBase = null;
+        this.floor = null;
 
-        /** @type {Reflector|null} */
-        this.floorReflector = null;
-
-        // Callback for when floor is created/removed (used to update image materials)
+        // Callback for when floor is created/removed
         /** @type {Function|null} */
         this.onAmbienceChange = null;
     }
 
     /**
-     * Create reflective floor
+     * Get floor color from params or use default
+     * @returns {{r: number, g: number, b: number, a: number}}
+     */
+    #getFloorColor() {
+        return this.params?.floorColor ?? { r: 236, g: 236, b: 236, a: 0.05 };
+    }
+
+    /**
+     * Normalize color component to 0-1 range.
+     * Handles both 0-255 (int) and 0-1 (normalized) formats.
+     * @param {number} value - Color component value
+     * @returns {number} Value in 0-1 range
+     */
+    #normalizeColorComponent(value) {
+        // If value > 1, assume 0-255 range and normalize
+        return value > 1 ? value / 255 : value;
+    }
+
+    /**
+     * Create floor plane at Y=0
      */
     create() {
-        // Defensive checks
         if (!this.scene) {
-            throw new Error('[FloorManager] Cannot create floor: scene is required');
-        }
-        if (!this.params || !this.params.bgColor) {
-            throw new Error('[FloorManager] Cannot create floor: params with bgColor is required');
+            throw new Error('[FloorManager] Cannot create floor: scene is required.');
         }
 
-        if (this.floorGroup) {
+        if (this.floor) {
             console.warn('[FloorManager] Floor already exists, skipping creation');
             return;
         }
 
-        const { width, height, pixelRatio } = getReflectionResolution();
+        const floorColor = this.#getFloorColor();
+        const r = this.#normalizeColorComponent(floorColor.r);
+        const g = this.#normalizeColorComponent(floorColor.g);
+        const b = this.#normalizeColorComponent(floorColor.b);
 
-        this.floorGroup = new THREE.Group();
-        this.floorGroup.name = 'ambience-floor';
-
-        // Create base floor plane
-        const baseGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
-        const floorColor = getAdaptiveFloorColor(this.params.bgColor);
-        const baseMaterial = new THREE.MeshStandardMaterial({
-            color: floorColor,
-            roughness: FLOOR_BASE_MATERIAL.roughness,
-            metalness: FLOOR_BASE_MATERIAL.metalness,
-            envMapIntensity: FLOOR_BASE_MATERIAL.envMapIntensity,
-            side: THREE.DoubleSide
+        const geometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
+        const material = new THREE.MeshBasicMaterial({
+            color: new THREE.Color(r, g, b),
+            transparent: true,
+            opacity: floorColor.a,
+            side: THREE.DoubleSide,
+            depthWrite: false
         });
 
-        this.floorBase = new THREE.Mesh(baseGeometry, baseMaterial);
-        this.floorBase.rotation.x = -Math.PI / 2;
-        this.floorBase.position.y = FLOOR_Y;
-        this.floorBase.receiveShadow = true;
+        this.floor = new THREE.Mesh(geometry, material);
+        this.floor.rotation.x = -Math.PI / 2; // Lay flat
+        this.floor.position.y = FLOOR_Y;
+        this.floor.name = 'floor';
 
-        // Create reflector plane
-        const reflectionGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
-        this.floorReflector = new Reflector(reflectionGeometry, {
-            textureWidth: width,
-            textureHeight: height,
-            shader: SoftReflectorShader,
-            multisample: Math.max(2, Math.round(pixelRatio * 2))
-        });
-        this.floorReflector.rotation.x = -Math.PI / 2;
-        this.floorReflector.position.y = FLOOR_Y + FLOOR_REFLECTOR_OFFSET;
-        this.floorReflector.material.transparent = true;
-        this.floorReflector.material.depthWrite = false;
-        this.floorReflector.material.uniforms.color.value.copy(floorColor);
-        this.floorReflector.material.uniforms.opacity.value = REFLECTION_OPACITY;
-        this.floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
-        this.floorReflector.material.uniforms.fadeStrength.value = REFLECTION_FADE_STRENGTH;
-        this.floorReflector.material.uniforms.floorSize.value = FLOOR_SIZE;
+        this.scene.add(this.floor);
+        console.log(`Floor created at y=${FLOOR_Y}`);
 
-        this.floorGroup.add(this.floorBase);
-        this.floorGroup.add(this.floorReflector);
-        this.scene.add(this.floorGroup);
-
-        this.updateReflectionSettings();
-
-        console.log(`Floor created at y=${FLOOR_Y} with ambience reflections (texture ${width}x${height})`);
-
-        // Notify that ambience is enabled
         if (this.onAmbienceChange) {
             this.onAmbienceChange(true);
         }
@@ -148,64 +91,48 @@ export class FloorManager {
      * Remove floor from scene
      */
     remove() {
-        if (!this.floorGroup) {
+        if (!this.floor) {
             return;
         }
 
-        this.scene.remove(this.floorGroup);
-
-        if (this.floorReflector) {
-            this.floorReflector.dispose();
-            this.floorReflector = null;
-        }
-
-        if (this.floorBase) {
-            this.floorBase.geometry.dispose();
-            this.floorBase.material.dispose();
-            this.floorBase = null;
-        }
-
-        this.floorGroup = null;
+        this.scene.remove(this.floor);
+        this.floor.geometry.dispose();
+        this.floor.material.dispose();
+        this.floor = null;
 
         console.log('Floor removed');
 
-        // Notify that ambience is disabled
         if (this.onAmbienceChange) {
             this.onAmbienceChange(false);
         }
     }
 
     /**
-     * Update floor color to match background
-     * @param {string} bgColor - Hex color string
+     * Update floor color and opacity from params
      */
-    updateColor(bgColor) {
-        if (!this.floorBase || !this.floorReflector) {
+    updateColor() {
+        if (!this.floor) {
             return;
         }
 
-        const floorColor = getAdaptiveFloorColor(bgColor);
-        this.floorBase.material.color.copy(floorColor);
-        this.floorReflector.material.uniforms.color.value.copy(floorColor);
+        const floorColor = this.#getFloorColor();
+
+        // Normalize RGB values (handles both 0-255 and 0-1 formats)
+        const r = this.#normalizeColorComponent(floorColor.r);
+        const g = this.#normalizeColorComponent(floorColor.g);
+        const b = this.#normalizeColorComponent(floorColor.b);
+
+        this.floor.material.color.setRGB(r, g, b);
+        // Alpha is always 0-1 range
+        this.floor.material.opacity = floorColor.a;
+        this.floor.material.needsUpdate = true;
     }
 
     /**
-     * Update reflection resolution (called on window resize)
+     * Update reflection settings (no-op for simplified floor)
      */
     updateReflectionSettings() {
-        if (!this.floorReflector) {
-            return;
-        }
-
-        const { width, height, pixelRatio } = getReflectionResolution();
-        const target = this.floorReflector.getRenderTarget();
-
-        if (target.width !== width || target.height !== height) {
-            target.setSize(width, height);
-        }
-
-        this.floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
-        this.floorReflector.material.uniforms.floorSize.value = FLOOR_SIZE;
+        // No reflections in simplified floor
     }
 
     /**
@@ -213,7 +140,7 @@ export class FloorManager {
      * @returns {boolean}
      */
     isActive() {
-        return this.floorGroup !== null;
+        return this.floor !== null;
     }
 
     /**

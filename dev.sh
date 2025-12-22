@@ -1,6 +1,7 @@
 #!/bin/bash
 # this_file: vexy-stax-js/dev.sh
 # Development server for vexy-stax-js
+cd "$(dirname "$0")"
 
 set -e  # Exit on error
 
@@ -17,12 +18,11 @@ if [ ! -d "node_modules" ]; then
 fi
 
 echo "🚀 Starting Vite dev server..."
-echo
-echo "   Local:   http://localhost:5173"
-echo "   Network: (see output below)"
+echo "   Press Ctrl+C to stop"
 echo
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo
 
-# Start dev server
+# Open browser after short delay, then start server (foreground)
+(sleep 1 && open "http://localhost:5173") &
 npm run dev

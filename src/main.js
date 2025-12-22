@@ -4,9 +4,6 @@
 
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import { Reflector } from 'three/examples/jsm/objects/Reflector.js';
-import { Pane } from 'tweakpane';
 import { CameraAnimator } from './camera/animation.js';
 import { CameraController } from './camera/CameraController.js';
 import { RenderLoop } from './core/RenderLoop.js';
@@ -21,12 +18,17 @@ import { setupKeyboardShortcuts } from './ui/KeyboardShortcuts.js';
 import { createToastService } from './ui/ToastService.js';
 import { createSettingsManager } from './settings/SettingsManager.js';
 import { HistoryManager } from './history/HistoryManager.js';
+import { SceneManager } from './scene/SceneManager.js';
+import { LightingManager, getAdaptiveEmissiveIntensity, calculateLuminance } from './scene/LightingManager.js';
+import { FloorManager } from './scene/FloorManager.js';
+import { AmbienceManager } from './scene/AmbienceManager.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
     MEMORY_WARNING_THRESHOLD_MB,
     MEMORY_CRITICAL_THRESHOLD_MB,
     MEMORY_WARNING_COOLDOWN,
+    AUTO_SAVE_INTERVAL,
     TOAST_DURATION_ERROR,
     TOAST_DURATION_WARNING,
     TOAST_DURATION_INFO,
@@ -40,15 +42,9 @@ import {
     DEFAULT_CAMERA_FOV,
     DEFAULT_BG_COLOR,
     DEFAULT_Z_SPACING,
+    MIN_LAYER_GAP,
     Z_INDEX_MODAL,
     BYTES_PER_MB,
-    FLOOR_Y,
-    FLOOR_SIZE,
-    REFLECTION_TEXTURE_BASE,
-    REFLECTION_MIN_RESOLUTION,
-    REFLECTION_OPACITY,
-    REFLECTION_BLUR_RADIUS,
-    REFLECTION_FADE_STRENGTH,
     ORTHO_FRUSTUM_SIZE,
     MAX_DIMENSION_PX,
     MAX_LOAD_RETRIES,
@@ -56,21 +52,15 @@ import {
     DEBOUNCE_DELAY_MS,
     MATERIAL_PRESETS,
     VIEWPOINT_PRESETS,
-    SoftReflectorShader,
-    AMBIENT_INTENSITY_RANGE,
-    EMISSIVE_INTENSITY_RANGE,
-    MAIN_LIGHT_SETTINGS,
-    FILL_LIGHT_SETTINGS,
-    HEMISPHERE_LIGHT_SETTINGS,
-    FLOOR_BASE_MATERIAL,
-    FLOOR_REFLECTOR_OFFSET,
     EVENTS,
+    FLOOR_Y,
     createDefaultParams
 } from './core/constants.js';
 import { appState } from './core/AppState.js';
 import { eventBus } from './core/EventBus.js';
 import { storeSharedRef, SHARED_STATE_KEYS } from './core/sharedState.js';
 import { computeRetinaDimensions } from './core/studioSizing.js';
+import { debounce } from './utils/helpers.js';
 
 // Scene, Camera, Renderer
 let scene, camera, orthoCamera, renderer, controls;
@@ -85,15 +75,15 @@ let sceneComposition; // Manages image stack meshes
 let fileHandler = null; // Handles file intake (browse + drag/drop)
 let exportManager = null; // Manages PNG/JSON exports and imports
 let keyboardShortcuts = null; // Handles keyboard shortcut wiring
-const FRONT_VIEW_PADDING = 1.1;
+// Strict fit: 1.0 = slide fills canvas exactly (matches animation.js)
+const FRONT_VIEW_PADDING = 1.0;
 const BEAUTY_VIEW_PADDING = 1.35;
 const BEAUTY_CAMERA_DIRECTION = new THREE.Vector3(-0.82, -0.18, 1).normalize();
 // Lighting and environment
-let ambientLight, mainLight, fillLight;
-let floorGroup = null;
-let floorBase = null;
-let floorReflector = null;
-let environmentTexture = null;
+let sceneManager = null;
+let lightingManager = null;
+let floorManager = null;
+let ambienceManager = null;
 
 // Image stack management
 let imageStack = [];
@@ -159,15 +149,17 @@ const settingsManager = createSettingsManager({
     switchCameraMode: (mode) => switchCameraMode(mode),
     updateZoom: (zoom) => updateZoom(zoom),
     updateBackground: () => updateBackground(),
+    updateFloorColor: () => updateFloorColor(),
     updateZSpacing: (spacing) => updateZSpacing(spacing),
-    updateReflectionSettings: () => updateReflectionSettings(),
+    updateReflectionSettings: () => floorManager?.updateReflectionSettings(),
     defaults: {
         cameraMode: 'perspective',
         cameraFOV: DEFAULT_CAMERA_FOV,
         cameraZoom: 1.0,
-        bgColor: DEFAULT_BG_COLOR,
+        bgColor: '#ffffff',
         transparentBg: false,
-        zSpacing: DEFAULT_Z_SPACING
+        zSpacing: null,
+        viewpointPreset: 'beauty'
     }
 });
 cameraMode = params.cameraMode;
@@ -301,23 +293,49 @@ function detectCapabilities() {
 }
 
 function init() {
-    // Check browser capabilities first
     if (!detectCapabilities()) {
-        return; // Stop initialization if capabilities missing
+        return;
     }
 
-    // Load saved settings from localStorage
     loadSettings();
-
-    // Get canvas element
     canvas = document.getElementById('canvas');
 
-    // Create scene
-    scene = new THREE.Scene();
-    storeSharedRef(SHARED_STATE_KEYS.scene, scene);
-    scene.background = new THREE.Color(params.bgColor);
+    // Accessibility: Canvas needs aria-label and tabindex for keyboard users
+    canvas.setAttribute('tabindex', '0');
+    canvas.setAttribute('role', 'img');
+    updateCanvasAriaLabel();
 
-    // Create perspective camera
+    // ═══════════════════════════════════════════════════════════════════════
+    // Manager Initialization Pattern
+    // ═══════════════════════════════════════════════════════════════════════
+    // Managers are initialized in dependency order:
+    // 1. SceneManager (creates scene + renderer)
+    // 2. LightingManager (requires scene)
+    // 3. FloorManager (requires scene + params)
+    // 4. AmbienceManager (requires scene + imageStack + params)
+    //
+    // Each manager is self-contained and can be disposed independently.
+    // See tests/error_recovery.test.js for disposal order safety verification.
+    // ═══════════════════════════════════════════════════════════════════════
+
+    // Step 1: Create SceneManager (owns scene + renderer lifecycle)
+    sceneManager = new SceneManager(canvas, params);
+    sceneManager.onContextRestoredCallback = () => {
+        imageStack.forEach((imageData, index) => {
+            if (imageData?.texture) {
+                imageData.texture.needsUpdate = true;
+                logWebGL.info(` Reloading texture ${index + 1}/${imageStack.length}: ${imageData.filename}`);
+            }
+        });
+    };
+
+    // Initialize scene and renderer (WebGL context creation happens here)
+    const { scene: managedScene, renderer: managedRenderer } = sceneManager.init();
+    scene = managedScene;
+    renderer = managedRenderer;
+    storeSharedRef(SHARED_STATE_KEYS.scene, scene);
+    storeSharedRef(SHARED_STATE_KEYS.renderer, renderer);
+
     const aspect = window.innerWidth / window.innerHeight;
     camera = new THREE.PerspectiveCamera(params.cameraFOV, aspect, 0.1, CAMERA_FAR_PLANE);
     storeSharedRef(SHARED_STATE_KEYS.camera, camera);
@@ -325,8 +343,7 @@ function init() {
     camera.lookAt(0, 0, 0);
     camera.zoom = params.cameraZoom;
 
-    // Create orthographic camera (for isometric/ortho modes)
-    const frustumSize = ORTHO_FRUSTUM_SIZE;  // Base frustum size
+    const frustumSize = ORTHO_FRUSTUM_SIZE;
     orthoCamera = new THREE.OrthographicCamera(
         frustumSize * aspect / -2,
         frustumSize * aspect / 2,
@@ -340,51 +357,70 @@ function init() {
     orthoCamera.lookAt(0, 0, 0);
     orthoCamera.zoom = params.cameraZoom;
 
-    // Create renderer with advanced photorealistic features
-    renderer = new THREE.WebGLRenderer({
-        canvas: canvas,
-        antialias: true,
-        alpha: true,  // Enable transparency
-        preserveDrawingBuffer: true,  // Needed for export
-        powerPreference: "high-performance"  // Use dedicated GPU if available
-    });
-    storeSharedRef(SHARED_STATE_KEYS.renderer, renderer);
-    syncRendererDimensions(params.canvasSize, window.devicePixelRatio);
+    sceneManager.camera = camera;
+    sceneManager.orthoCamera = orthoCamera;
 
-    // Enable high-quality shadows with soft edges
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.VSMShadowMap;  // Variance shadows for softer look
-    renderer.shadowMap.autoUpdate = true;
-
-    // Enable physically correct lighting and rendering
-    renderer.physicallyCorrectLights = true;  // Realistic light falloff
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;  // Cinematic tone mapping
-    renderer.toneMappingExposure = 1.2;  // Slightly brighter for better visibility
-    renderer.outputColorSpace = THREE.SRGBColorSpace;  // Correct color space for displays (Three.js r152+)
-
-    const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    pmremGenerator.compileEquirectangularShader();
-    if (environmentTexture) {
-        environmentTexture.dispose();
-    }
-    environmentTexture = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
-    scene.environment = environmentTexture;
-    pmremGenerator.dispose();
-
-    renderer.setClearColor(0x000000, 1);  // Default opaque black
-
-    // Add lighting for 3D depth
-    setupLighting();
-
-    // Add orbit controls (use current active camera)
     controls = new OrbitControls(camera, renderer.domElement);
     storeSharedRef(SHARED_STATE_KEYS.controls, controls);
     controls.enableDamping = true;
     controls.dampingFactor = CONTROLS_DAMPING_FACTOR;
     controls.minDistance = CAMERA_MIN_DISTANCE;
     controls.maxDistance = CAMERA_MAX_DISTANCE;
+    sceneManager.controls = controls;
 
-    // Initialize camera animator
+    // Sync cameraDistance param when OrbitControls changes camera position (pinch/wheel)
+    // Use debounced pane refresh to update Z slider without affecting drag performance
+    const debouncedPaneRefresh = debounce(() => {
+        if (pane) {
+            pane.refresh();
+        }
+    }, 100);
+
+    controls.addEventListener('change', () => {
+        const activeCamera = controls.object;
+        if (activeCamera) {
+            const distance = activeCamera.position.distanceTo(controls.target);
+            // Only update if significantly different (avoid feedback loops)
+            if (Math.abs(distance - params.cameraDistance) > 1) {
+                params.cameraDistance = distance;
+                // Debounced refresh updates Z slider after drag settles
+                debouncedPaneRefresh();
+            }
+        }
+    });
+
+    // Camera control hints - show first 3 interactions
+    const HINT_STORAGE_KEY = 'vexy-stax-camera-hints';
+    const MAX_HINTS = 3;
+    let hintCount = parseInt(localStorage.getItem(HINT_STORAGE_KEY) || '0', 10);
+
+    const showCameraHint = () => {
+        if (hintCount >= MAX_HINTS) return;
+        hintCount++;
+        localStorage.setItem(HINT_STORAGE_KEY, String(hintCount));
+
+        const hints = [
+            'ℹ️ Drag to rotate • Pinch/scroll to zoom • Shift+drag to pan',
+            'ℹ️ Arrow keys rotate • +/- zoom • Shift+arrows pan',
+            'ℹ️ Press ? for all keyboard shortcuts'
+        ];
+        showToast(hints[hintCount - 1] || hints[0], 'info', 4000);
+    };
+
+    // Trigger hint on first canvas interaction
+    const canvasEl = renderer.domElement;
+    const hintHandler = () => {
+        showCameraHint();
+        if (hintCount >= MAX_HINTS) {
+            canvasEl.removeEventListener('mousedown', hintHandler);
+            canvasEl.removeEventListener('touchstart', hintHandler);
+        }
+    };
+    if (hintCount < MAX_HINTS) {
+        canvasEl.addEventListener('mousedown', hintHandler, { once: false });
+        canvasEl.addEventListener('touchstart', hintHandler, { once: false });
+    }
+
     cameraAnimator = new CameraAnimator(camera, controls);
     storeSharedRef(SHARED_STATE_KEYS.cameraAnimator, cameraAnimator);
 
@@ -404,6 +440,51 @@ function init() {
     });
     cameraMode = cameraController.getMode();
     appState.set('cameraMode', cameraMode);
+
+    // Step 2: Create LightingManager (sets up all scene lights)
+    // Manages ambient, directional, fill, and hemisphere lights
+    // Calculates adaptive intensities based on background luminance
+    lightingManager = new LightingManager(scene, params);
+    lightingManager.setup();
+
+    // Step 3: Create FloorManager + AmbienceManager (coordinate ambience mode)
+    // FloorManager: Manages reflective floor plane and ambient background
+    // AmbienceManager: Handles material switching (flat ↔ lit) for image meshes
+    floorManager = new FloorManager(scene, params);
+    ambienceManager = new AmbienceManager(scene, imageStack, params, {
+        getEffectiveZSpacing,
+        // SCENE.md §1: Recalculate layout after material updates
+        onMaterialsUpdated: () => {
+            if (sceneComposition) {
+                sceneComposition.recalculateLayout();
+            }
+        }
+    });
+
+    // Coordinate ambience toggle between FloorManager and AmbienceManager
+    // When user toggles ambience mode:
+    // 1. FloorManager callback fires
+    // 2. AmbienceManager rebuilds all image meshes with appropriate materials
+    // 3. If enabled, applies emissive intensity from LightingManager
+    floorManager.onAmbienceChange = (enabled) => {
+        ambienceManager.updateMaterials(enabled);
+        if (enabled) {
+            const emissiveIntensity = lightingManager.getEmissiveIntensity();
+            ambienceManager.applyEmissiveIntensity(emissiveIntensity);
+        }
+    };
+    sceneManager.onResizeCallback = () => {
+        if (params.ambience) {
+            floorManager.updateReflectionSettings();
+        }
+    };
+
+    // Floor is always visible (in both ambience and non-ambience modes)
+    floorManager.create();
+
+    if (params.ambience) {
+        updateBackground();
+    }
 
     memoryMonitor = new MemoryMonitor({
         getImageStack: () => imageStack,
@@ -461,10 +542,30 @@ function init() {
         logImages,
         logMemory,
         calculateLuminance,
-        getAdaptiveEmissiveIntensity
+        getAdaptiveEmissiveIntensity,
+        getEffectiveZSpacing,
+        // SCENE.md §2: Set initial defaults when first slide is added
+        onFirstSlide: (slideCount) => {
+            logInit.info(`First slide added (${slideCount} total) - applying initial defaults`);
+            // Set viewpoint to beauty
+            setBeautyViewpoint();
+            // Set material to default (neutral)
+            params.materialPreset = 'neutral';
+            applyMaterialPreset(MATERIAL_PRESETS.neutral);
+            // Set ambience to default (0 = off)
+            params.ambience = 0;
+            // Set slide distance to auto: STUDIOWIDTH/(NUM_SLIDES+2)
+            params.zSpacing = null; // null triggers auto calculation
+            updateCanvasAriaLabel();
+        },
+        // SCENE.md §1: Update floor position when vertical layout changes
+        onLayoutChanged: (floorY) => {
+            if (floorManager) {
+                floorManager.setPositionY(floorY);
+            }
+        }
     });
 
-    // Setup file input handler
     fileHandler = new FileHandler({
         elements: {
             imageInput: document.getElementById('image-input'),
@@ -476,6 +577,10 @@ function init() {
         onFileAccepted: (file) => {
             loadImage(file);
         },
+        onJSONFileAccepted: (file) => {
+            // Import JSON scene - same as JSON > Open
+            importJSON(file);
+        },
         shouldProceedAfterMemoryCheck: () => checkMemoryUsage(true),
         showToast,
         loggers: {
@@ -485,9 +590,14 @@ function init() {
     });
     fileHandler.setup();
 
-    // Setup Tweakpane UI
-    setupTweakpane();
-    cameraController.attachPane(pane);
+    // Wrap Tweakpane setup in try-catch for headless/automation environments
+    try {
+        setupTweakpane();
+        cameraController.attachPane(pane);
+    } catch (err) {
+        logInit.warn('Tweakpane setup failed (headless mode?)', err.message);
+        // Continue without UI controls - API will still be exposed
+    }
 
     exportManager = new ExportManager({
         renderer,
@@ -505,18 +615,23 @@ function init() {
         updateBackground,
         pane,
         getActiveCamera: () => getActiveCamera(),
+        getEffectiveZSpacing,
         document,
         window,
         navigator,
-        alert: (message) => alert(message)
+        alert: (message) => alert(message),
+        // SCENE.md §1: Recalculate layout after JSON import completes
+        onImportComplete: () => {
+            if (sceneComposition) {
+                sceneComposition.recalculateLayout();
+            }
+        }
     });
 
     logInit.info('Initialization complete - UI should be visible');
 
-    // Handle window resize with debouncing
     setupDebouncedResize();
 
-    // Setup keyboard shortcuts
     keyboardShortcuts = setupKeyboardShortcuts({
         addTrackedEventListener,
         windowRef: window,
@@ -530,19 +645,48 @@ function init() {
         redo,
         clearAll,
         imageStack,
-        confirm: (message) => confirm(message)
+        confirm: (message) => confirm(message),
+        cameraControls: {
+            rotateCamera: (deltaAzimuth, deltaPolar) => {
+                if (!controls) return;
+                // Rotate around target using spherical coordinates
+                const offset = camera.position.clone().sub(controls.target);
+                const spherical = new THREE.Spherical().setFromVector3(offset);
+                spherical.theta += deltaAzimuth;
+                spherical.phi += deltaPolar;
+                // Clamp polar angle to avoid flipping
+                spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, spherical.phi));
+                offset.setFromSpherical(spherical);
+                camera.position.copy(controls.target).add(offset);
+                camera.lookAt(controls.target);
+                controls.update();
+            },
+            panCamera: (deltaX, deltaY) => {
+                if (!cameraController) return;
+                const currentX = params.cameraOffsetX + deltaX;
+                const currentY = params.cameraOffsetY + deltaY;
+                cameraController.setOffset(currentX, currentY);
+                if (pane) pane.refresh();
+            },
+            zoomCamera: (delta) => {
+                if (!cameraController) return;
+                const newDistance = Math.max(
+                    CAMERA_MIN_DISTANCE,
+                    Math.min(CAMERA_MAX_DISTANCE, params.cameraDistance + delta)
+                );
+                cameraController.setDistance(newDistance);
+                if (pane) pane.refresh();
+            }
+        }
     });
 
-    // Expose debug API
-    exposeDebugAPI();
+    // Wire up toolbar buttons
+    setupToolbarButtons();
 
-    // Setup resource cleanup on page unload
+    exposeDebugAPI();
+    setupPlaywrightBridge();
     setupCleanup();
 
-    // Setup WebGL context loss recovery
-    setupContextLossRecovery();
-
-    // Initialize RenderLoop
     renderLoop = new RenderLoop();
     renderLoop.setRenderCallback(() => {
         controls.update();
@@ -550,6 +694,9 @@ function init() {
         renderer.render(scene, activeCamera);
     });
     renderLoop.start();
+
+    // Auto-save settings every 30 seconds
+    setupAutoSave();
 
     logInit.info('Vexy Stax initialized');
 }
@@ -560,328 +707,39 @@ function init() {
  * @param {string} hexColor - Hex color string (e.g. '#ffffff')
  * @returns {number} Luminance value between 0 (black) and 1 (white)
  */
-function calculateLuminance(hexColor) {
-    // Parse hex color to RGB
-    const color = new THREE.Color(hexColor);
-    const r = color.r;
-    const g = color.g;
-    const b = color.b;
-
-    // Apply gamma correction
-    const rsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
-    const gsRGB = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
-    const bsRGB = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-
-    // Calculate luminance
-    return 0.2126 * rsRGB + 0.7152 * gsRGB + 0.0722 * bsRGB;
-}
-
-/**
- * Get adaptive ambient light intensity based on background luminance
- * Dark backgrounds need more light, bright backgrounds need less
- * @param {number} luminance - Background luminance (0-1)
- * @returns {number} Ambient light intensity
- */
-function getAdaptiveAmbientIntensity(luminance) {
-    // Reduced intensity range to prevent overexposure
-    // Range: 0.5 (bright bg) to 0.8 (dark bg)
-    const { min, max } = AMBIENT_INTENSITY_RANGE;
-
-    // Inverse relationship: darker background = more light
-    return max - (luminance * (max - min));
-}
-
-/**
- * Get adaptive emissive intensity for materials based on background luminance
- * Helps slides remain visible on dark backgrounds and prevents washout on bright ones
- * @param {number} luminance - Background luminance (0-1)
- * @returns {number} Emissive intensity (0-1)
- */
-function getAdaptiveEmissiveIntensity(luminance) {
-    // For dark backgrounds, add subtle emissive glow
-    // For bright backgrounds, reduce emissive to near zero
-    // Range: 0.05 (bright bg) to 0.25 (dark bg)
-    const { min, max } = EMISSIVE_INTENSITY_RANGE;
-
-    // Inverse relationship: darker background = more emissive
-    return max - (luminance * (max - min));
-}
-
-function setupLighting() {
-    // Calculate adaptive ambient light intensity based on background
-    const bgLuminance = calculateLuminance(params.bgColor);
-    const ambientIntensity = getAdaptiveAmbientIntensity(bgLuminance);
-
-    // Ambient light with adaptive intensity
-    ambientLight = new THREE.AmbientLight(0xffffff, ambientIntensity);
-    scene.add(ambientLight);
-
-    // Main directional light (sun-like) with high-quality shadows
-    // Reduced intensity to prevent overexposure
-    mainLight = new THREE.DirectionalLight(0xffffff, MAIN_LIGHT_SETTINGS.intensity);
-    mainLight.position.set(
-        MAIN_LIGHT_SETTINGS.position.x,
-        MAIN_LIGHT_SETTINGS.position.y,
-        MAIN_LIGHT_SETTINGS.position.z
-    );
-    mainLight.castShadow = true;
-
-    // Configure high-quality shadow properties for photorealism
-    mainLight.shadow.mapSize.width = MAIN_LIGHT_SETTINGS.shadow.mapSize;  // High-res shadows
-    mainLight.shadow.mapSize.height = MAIN_LIGHT_SETTINGS.shadow.mapSize;
-    mainLight.shadow.camera.near = MAIN_LIGHT_SETTINGS.shadow.camera.near;
-    mainLight.shadow.camera.far = MAIN_LIGHT_SETTINGS.shadow.camera.far;
-    mainLight.shadow.camera.left = MAIN_LIGHT_SETTINGS.shadow.camera.left;
-    mainLight.shadow.camera.right = MAIN_LIGHT_SETTINGS.shadow.camera.right;
-    mainLight.shadow.camera.top = MAIN_LIGHT_SETTINGS.shadow.camera.top;
-    mainLight.shadow.camera.bottom = MAIN_LIGHT_SETTINGS.shadow.camera.bottom;
-    mainLight.shadow.bias = MAIN_LIGHT_SETTINGS.shadow.bias;       // Adjusted to prevent flickering
-    mainLight.shadow.normalBias = MAIN_LIGHT_SETTINGS.shadow.normalBias;    // Increased to prevent shadow acne and flickering
-    mainLight.shadow.radius = MAIN_LIGHT_SETTINGS.shadow.radius;            // Softer shadow edges
-    mainLight.shadow.blurSamples = MAIN_LIGHT_SETTINGS.shadow.blurSamples;      // VSM-specific softness control
-
-    scene.add(mainLight);
-
-    // Fill light from opposite side for softer shadows and ambient feel
-    fillLight = new THREE.DirectionalLight(0xffffff, FILL_LIGHT_SETTINGS.intensity);
-    fillLight.position.set(
-        FILL_LIGHT_SETTINGS.position.x,
-        FILL_LIGHT_SETTINGS.position.y,
-        FILL_LIGHT_SETTINGS.position.z
-    );
-    scene.add(fillLight);
-
-    // Add hemisphere light for realistic sky/ground ambient lighting
-    const hemisphereLight = new THREE.HemisphereLight(
-        HEMISPHERE_LIGHT_SETTINGS.skyColor,  // Sky color
-        HEMISPHERE_LIGHT_SETTINGS.groundColor,  // Ground color
-        HEMISPHERE_LIGHT_SETTINGS.intensity        // Reduced intensity
-    );
-    scene.add(hemisphereLight);
-
-    logLighting.info(`Lighting setup complete (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${ambientIntensity.toFixed(2)})`);
-}
-
-/**
- * Update lighting based on current background color
- * Called when background color changes
- */
-function updateLighting() {
-    if (!ambientLight) return;
-
-    const bgLuminance = calculateLuminance(params.bgColor);
-    const newIntensity = getAdaptiveAmbientIntensity(bgLuminance);
-
-    ambientLight.intensity = newIntensity;
-    logLighting.info(`Lighting updated (bg luminance: ${bgLuminance.toFixed(2)}, ambient: ${newIntensity.toFixed(2)})`);
-}
-
-function getReflectionResolution() {
-    const pixelRatio = window.devicePixelRatio || 1;
-    const width = Math.max(
-        REFLECTION_MIN_RESOLUTION,
-        Math.round(window.innerWidth * pixelRatio * REFLECTION_TEXTURE_BASE)
-    );
-    const height = Math.max(
-        REFLECTION_MIN_RESOLUTION,
-        Math.round(window.innerHeight * pixelRatio * REFLECTION_TEXTURE_BASE)
-    );
-    return { width, height, pixelRatio };
-}
-
-function updateReflectionSettings() {
-    if (!floorReflector) {
-        return;
-    }
-
-    const { width, height, pixelRatio } = getReflectionResolution();
-    const target = floorReflector.getRenderTarget();
-    if (target.width !== width || target.height !== height) {
-        target.setSize(width, height);
-    }
-
-    floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
-    floorReflector.material.uniforms.floorSize.value = FLOOR_SIZE;
-}
-
-/**
- * Create realistic floor with reflections and shadows
- * Floor is positioned below the images
- */
-/**
- * Floor color should MATCH background exactly for seamless ambience
- * Depth comes from shadows and reflections, not floor color contrast
- */
-function getAdaptiveFloorColor(bgColor) {
-    // Return the exact background color - floor blends seamlessly
-    return new THREE.Color(bgColor);
-}
-
-function createFloor() {
-    if (floorGroup) return; // Already exists
-
-    const { width, height, pixelRatio } = getReflectionResolution();
-
-    floorGroup = new THREE.Group();
-    floorGroup.name = 'ambience-floor';
-
-    const baseGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
-    const floorColor = getAdaptiveFloorColor(params.bgColor);
-    const baseMaterial = new THREE.MeshStandardMaterial({
-        color: floorColor,
-        roughness: FLOOR_BASE_MATERIAL.roughness,
-        metalness: FLOOR_BASE_MATERIAL.metalness,
-        envMapIntensity: FLOOR_BASE_MATERIAL.envMapIntensity,
-        side: THREE.DoubleSide
-    });
-
-    floorBase = new THREE.Mesh(baseGeometry, baseMaterial);
-    floorBase.rotation.x = -Math.PI / 2;
-    floorBase.position.y = FLOOR_Y;
-    floorBase.receiveShadow = true;
-
-    const reflectionGeometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
-    floorReflector = new Reflector(reflectionGeometry, {
-        textureWidth: width,
-        textureHeight: height,
-        shader: SoftReflectorShader,
-        multisample: Math.max(2, Math.round(pixelRatio * 2))
-    });
-    floorReflector.rotation.x = -Math.PI / 2;
-    floorReflector.position.y = FLOOR_Y + FLOOR_REFLECTOR_OFFSET; // Prevent z-fighting with more separation
-    floorReflector.material.transparent = true;
-    floorReflector.material.depthWrite = false;
-    floorReflector.material.uniforms.color.value.copy(floorColor);
-    floorReflector.material.uniforms.opacity.value = REFLECTION_OPACITY;
-    floorReflector.material.uniforms.blurRadius.value = REFLECTION_BLUR_RADIUS / pixelRatio;
-    floorReflector.material.uniforms.fadeStrength.value = REFLECTION_FADE_STRENGTH;
-    floorReflector.material.uniforms.floorSize.value = FLOOR_SIZE;
-
-    floorGroup.add(floorBase);
-    floorGroup.add(floorReflector);
-    scene.add(floorGroup);
-    updateReflectionSettings();
-
-    logFloor.info(`Floor created at y=${FLOOR_Y} with ambience reflections (texture ${width}x${height})`);
-
-    // Update all images to stand on floor and cast shadows
-    updateImagesForAmbience(true);
-}
-
-/**
- * Remove floor from scene
- */
-function removeFloor() {
-    if (!floorGroup) return;
-
-    scene.remove(floorGroup);
-    if (floorReflector) {
-        floorReflector.dispose();
-        floorReflector = null;
-    }
-    if (floorBase) {
-        floorBase.geometry.dispose();
-        floorBase.material.dispose();
-        floorBase = null;
-    }
-    floorGroup = null;
-
-    logFloor.info('Floor removed');
-
-    // Update images to remove shadow casting
-    updateImagesForAmbience(false);
-}
-
-/**
- * Update all images in stack for ambience mode
- * - Change material to MeshStandardMaterial (responds to lighting)
- * - Enable shadow casting
- * - Position to stand on floor like domino pieces
- * @param {boolean} enabled - Whether ambience is enabled
- */
-function updateImagesForAmbience(enabled) {
-    imageStack.forEach((imageData, index) => {
-        const texture = imageData.mesh.material.map;
-        const width = imageData.width;
-        const height = imageData.height;
-
-        // Remove old mesh
-        scene.remove(imageData.mesh);
-        imageData.mesh.geometry.dispose();
-        imageData.mesh.material.dispose();
-
-        // Create new geometry
-        let geometry;
-        if (params.materialThickness > 1) {
-            geometry = new THREE.BoxGeometry(width, height, params.materialThickness);
-        } else {
-            geometry = new THREE.PlaneGeometry(width, height);
-        }
-
-        // Create material based on ambience mode
-        let material;
-        if (enabled) {
-            // Use MeshStandardMaterial WITHOUT emissive - preserve original colors
-            // No emissive properties to avoid washing out colors
-            material = new THREE.MeshStandardMaterial({
-                map: texture,
-                side: THREE.DoubleSide,
-                transparent: true,
-                roughness: params.materialRoughness,
-                metalness: params.materialMetalness
-            });
-            // Very low envMapIntensity to avoid over-brightening
-            material.envMapIntensity = 0.0;
-            material.needsUpdate = true;
-        } else {
-            // Use MeshBasicMaterial for flat, unlit appearance
-            material = new THREE.MeshBasicMaterial({
-                map: texture,
-                side: THREE.DoubleSide,
-                transparent: true
-            });
-        }
-
-        // Create new mesh
-        const mesh = new THREE.Mesh(geometry, material);
-
-        if (enabled) {
-            // Enable shadows (for depth, even without floor)
-            mesh.castShadow = true;
-            mesh.receiveShadow = true;
-
-            // Default positioning (centered, NO floor to stand on)
-            mesh.rotation.y = 0;
-            mesh.position.y = 0;
-            mesh.position.z = index * params.zSpacing;
-        } else {
-            // Default positioning (centered, no rotation)
-            mesh.position.z = index * params.zSpacing;
-            mesh.position.y = 0;
-        }
-
-        // Update image data
-        imageData.mesh = mesh;
-        scene.add(mesh);
-    });
-
-    logImages.info(`Images updated for ambience mode: ${enabled ? 'enabled' : 'disabled'}`);
-}
 
 /**
  * Toggle ambience mode (floor + realistic lighting)
- * @param {boolean} enabled - Whether to enable ambience
+ * @param {number} intensity - Ambience intensity (0 = off, 0.1-1.0 = on with gradual intensity)
  */
-function toggleAmbience(enabled) {
-    params.ambience = enabled;
+function toggleAmbience(intensity) {
+    params.ambience = intensity;
+    const enabled = intensity > 0;
 
+    // Floor is always visible, ambience only affects lighting/materials
     if (enabled) {
-        // NO FLOOR - just update materials for ambient lighting
-        updateImagesForAmbience(true);
-        showToast('✨ Ambience enabled: Realistic lighting', 'success');
+        if (ambienceManager) {
+            ambienceManager.updateMaterials(true);
+            // Apply emissive intensity based on ambience slider value
+            ambienceManager.applyEmissiveIntensity(intensity * 0.25);
+        }
+        if (lightingManager) {
+            // Scale ambient light intensity with slider value
+            lightingManager.setAmbientIntensity(0.3 + intensity * 0.5);
+        }
+        updateBackground();
     } else {
-        updateImagesForAmbience(false);
-        showToast('Ambience disabled: Flat rendering', 'info');
+        if (ambienceManager) {
+            ambienceManager.updateMaterials(false);
+        }
+        updateBackground();
+    }
+
+    // After mesh rebuilding, just update the controls without changing the target
+    // The meshes are rebuilt at the same positions, so the existing target remains valid
+    // Changing the target would override user's current view angle
+    if (controls) {
+        controls.update();
     }
 }
 
@@ -1101,12 +959,14 @@ function exposeDebugAPI() {
                                     // Create material
                                     const material = new THREE.MeshBasicMaterial({
                                         map: texture,
-                                        side: THREE.DoubleSide,
+                                        side: THREE.FrontSide,
                                         transparent: true
                                     });
 
                                     // Create mesh
                                     const mesh = new THREE.Mesh(geometry, material);
+                                    // Slides always sit ON floor (bottom edge at Y=0)
+                                    mesh.position.y = FLOOR_Y + (imageConfig.height / 2);
                                     mesh.position.z = index * params.zSpacing;
 
                                     // Store and add to scene
@@ -1135,8 +995,22 @@ function exposeDebugAPI() {
                     // Wait for all images to load
                     Promise.all(loadPromises)
                         .then(() => {
-                            // Refresh Tweakpane
-                            pane.refresh();
+                            // Apply ambience if enabled (positions slides on floor)
+                            if (params.ambience > 0) {
+                                toggleAmbience(params.ambience);
+                            }
+
+                            // Recenter camera on content now that images are loaded
+                            // This ensures camera looks at content center, not origin
+                            if (cameraController) {
+                                const center = cameraController.getContentCenter();
+                                camera.lookAt(center);
+                                controls.target.copy(center);
+                                controls.update();
+                            }
+
+                            // Refresh Tweakpane (if available - may be absent in headless mode)
+                            if (pane) pane.refresh();
                             logAPI.info(' Configuration loaded successfully');
                             resolve();
                         })
@@ -1200,7 +1074,15 @@ function setupCleanup() {
         logCleanup.info(' Disposing Three.js resources...');
 
         try {
-            removeFloor();
+            if (floorManager) {
+                floorManager.remove();
+                floorManager.dispose?.();
+                floorManager = null;
+            }
+            if (lightingManager) {
+                lightingManager.dispose();
+                lightingManager = null;
+            }
 
             // Dispose all images in stack
             imageStack.forEach(imageData => {
@@ -1238,21 +1120,18 @@ function setupCleanup() {
                 controls.dispose();
             }
 
-            // Dispose renderer
-            if (renderer) {
-                renderer.dispose();
-                renderer.forceContextLoss();
-            }
-
-            // Clear scene
-            if (scene) {
-                scene.environment = null;
-                scene.clear();
-            }
-
-            if (environmentTexture) {
-                environmentTexture.dispose();
-                environmentTexture = null;
+            if (sceneManager) {
+                sceneManager.dispose();
+                sceneManager = null;
+            } else {
+                if (renderer) {
+                    renderer.dispose();
+                    renderer.forceContextLoss();
+                }
+                if (scene) {
+                    scene.environment = null;
+                    scene.clear();
+                }
             }
 
             if (fileHandler) {
@@ -1308,89 +1187,69 @@ function setupDebouncedResize() {
 }
 
 /**
+ * Setup toolbar button click handlers for Undo/Redo/Reset Camera/Help
+ */
+function setupToolbarButtons() {
+    const btnUndo = document.getElementById('btn-undo');
+    const btnRedo = document.getElementById('btn-redo');
+    const btnResetCamera = document.getElementById('btn-reset-camera');
+    const btnHelp = document.getElementById('btn-help');
+
+    if (btnUndo) {
+        addTrackedEventListener(btnUndo, 'click', () => {
+            undo();
+        });
+    }
+
+    if (btnRedo) {
+        addTrackedEventListener(btnRedo, 'click', () => {
+            redo();
+        });
+    }
+
+    if (btnResetCamera) {
+        addTrackedEventListener(btnResetCamera, 'click', () => {
+            setViewpointFitToFrame();
+            showToast('Camera reset to fit', 'info');
+        });
+    }
+
+    if (btnHelp && keyboardShortcuts?.toggleHelp) {
+        addTrackedEventListener(btnHelp, 'click', () => {
+            keyboardShortcuts.toggleHelp();
+        });
+    }
+
+    logUI.info('Toolbar buttons initialized');
+}
+
+/**
+ * Setup auto-save interval to persist settings every 30 seconds
+ */
+let autoSaveIntervalId = null;
+
+function setupAutoSave() {
+    if (autoSaveIntervalId) {
+        clearInterval(autoSaveIntervalId);
+    }
+
+    autoSaveIntervalId = setInterval(() => {
+        saveSettings();
+        logUI.info('Settings auto-saved');
+    }, AUTO_SAVE_INTERVAL);
+
+    // Track for cleanup
+    cleanupCallbacks.push(() => {
+        if (autoSaveIntervalId) {
+            clearInterval(autoSaveIntervalId);
+            autoSaveIntervalId = null;
+        }
+    });
+}
+
+/**
  * Setup WebGL context loss/restore handlers for graceful GPU reset recovery
  */
-function setupContextLossRecovery() {
-    const canvas = renderer.domElement;
-
-    const contextLostHandler = (event) => {
-        event.preventDefault(); // Allows context restoration
-        logWebGL.warn(' Context lost - GPU reset detected');
-
-        // Show user-friendly message
-        const message = document.createElement('div');
-        message.id = 'webgl-context-lost-message';
-        message.style.cssText = `
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(255, 165, 0, 0.95);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 8px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: ' + Z_INDEX_MODAL + ';
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        `;
-        message.textContent = '⚠️ Graphics context lost - recovering...';
-        document.body.appendChild(message);
-    };
-
-    const contextRestoredHandler = () => {
-        logWebGL.info(' Context restored - reinitializing renderer');
-
-        // Remove message
-        const message = document.getElementById('webgl-context-lost-message');
-        if (message) {
-            message.remove();
-        }
-
-        // Re-initialize renderer settings
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        renderer.setPixelRatio(window.devicePixelRatio);
-        renderer.shadowMap.enabled = true;
-        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        renderer.setClearColor(params.bgColor, params.transparentBg ? 0 : 1);
-
-        // Reload all textures in image stack
-        imageStack.forEach((imageData, index) => {
-            logWebGL.info(` Reloading texture ${index + 1}/${imageStack.length}: ${imageData.filename}`);
-            // Texture will be reloaded automatically by Three.js on next render
-            if (imageData.texture && imageData.texture.image) {
-                imageData.texture.needsUpdate = true;
-            }
-        });
-
-        logWebGL.info(' Context restoration complete');
-
-        // Show success message briefly
-        const successMessage = document.createElement('div');
-        successMessage.style.cssText = `
-            position: fixed;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(40, 167, 69, 0.95);
-            color: white;
-            padding: 15px 25px;
-            border-radius: 8px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            z-index: ' + Z_INDEX_MODAL + ';
-            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-        `;
-        successMessage.textContent = '✓ Graphics recovered successfully';
-        document.body.appendChild(successMessage);
-
-        setTimeout(() => {
-            successMessage.remove();
-        }, 3000);
-    };
-
-    addTrackedEventListener(canvas, 'webglcontextlost', contextLostHandler);
-    addTrackedEventListener(canvas, 'webglcontextrestored', contextRestoredHandler);
-    logWebGL.info(' Context loss/restore handlers registered');
-}
 
 /**
  * Setup FPS counter and performance monitoring
@@ -1555,13 +1414,16 @@ function setupTweakpane() {
         callbacks: {
             updateCanvasSize,
             updateBackground,
+            updateFloorColor,
             toggleAmbience,
             centerViewOnContent,
-            setViewpoint,
-            setBeautyViewpoint,
-            setViewpointFitToFrame,
+            setViewpoint: (...args) => { setViewpoint(...args); updateCanvasAriaLabel(); },
+            setBeautyViewpoint: () => { setBeautyViewpoint(); updateCanvasAriaLabel(); },
+            setViewpointFitToFrame: () => { setViewpointFitToFrame(); updateCanvasAriaLabel(); },
             switchCameraMode,
             updateZoom,
+            updateCameraDistance,
+            updateCameraOffset,
             setCameraFOV: (value) => {
                 if (cameraController) {
                     cameraController.setFOV(value);
@@ -1570,7 +1432,8 @@ function setupTweakpane() {
                     camera.updateProjectionMatrix();
                 }
             },
-            applyMaterialPreset,
+            setHeroViewpoint: () => { setHeroViewpoint(); updateCanvasAriaLabel(); },
+            applyMaterialPreset: (preset) => { applyMaterialPreset(preset); updateCanvasAriaLabel(); },
             updateZSpacing,
             exportPNG,
             exportJSON,
@@ -1582,7 +1445,8 @@ function setupTweakpane() {
             undo,
             redo,
             showToast,
-            saveSettings
+            saveSettings,
+            loadExample
         },
         dependencies: {
             cameraAnimator,
@@ -1656,6 +1520,27 @@ function updateZoom(zoomValue) {
     emitCameraUpdated('zoom');
 }
 
+/**
+ * Update camera distance (delegates to CameraController)
+ * @param {number} distance - Camera distance from target
+ */
+function updateCameraDistance(distance) {
+    if (cameraController) {
+        cameraController.setDistance(distance);
+    }
+}
+
+/**
+ * Update camera X/Y offset (delegates to CameraController)
+ * @param {number} offsetX - X offset (positive = right in screen space)
+ * @param {number} offsetY - Y offset (positive = up in screen space)
+ */
+function updateCameraOffset(offsetX, offsetY) {
+    if (cameraController) {
+        cameraController.setOffset(offsetX, offsetY);
+    }
+}
+
 function syncRendererDimensions(size, pixelRatioOverride) {
     if (!renderer || !canvas) {
         return;
@@ -1672,10 +1557,10 @@ function syncRendererDimensions(size, pixelRatioOverride) {
 function updateCanvasSize(size) {
     params.canvasSize = size;
 
-    // Resize the actual renderer/canvas to match studio size
-    const dimensions = syncRendererDimensions(size, window.devicePixelRatio);
+    const dimensions = sceneManager
+        ? sceneManager.syncRendererDimensions(size, window.devicePixelRatio)
+        : null;
 
-    // Update camera aspect ratio
     const aspect = size.x / size.y;
     if (cameraMode === 'perspective' || cameraMode === 'telephoto') {
         camera.aspect = aspect;
@@ -1689,9 +1574,8 @@ function updateCanvasSize(size) {
         orthoCamera.updateProjectionMatrix();
     }
 
-    // Update reflection resolution if ambience is enabled
     if (params.ambience) {
-        updateReflectionSettings();
+        floorManager?.updateReflectionSettings();
     }
 
     if (dimensions) {
@@ -1716,6 +1600,11 @@ function updateCanvasSize(size) {
  * centerViewOnContent();
  */
 function centerViewOnContent() {
+    // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
+    if (params.viewpointPreset === 'hero') {
+        restoreSlideZPositions();
+    }
+
     if (cameraController) {
         cameraController.centerOnContent();
         return;
@@ -1798,41 +1687,32 @@ function switchCameraMode(mode) {
 }
 
 function updateBackground() {
-    if (params.transparentBg) {
-        scene.background = null;
-        renderer.setClearColor(0x000000, 0); // Transparent
+    if (sceneManager) {
+        sceneManager.updateBackground(params.bgColor, params.transparentBg);
     } else {
-        scene.background = new THREE.Color(params.bgColor);
-        renderer.setClearColor(params.bgColor, 1);
+        if (params.transparentBg) {
+            scene.background = null;
+            renderer.setClearColor(0x000000, 0);
+        } else {
+            scene.background = new THREE.Color(params.bgColor);
+            renderer.setClearColor(params.bgColor, 1);
+        }
     }
 
-    // Update lighting to adapt to new background color
-    updateLighting();
+    lightingManager?.update();
 
-    // Update floor color adaptively based on background luminance
-    if (params.ambience) {
-        const floorColor = getAdaptiveFloorColor(params.bgColor);
-        if (floorBase) {
-            floorBase.material.color.copy(floorColor);
-            floorBase.material.needsUpdate = true;
-        }
-        if (floorReflector) {
-            floorReflector.material.uniforms.color.value.copy(floorColor);
-        }
-        logFloor.info(`Floor color updated to ${params.bgColor}`);
-    }
-
-    // Update all existing slides' emissive intensity to react to background
     if (params.ambience) {
         const bgLuminance = calculateLuminance(params.bgColor);
         const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
 
-        imageStack.forEach(imageData => {
-            if (imageData.mesh.material.emissiveIntensity !== undefined) {
-                imageData.mesh.material.emissiveIntensity = emissiveIntensity;
-                imageData.mesh.material.needsUpdate = true;
+        imageStack.forEach((imageData) => {
+            const material = imageData.mesh?.material;
+            if (material && 'emissiveIntensity' in material) {
+                material.emissiveIntensity = emissiveIntensity;
+                material.needsUpdate = true;
             }
         });
+
         logImages.info(`Slides emissive updated (luminance: ${bgLuminance.toFixed(2)}, emissive: ${emissiveIntensity.toFixed(2)})`);
     }
 
@@ -1840,39 +1720,111 @@ function updateBackground() {
 }
 
 /**
+ * Update floor color and opacity from params.floorColor
+ */
+function updateFloorColor() {
+    if (floorManager) {
+        floorManager.updateColor();
+    }
+}
+
+/**
+ * Update canvas aria-label to describe current scene state for screen readers.
+ * Called when images are added/removed or viewpoint changes.
+ */
+function updateCanvasAriaLabel() {
+    if (!canvas) return;
+
+    const imageCount = imageStack.length;
+    const viewpoint = params.viewpointPreset || 'custom';
+    const material = params.materialPreset || 'neutral';
+
+    let description;
+    if (imageCount === 0) {
+        description = '3D image stack viewer. No images loaded. Drop images here or click the + button to add images.';
+    } else {
+        const imageWord = imageCount === 1 ? 'image' : 'images';
+        description = `3D image stack with ${imageCount} ${imageWord}. ${viewpoint} viewpoint, ${material} material. Use arrow keys to rotate camera, +/- to zoom.`;
+    }
+
+    canvas.setAttribute('aria-label', description);
+}
+
+/**
  * Update the Z-offset applied between consecutive slides in the stack.
  *
- * @param {number} newSpacing - Distance in Three.js world units between slides.
+ * @param {number|null} newSpacing - Distance in Three.js world units between slides.
+ *                                   Pass null to use automatic calculation.
  *
  * @example
  * // Increase separation for a thicker stack appearance
  * updateZSpacing(80);
+ *
+ * @example
+ * // Use automatic distance calculation
+ * updateZSpacing(null);
  */
 function updateZSpacing(newSpacing) {
+    params.zSpacing = newSpacing;
+    const effectiveSpacing = newSpacing === null ? calculateAutoDistance() : newSpacing;
+
     // Update all existing images
     imageStack.forEach((imageData, index) => {
-        imageData.mesh.position.z = index * newSpacing;
+        imageData.mesh.position.z = index * effectiveSpacing;
     });
-    logImages.info(`Z-spacing updated to ${newSpacing}px`);
+    logImages.info(`Z-spacing updated to ${effectiveSpacing}px${newSpacing === null ? ' (auto)' : ''}`);
+}
+
+/**
+ * Calculate content center from imageStack for fallback camera targeting.
+ * @returns {THREE.Vector3}
+ */
+function getContentCenterFromStack() {
+    if (imageStack.length === 0) {
+        return new THREE.Vector3(0, 0, 0);
+    }
+    const box = new THREE.Box3();
+    imageStack.forEach((entry) => {
+        if (entry?.mesh) {
+            box.expandByObject(entry.mesh);
+        }
+    });
+    if (box.isEmpty()) {
+        return new THREE.Vector3(0, 0, 0);
+    }
+    return box.getCenter(new THREE.Vector3());
 }
 
 function setViewpoint(x, y, z) {
+    // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
+    if (params.viewpointPreset === 'hero') {
+        restoreSlideZPositions();
+    }
+
     if (cameraController) {
         cameraController.setViewpoint(x, y, z);
         return;
     }
 
+    const target = getContentCenterFromStack();
     camera.position.set(x, y, z);
-    camera.lookAt(0, 0, 0);
+    camera.lookAt(target);
+    controls.target.copy(target);
     controls.update();
-    logCamera.info(`Viewpoint set to (${x}, ${y}, ${z})`);
+    logCamera.info(`Viewpoint set to (${x}, ${y}, ${z}), target (${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)})`);
     emitCameraUpdated('viewpoint');
 }
 
 /**
  * Set viewpoint to fit frontmost slide within studio frame
+ * Accounts for both FOV and camera zoom (Tele) in distance calculation
  */
 function setViewpointFitToFrame() {
+    // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
+    if (params.viewpointPreset === 'hero') {
+        restoreSlideZPositions();
+    }
+
     if (cameraController) {
         cameraController.setViewpointFitToFrame();
         return;
@@ -1906,8 +1858,11 @@ function setViewpointFitToFrame() {
     const height = size.y || 1;
 
     const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
+    const zoom = params.cameraZoom ?? 1.0;
     const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
-    const halfVerticalTan = Math.max(Math.tan(fov / 2), 1e-6);
+
+    // Account for zoom: effective FOV = 2 * atan(tan(fov/2) / zoom)
+    const halfVerticalTan = Math.max(Math.tan(fov / 2) / zoom, 1e-6);
     const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
     const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
 
@@ -1922,15 +1877,132 @@ function setViewpointFitToFrame() {
     controls.target.copy(center);
     controls.update();
 
+    // Update the cameraDistance param so slider reflects the value
+    params.cameraDistance = distance;
+
     logCamera.info(`Front view: centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
-        + `with width ${width.toFixed(1)}, height ${height.toFixed(1)}, distance ${distance.toFixed(1)}`);
+        + `with width ${width.toFixed(1)}, height ${height.toFixed(1)}, distance ${distance.toFixed(1)}, zoom ${zoom.toFixed(2)}`);
     emitCameraUpdated('viewpoint');
+}
+
+/**
+ * Calculate automatic slide distance based on studio width and number of slides.
+ * Formula: STUDIOWIDTH / (NUM_SLIDES + 2)
+ * @returns {number} The calculated automatic distance
+ */
+function calculateAutoDistance() {
+    const studioWidth = params.canvasSize?.x ?? 960;
+    const numSlides = imageStack.length;
+    if (numSlides === 0) {
+        return DEFAULT_Z_SPACING;
+    }
+    return Math.round(studioWidth / (numSlides + 2));
+}
+
+/**
+ * Get the effective z-spacing, using automatic calculation if null.
+ * Always adds MIN_LAYER_GAP to prevent z-fighting when Layer Depth is 0.
+ * @returns {number} The z-spacing to use (always >= MIN_LAYER_GAP)
+ */
+function getEffectiveZSpacing() {
+    const baseSpacing = (params.zSpacing === null || params.zSpacing === undefined)
+        ? calculateAutoDistance()
+        : params.zSpacing;
+    return baseSpacing + MIN_LAYER_GAP;
+}
+
+/**
+ * Restore slide z-positions to their proper spacing based on params.zSpacing.
+ * Called when switching away from Hero viewpoint, which collapses slides.
+ * SCENE.md §5: Layer depth should restore when changing away from Hero.
+ */
+function restoreSlideZPositions() {
+    const effectiveSpacing = getEffectiveZSpacing();
+    imageStack.forEach((imageData, index) => {
+        imageData.mesh.position.z = index * effectiveSpacing;
+    });
+    logCamera.info(`Slide z-positions restored to spacing ${effectiveSpacing}px`);
+}
+
+/**
+ * Set viewpoint to Hero view - front view with slides collapsed
+ * This is the "culmination" view for hero shots
+ * Resets X/Y offsets to 0 and sets Z (distance) to fit-to-frame value
+ * Accounts for both FOV and camera zoom (Tele) in distance calculation
+ */
+function setHeroViewpoint() {
+    params.viewpointPreset = 'hero';
+
+    // Reset X/Y offsets to 0
+    if (cameraController) {
+        cameraController.resetOffset();
+    } else {
+        params.cameraOffsetX = 0;
+        params.cameraOffsetY = 0;
+    }
+
+    // Reset controls target to origin
+    controls.target.set(0, 0, 0);
+
+    // Collapse slides with MIN_LAYER_GAP spacing to prevent z-fighting
+    // Front slide (highest index) at z=0, others spaced behind
+    const slideCount = imageStack.length;
+    imageStack.forEach((imageData, index) => {
+        const offset = (slideCount - 1 - index) * MIN_LAYER_GAP;
+        imageData.mesh.position.z = -offset;
+    });
+
+    // Calculate and set camera distance to fit front slide
+    if (imageStack.length > 0) {
+        const frontSlide = imageStack[imageStack.length - 1];
+        const mesh = frontSlide?.mesh;
+        if (mesh) {
+            const box = new THREE.Box3().setFromObject(mesh);
+            if (!box.isEmpty()) {
+                const size = box.getSize(new THREE.Vector3());
+                const width = size.x || 1;
+                const height = size.y || 1;
+
+                const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
+                const zoom = params.cameraZoom ?? 1.0;
+                const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
+
+                // Account for zoom: effective FOV = 2 * atan(tan(fov/2) / zoom)
+                const halfVerticalTan = Math.max(Math.tan(fov / 2) / zoom, 1e-6);
+                const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
+                const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
+
+                const distanceForHeight = (height / 2) / halfVerticalTan;
+                const distanceForWidth = (width / 2) / halfHorizontalTan;
+                const distance = Math.max(
+                    Math.max(distanceForHeight, distanceForWidth) * FRONT_VIEW_PADDING,
+                    CAMERA_MIN_DISTANCE
+                );
+
+                // Update the cameraDistance param so slider reflects the value
+                params.cameraDistance = distance;
+            }
+        }
+    }
+
+    // Set camera to fit front slide
+    setViewpointFitToFrame();
+
+    // Refresh pane to update slider values
+    pane?.refresh?.();
+
+    logCamera.info('Hero view: slides collapsed with gaps, X/Y reset, distance set to fit');
 }
 
 /**
  * Set viewpoint to a dynamic three-quarter "beauty" angle.
  */
 function setBeautyViewpoint() {
+    // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
+    if (params.viewpointPreset === 'hero') {
+        restoreSlideZPositions();
+    }
+
     if (cameraController) {
         cameraController.setBeautyViewpoint();
         return;
@@ -2003,16 +2075,19 @@ function setupPlaywrightBridge() {
             const file = new File([blob], filename, { type });
             const initialCount = imageStack.length;
             await new Promise((resolve, reject) => {
+                // Timeout after 30 seconds to prevent infinite hanging
+                const timeout = setTimeout(() => {
+                    unsubscribe();
+                    reject(new Error('addSlideFromDataURL timed out after 30s'));
+                }, 30000);
                 const unsubscribe = eventBus.once(EVENTS.stackUpdated, () => {
-                    if (imageStack.length > initialCount) {
-                        resolve();
-                    } else {
-                        resolve();
-                    }
+                    clearTimeout(timeout);
+                    resolve();
                 });
                 try {
                     loadImage(file);
                 } catch (error) {
+                    clearTimeout(timeout);
                     unsubscribe();
                     reject(error);
                 }
@@ -2108,6 +2183,53 @@ function clearAll() {
     sceneComposition?.clearAll();
 }
 
+/**
+ * Load example images for quick onboarding.
+ * Creates 3 gradient placeholder images programmatically.
+ */
+function loadExample() {
+    // Clear existing images first
+    clearAll();
+
+    // Create 3 example gradient images
+    const colors = [
+        { start: '#ff6b6b', end: '#ee5a5a', name: 'Red Layer' },
+        { start: '#4ecdc4', end: '#45b7aa', name: 'Teal Layer' },
+        { start: '#45b7d1', end: '#3a9bb5', name: 'Blue Layer' }
+    ];
+
+    const canvas = document.createElement('canvas');
+    canvas.width = 400;
+    canvas.height = 300;
+    const ctx = canvas.getContext('2d');
+
+    colors.forEach((color, index) => {
+        // Create gradient
+        const gradient = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+        gradient.addColorStop(0, color.start);
+        gradient.addColorStop(1, color.end);
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Add layer number
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        ctx.font = 'bold 48px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`Layer ${index + 1}`, canvas.width / 2, canvas.height / 2);
+
+        // Convert to data URL and load
+        const dataURL = canvas.toDataURL('image/png');
+        const loader = new THREE.TextureLoader();
+        loader.load(dataURL, (texture) => {
+            sceneComposition?.addImage(texture, `${color.name}.png`);
+        });
+    });
+
+    showToast('Loaded 3 example layers', 'success');
+    logImages.info('Example images loaded');
+}
+
 function applyMaterialPreset(preset) {
     sceneComposition?.applyMaterialPreset(preset);
 }
@@ -2171,6 +2293,9 @@ function updateImageList() {
     if (emptyMessage) {
         emptyMessage.classList.toggle('hidden', hasImages);
     }
+
+    // Update canvas aria-label when image count changes
+    updateCanvasAriaLabel();
 
     imageStack.forEach((imageData, index) => {
         const item = document.createElement('div');
@@ -2348,22 +2473,14 @@ window.deleteImage = function(index) {
 };
 
 function onWindowResize() {
-    const aspect = params.canvasSize.x / params.canvasSize.y;
+    if (!sceneManager) {
+        return;
+    }
 
-    // Update perspective camera
-    camera.aspect = aspect;
-    camera.updateProjectionMatrix();
-
-    // Update orthographic camera
-    const frustumSize = ORTHO_FRUSTUM_SIZE;
-    orthoCamera.left = frustumSize * aspect / -2;
-    orthoCamera.right = frustumSize * aspect / 2;
-    orthoCamera.top = frustumSize / 2;
-    orthoCamera.bottom = frustumSize / -2;
-    orthoCamera.updateProjectionMatrix();
-
-    syncRendererDimensions(params.canvasSize, window.devicePixelRatio);
-    updateReflectionSettings();
+    sceneManager.onWindowResize();
+    if (params.ambience) {
+        floorManager?.updateReflectionSettings();
+    }
 }
 
 /**
@@ -2451,4 +2568,3 @@ function pasteJSON() {
 
 // Initialize when DOM is ready
 init();
-setupPlaywrightBridge();

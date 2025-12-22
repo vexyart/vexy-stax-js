@@ -10,10 +10,11 @@
  * - src/scene/SceneManager.js
  * - src/scene/LightingManager.js
  * - src/scene/FloorManager.js
+ * - src/scene/AmbienceManager.js
  * - src/camera/animation.js (CameraAnimator)
  *
- * Test Count: 23 tests
- * @lastTested 2025-11-05 (Iteration 92)
+ * Test Count: 28 tests
+ * @lastTested 2025-11-08 (Iteration 120)
  */
 
 import { describe, test } from 'node:test';
@@ -21,6 +22,7 @@ import assert from 'node:assert/strict';
 import { SceneManager } from '../src/scene/SceneManager.js';
 import { LightingManager } from '../src/scene/LightingManager.js';
 import { FloorManager } from '../src/scene/FloorManager.js';
+import { AmbienceManager } from '../src/scene/AmbienceManager.js';
 import { CameraAnimator } from '../src/camera/animation.js';
 
 describe('Error Recovery - SceneManager', () => {
@@ -147,25 +149,14 @@ describe('Error Recovery - FloorManager', () => {
     );
   });
 
-  test('create throws clear error when params is missing', () => {
+  test('create succeeds with minimal params (bgColor not required)', () => {
     const mockScene = { add: () => {} };
     const floorManager = new FloorManager(mockScene, null);
 
-    assert.throws(
+    // Simplified FloorManager uses fixed color, no bgColor required
+    assert.doesNotThrow(
       () => floorManager.create(),
-      /params with bgColor is required/,
-      'should throw clear error for missing params'
-    );
-  });
-
-  test('create throws clear error when bgColor is missing', () => {
-    const mockScene = { add: () => {} };
-    const floorManager = new FloorManager(mockScene, {});
-
-    assert.throws(
-      () => floorManager.create(),
-      /params with bgColor is required/,
-      'should throw clear error for missing bgColor'
+      'should not throw when params is null'
     );
   });
 
@@ -213,6 +204,77 @@ describe('Error Recovery - FloorManager', () => {
 
     // Should not throw even when floor not created
     assert.doesNotThrow(() => floorManager.updateColor('#ffffff'), 'updateColor before create should not throw');
+  });
+});
+
+describe('Error Recovery - AmbienceManager', () => {
+  test('constructor throws clear error when scene is missing', () => {
+    const mockImageStack = [];
+    const mockParams = { zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+
+    assert.throws(
+      () => new AmbienceManager(null, mockImageStack, mockParams),
+      /\[AmbienceManager\] Cannot initialize: scene is required/,
+      'should throw clear error for missing scene'
+    );
+  });
+
+  test('constructor throws clear error when imageStack is not array', () => {
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockParams = { zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+
+    assert.throws(
+      () => new AmbienceManager(mockScene, null, mockParams),
+      /\[AmbienceManager\] Cannot initialize: imageStack array is required/,
+      'should throw clear error for non-array imageStack'
+    );
+
+    assert.throws(
+      () => new AmbienceManager(mockScene, {}, mockParams),
+      /\[AmbienceManager\] Cannot initialize: imageStack array is required/,
+      'should throw clear error for non-array imageStack (object)'
+    );
+
+    assert.throws(
+      () => new AmbienceManager(mockScene, 'not-an-array', mockParams),
+      /\[AmbienceManager\] Cannot initialize: imageStack array is required/,
+      'should throw clear error for non-array imageStack (string)'
+    );
+  });
+
+  test('constructor throws clear error when params is missing', () => {
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockImageStack = [];
+
+    assert.throws(
+      () => new AmbienceManager(mockScene, mockImageStack, null),
+      /\[AmbienceManager\] Cannot initialize: params object is required/,
+      'should throw clear error for missing params'
+    );
+  });
+
+  test('dispose is safe to call multiple times', () => {
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockImageStack = [];
+    const mockParams = { zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, mockParams);
+
+    // First dispose
+    assert.doesNotThrow(() => ambienceManager.dispose(), 'first dispose should not throw');
+
+    // Second dispose (should be idempotent)
+    assert.doesNotThrow(() => ambienceManager.dispose(), 'second dispose should not throw');
+  });
+
+  test('updateMaterials handles empty imageStack gracefully', () => {
+    const mockScene = { add: () => {}, remove: () => {} };
+    const mockImageStack = []; // Empty stack
+    const mockParams = { zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, metalMetalness: 0 };
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, mockParams);
+
+    // Should not throw for empty stack
+    assert.doesNotThrow(() => ambienceManager.updateMaterials(true), 'updateMaterials with empty stack should not throw');
+    assert.doesNotThrow(() => ambienceManager.updateMaterials(false), 'updateMaterials with empty stack should not throw');
   });
 });
 
@@ -274,15 +336,41 @@ describe('Error Recovery - CameraAnimator', () => {
   });
 });
 
+/**
+ * Module Cleanup Order Safety Documentation
+ *
+ * All 4 scene managers (SceneManager, LightingManager, FloorManager, AmbienceManager)
+ * can be disposed in ANY order without causing errors. This is verified through:
+ *
+ * 1. Arbitrary order disposal (Lighting -> Scene -> Ambience -> Floor)
+ * 2. Reverse creation order disposal (Ambience -> Floor -> Lighting)
+ * 3. Uninitialized manager disposal (all managers without init/setup/create)
+ *
+ * Key Safety Features:
+ * - Each manager's dispose() is idempotent (safe to call multiple times)
+ * - Each dispose() checks for null/undefined before cleanup
+ * - No manager depends on another manager's state during disposal
+ * - dispose() can be called before init/setup/create without errors
+ *
+ * Recommended disposal order (for clarity, not required):
+ * 1. AmbienceManager.dispose()
+ * 2. FloorManager.dispose()
+ * 3. LightingManager.dispose()
+ * 4. SceneManager.dispose()
+ *
+ * @verified 2025-11-08 (Iteration 120)
+ */
 describe('Error Recovery - Module Cleanup Order', () => {
   test('disposing managers in any order does not cause errors (after setup)', () => {
     const mockCanvas = { width: 1920, height: 1080, style: {}, addEventListener: () => {} };
     const mockScene = { add: () => {}, remove: () => {}, environment: null };
-    const params = { canvasSize: { x: 1920, y: 1080 }, bgColor: '#000000' };
+    const mockImageStack = [];
+    const params = { canvasSize: { x: 1920, y: 1080 }, bgColor: '#000000', zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
 
     const sceneManager = new SceneManager(mockCanvas, params);
     const lightingManager = new LightingManager(mockScene, params);
     const floorManager = new FloorManager(mockScene, params);
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, params);
 
     // Note: Cannot init/create in Node.js (requires WebGL), only test cleanup of uninitialized state
     lightingManager.setup(); // This one works without WebGL
@@ -291,6 +379,7 @@ describe('Error Recovery - Module Cleanup Order', () => {
     assert.doesNotThrow(() => {
       lightingManager.dispose(); // Lights first
       sceneManager.dispose();    // Scene second
+      ambienceManager.dispose();  // Ambience third
       floorManager.dispose();    // Floor last
     }, 'disposing in any order should not throw');
   });
@@ -298,17 +387,39 @@ describe('Error Recovery - Module Cleanup Order', () => {
   test('disposing managers without initialization does not cause errors', () => {
     const mockCanvas = { width: 1920, height: 1080, style: {}, addEventListener: () => {} };
     const mockScene = { add: () => {} };
-    const params = { canvasSize: { x: 1920, y: 1080 }, bgColor: '#000000' };
+    const mockImageStack = [];
+    const params = { canvasSize: { x: 1920, y: 1080 }, bgColor: '#000000', zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
 
     const sceneManager = new SceneManager(mockCanvas, params);
     const lightingManager = new LightingManager(mockScene, params);
     const floorManager = new FloorManager(mockScene, params);
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, params);
 
     // Dispose without init/setup/create
     assert.doesNotThrow(() => {
       sceneManager.dispose();
       lightingManager.dispose();
       floorManager.dispose();
+      ambienceManager.dispose();
     }, 'disposing uninitialized managers should not throw');
+  });
+
+  test('disposing all 4 scene managers in reverse creation order', () => {
+    const mockScene = { add: () => {}, remove: () => {}, environment: null };
+    const mockImageStack = [];
+    const params = { bgColor: '#000000', zSpacing: 100, materialThickness: 1, materialRoughness: 0.5, materialMetalness: 0 };
+
+    const lightingManager = new LightingManager(mockScene, params);
+    const floorManager = new FloorManager(mockScene, params);
+    const ambienceManager = new AmbienceManager(mockScene, mockImageStack, params);
+
+    lightingManager.setup();
+
+    // Dispose in reverse order: Ambience -> Floor -> Lighting
+    assert.doesNotThrow(() => {
+      ambienceManager.dispose();
+      floorManager.dispose();
+      lightingManager.dispose();
+    }, 'disposing in reverse order should not throw');
   });
 });

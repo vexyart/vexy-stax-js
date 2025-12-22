@@ -21,16 +21,12 @@ import {
     MATERIAL_PRESETS,
     VIEWPOINT_PRESETS,
     RETRY_DELAYS_MS,
-    REFLECTION_OPACITY,
-    SoftReflectorShader,
     AMBIENT_INTENSITY_RANGE,
     EMISSIVE_INTENSITY_RANGE,
     ORTHO_FRUSTUM_SIZE,
     MAIN_LIGHT_SETTINGS,
     FILL_LIGHT_SETTINGS,
     HEMISPHERE_LIGHT_SETTINGS,
-    FLOOR_BASE_MATERIAL,
-    FLOOR_REFLECTOR_OFFSET,
     EVENTS,
     TOAST_DURATION_ERROR,
     TOAST_DURATION_WARNING,
@@ -48,10 +44,10 @@ test('createDefaultParams returns a deep clone each call', () => {
     assert.notStrictEqual(first.canvasSize, second.canvasSize, 'nested objects should be cloned');
 
     first.canvasSize.x = 123;
-    first.materialPreset = 'glass-slide';
+    first.materialPreset = 'glossy';
 
     assert.equal(second.canvasSize.x, 960, 'mutating one instance must not affect another');
-    assert.equal(second.materialPreset, 'metallic-card', 'defaults should remain intact on other clones');
+    assert.equal(second.materialPreset, 'neutral', 'defaults should remain intact on other clones');
 });
 
 test('material presets expose expected schema and are frozen', () => {
@@ -82,14 +78,6 @@ test('retry delays array is immutable', () => {
     }
 
     assert.deepStrictEqual(RETRY_DELAYS_MS, snapshot, 'frozen array should not reflect attempted mutations');
-});
-
-test('SoftReflectorShader carries default opacity from constants', () => {
-    assert.equal(
-        SoftReflectorShader.uniforms.opacity.value,
-        REFLECTION_OPACITY,
-        'shader opacity uniform should reuse constant value'
-    );
 });
 
 test('lighting configuration constants are frozen and expose expected ranges', () => {
@@ -152,14 +140,6 @@ test('lighting configuration constants are frozen and expose expected ranges', (
     );
 });
 
-test('floor material constants stay frozen with expected values', () => {
-    assert.equal(Object.isFrozen(FLOOR_BASE_MATERIAL), true, 'floor base material constants must be frozen');
-    assert.equal(FLOOR_BASE_MATERIAL.roughness, 0.45, 'floor roughness baseline must remain 0.45');
-    assert.equal(FLOOR_BASE_MATERIAL.metalness, 0.08, 'floor metalness baseline must remain 0.08');
-    assert.equal(FLOOR_BASE_MATERIAL.envMapIntensity, 0.35, 'floor envMap intensity must remain 0.35');
-    assert.equal(FLOOR_REFLECTOR_OFFSET, 0.1, 'floor reflector offset should remain 0.1');
-});
-
 test('event channel constants are defined and frozen', () => {
     assert.equal(Object.isFrozen(EVENTS), true, 'event name registry should be frozen');
     assert.equal(
@@ -187,21 +167,22 @@ test('MATERIAL_PRESETS all have values in valid PBR ranges', () => {
 });
 
 test('MATERIAL_PRESETS has expected preset names', () => {
-    const requiredPresets = [
-        'flat-matte', 'glossy-photo', 'plastic-card', 'thick-board',
-        'metal-sheet', 'glass-slide', '3d-box', 'metallic-card'
-    ];
+    const requiredPresets = ['glossy', 'neutral', 'matte'];
 
     requiredPresets.forEach(name => {
         assert.ok(MATERIAL_PRESETS[name],
             `Missing required material preset: ${name}`);
     });
+
+    // Verify exactly 3 presets exist
+    assert.strictEqual(Object.keys(MATERIAL_PRESETS).length, 3,
+        'MATERIAL_PRESETS should contain exactly 3 presets');
 });
 
 test('VIEWPOINT_PRESETS have valid coordinate ranges', () => {
     Object.entries(VIEWPOINT_PRESETS).forEach(([name, preset]) => {
-        if (preset === null || preset === 'fitToFrame') {
-            return; // Skip special values
+        if (preset === null || preset === 'fitToFrame' || preset === 'heroView') {
+            return; // Skip special values (null, fitToFrame, heroView)
         }
 
         const { x, y, z } = preset;
@@ -236,16 +217,6 @@ test('VIEWPOINT_PRESETS has expected viewpoint names', () => {
         assert.ok(VIEWPOINT_PRESETS.hasOwnProperty(name),
             `Missing required viewpoint preset: ${name}`);
     });
-});
-
-test('SoftReflectorShader uniforms match constant definitions', () => {
-    assert.equal(typeof SoftReflectorShader, 'object', 'SoftReflectorShader should be defined');
-    assert.ok(SoftReflectorShader.uniforms, 'Shader should have uniforms');
-    assert.ok(SoftReflectorShader.uniforms.opacity, 'Shader should have opacity uniform');
-
-    const defaultOpacity = SoftReflectorShader.uniforms.opacity.value;
-    assert.equal(defaultOpacity, REFLECTION_OPACITY,
-        `Shader opacity uniform (${defaultOpacity}) should match REFLECTION_OPACITY constant (${REFLECTION_OPACITY})`);
 });
 
 test('Lighting intensity ranges are valid', () => {
@@ -336,15 +307,6 @@ test('HEMISPHERE_LIGHT_SETTINGS is frozen', () => {
     }, 'Cannot mutate frozen hemisphere intensity');
 });
 
-test('FLOOR_BASE_MATERIAL is frozen', () => {
-    assert.ok(Object.isFrozen(FLOOR_BASE_MATERIAL),
-        'FLOOR_BASE_MATERIAL should be frozen');
-
-    assert.throws(() => {
-        FLOOR_BASE_MATERIAL.roughness = 999;
-    }, 'Cannot mutate frozen floor material roughness');
-});
-
 test('EVENTS object is frozen', () => {
     assert.ok(Object.isFrozen(EVENTS), 'EVENTS should be frozen');
 
@@ -355,7 +317,7 @@ test('EVENTS object is frozen', () => {
 
 // Tests for Iteration 13 constants (added 2025-11-05)
 test('TOAST_DURATION constants have correct values', () => {
-    assert.strictEqual(TOAST_DURATION_ERROR, 5000, 'Error toast duration should be 5000ms');
+    assert.strictEqual(TOAST_DURATION_ERROR, 10000, 'Error toast duration should be 10000ms (10s for readability)');
     assert.strictEqual(TOAST_DURATION_WARNING, 4000, 'Warning toast duration should be 4000ms');
     assert.strictEqual(TOAST_DURATION_INFO, 3000, 'Info toast duration should be 3000ms');
 });
@@ -409,29 +371,11 @@ test('Memory warning constants have valid values', async () => {
 });
 
 test('Floor constants have valid values', async () => {
-    const { FLOOR_Y, FLOOR_SIZE, FLOOR_REFLECTOR_OFFSET } = await import('../src/core/constants.js');
+    const { FLOOR_Y, FLOOR_SIZE } = await import('../src/core/constants.js');
 
-    assert.strictEqual(FLOOR_Y, -250, 'Floor Y position should be -250');
+    assert.strictEqual(FLOOR_Y, 0, 'Floor Y position should be 0 (slides sit on floor)');
     assert.strictEqual(FLOOR_SIZE, 2000, 'Floor size should be 2000');
-    assert.strictEqual(FLOOR_REFLECTOR_OFFSET, 0.1, 'Floor reflector offset should be 0.1');
-    assert.ok(FLOOR_Y < 0, 'Floor should be below origin');
     assert.ok(FLOOR_SIZE > 0, 'Floor size must be positive');
-});
-
-test('Reflection constants have valid values', async () => {
-    const {
-        REFLECTION_TEXTURE_BASE,
-        REFLECTION_MIN_RESOLUTION,
-        REFLECTION_BLUR_RADIUS,
-        REFLECTION_FADE_STRENGTH
-    } = await import('../src/core/constants.js');
-
-    assert.strictEqual(REFLECTION_TEXTURE_BASE, 0.65, 'Texture base should be 0.65');
-    assert.strictEqual(REFLECTION_MIN_RESOLUTION, 512, 'Min resolution should be 512');
-    assert.strictEqual(REFLECTION_BLUR_RADIUS, 0.003, 'Blur radius should be 0.003');
-    assert.strictEqual(REFLECTION_FADE_STRENGTH, 2.7, 'Fade strength should be 2.7');
-    assert.ok(REFLECTION_TEXTURE_BASE > 0 && REFLECTION_TEXTURE_BASE < 1, 'Texture base should be 0-1');
-    assert.ok(REFLECTION_MIN_RESOLUTION > 0, 'Min resolution must be positive');
 });
 
 test('Loading and dimension constants have valid values', async () => {
@@ -453,7 +397,7 @@ test('Camera distance constants have valid values and hierarchy', async () => {
         CAMERA_MAX_DISTANCE
     } = await import('../src/core/constants.js');
 
-    // Verify exact values
+    // Verify exact values (updated for 5-slider camera system)
     assert.strictEqual(CAMERA_DEFAULT_DISTANCE, 800, 'Default camera distance should be 800');
     assert.strictEqual(CAMERA_MIN_DISTANCE, 100, 'Min camera distance should be 100');
     assert.strictEqual(CAMERA_MAX_DISTANCE, 3000, 'Max camera distance should be 3000');
@@ -469,8 +413,8 @@ test('Camera distance constants have valid values and hierarchy', async () => {
     assert.ok(CAMERA_DEFAULT_DISTANCE < CAMERA_MAX_DISTANCE,
         'Default distance must be less than max distance');
 
-    // Verify all positive
-    assert.ok(CAMERA_MIN_DISTANCE > 0, 'Min distance must be positive');
+    // Verify all non-negative (min can be 0)
+    assert.ok(CAMERA_MIN_DISTANCE >= 0, 'Min distance must be non-negative');
     assert.ok(CAMERA_DEFAULT_DISTANCE > 0, 'Default distance must be positive');
     assert.ok(CAMERA_MAX_DISTANCE > 0, 'Max distance must be positive');
 });

@@ -123,7 +123,7 @@ test('RetryingTextureLoader_load_when_allAttemptsFail_then_emitsErrorToast', () 
     assert.equal(harness.infoLogs.length, 0, 'no success info logs expected when final failure');
     assert.equal(harness.toasts.length, 1, 'final failure should emit error toast');
     assert.equal(harness.toasts[0].type, 'error', 'toast type should be error');
-    assert.match(harness.toasts[0].message, /Failed to load: cover\.png/, 'toast should reference filename');
+    assert.match(harness.toasts[0].message, /cover\.png failed to load/, 'toast should reference filename');
     assert.equal(harness.toasts[0].duration, 2300, 'toast should respect injected duration');
     assert.equal(harness.textures.length, 0, 'success callback must not fire on failure');
 });

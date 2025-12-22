@@ -8,24 +8,39 @@
     <link rel="stylesheet" href="/styles/main.css">
 </head>
 <body>
+    <!-- Skip links for keyboard navigation (WCAG 2.4.1) -->
+    <nav class="skip-links" aria-label="Skip navigation">
+        <a href="#canvas" class="skip-link">Skip to canvas</a>
+        <a href="#controls" class="skip-link">Skip to controls</a>
+    </nav>
     <div id="app">
-        <aside id="slides-panel" class="slides-panel is-empty">
+        <aside id="slides-panel" class="slides-panel is-empty" role="complementary" aria-label="Image slides">
             <div class="slides-header">
-                <button id="browse-button" type="button" class="browse-button">+</button>
+                <button id="browse-button" type="button" class="browse-button" aria-label="Add images">+</button>
             </div>
             <div id="image-list" role="list" aria-label="Slide thumbnails"></div>
         </aside>
-        <main id="studio-panel">
+        <main id="studio-panel" role="main" aria-label="3D canvas viewport">
+            <nav id="toolbar" class="toolbar" aria-label="Main actions">
+                <button id="btn-undo" type="button" class="toolbar-btn" title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+                <button id="btn-redo" type="button" class="toolbar-btn" title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+                <button id="btn-reset-camera" type="button" class="toolbar-btn" title="Reset camera to fit" aria-label="Reset camera">⊞</button>
+                <button id="btn-help" type="button" class="toolbar-btn" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
+            </nav>
             <div id="studio-frame">
                 <canvas id="canvas"></canvas>
             </div>
         </main>
-        <aside id="controls-panel">
+        <aside id="controls-panel" role="complementary" aria-label="Settings controls">
             <div id="controls"></div>
         </aside>
     </div>
     <input type="file" id="image-input" accept="image/png,image/jpeg,image/jpg,image/gif,image/webp,image/svg+xml" multiple style="display: none;">
-    <div id="drop-overlay" aria-hidden="true">Drop images to load</div>
+    <div id="drop-overlay" aria-hidden="true">
+        <span style="font-size: 48px; margin-bottom: 8px;">📷</span>
+        <span>Drop images here</span>
+        <span style="font-size: 14px; opacity: 0.7;">PNG, JPG, GIF, WebP, SVG</span>
+    </div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>

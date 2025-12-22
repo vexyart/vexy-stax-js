@@ -220,7 +220,8 @@ function createSetupContext(overrides = {}) {
             loadImage: overrides.loadImage ?? (() => {}),
             showToast: overrides.showToast ?? (() => {}),
             saveSettings: () => { calls.saveSettings += 1; },
-            playHeroShot: overrides.playHeroShot ?? (async () => {})
+            playHeroShot: overrides.playHeroShot ?? (async () => {}),
+            loadExample: overrides.loadExample ?? (() => {})
         },
         dependencies: {
             cameraAnimator: overrides.cameraAnimator ?? {
@@ -380,7 +381,7 @@ test('TweakpaneSetup_toolsGrid_when_defaultsClicked_then_resetsAfterConfirm', ()
     const filePage = pane.tabs[0].pages[0];
     const toolsBlade = filePage.blades[1];
 
-    toolsBlade.handlers.click({ index: [0, 0] });
+    toolsBlade.handlers.click({ index: [1, 0] });
 
     assert.equal(confirmations.length, 1, 'confirm should prompt once');
     assert.match(confirmations[0], /Reset all settings/i, 'confirm message should mention reset');
@@ -398,7 +399,7 @@ test('TweakpaneSetup_toolsGrid_when_defaultsCancelled_then_skipReset', () => {
     const filePage = pane.tabs[0].pages[0];
     const toolsBlade = filePage.blades[1];
 
-    toolsBlade.handlers.click({ index: [0, 0] });
+    toolsBlade.handlers.click({ index: [1, 0] });
 
     assert.equal(resetCalled, 0, 'resetSettings should not run when confirmation is declined');
 });
@@ -413,8 +414,22 @@ test('TweakpaneSetup_toolsGrid_when_clearClicked_then_invokesClearAll', () => {
     const filePage = pane.tabs[0].pages[0];
     const toolsBlade = filePage.blades[1];
 
-    toolsBlade.handlers.click({ index: [1, 0] });
+    toolsBlade.handlers.click({ index: [2, 0] });
     assert.equal(cleared, 1, 'clearAll should fire for Tools → Clear');
+});
+
+test('TweakpaneSetup_toolsGrid_when_exampleClicked_then_invokesLoadExample', () => {
+    let exampleLoaded = 0;
+    const { setup } = createSetupContext({
+        loadExample: () => { exampleLoaded += 1; }
+    });
+
+    const pane = setup.setup();
+    const filePage = pane.tabs[0].pages[0];
+    const toolsBlade = filePage.blades[1];
+
+    toolsBlade.handlers.click({ index: [0, 0] });
+    assert.equal(exampleLoaded, 1, 'loadExample should fire for Tools → Example');
 });
 
 test('TweakpaneSetup_heroShot_when_noImages_then_showsErrorToast', async (t) => {

@@ -97,7 +97,7 @@ export class RetryingTextureLoader {
                     `Failed to load ${filename} after ${this.maxRetries + 1} attempts:`,
                     error
                 );
-                this.showToast(`❌ Failed to load: ${filename}. Check file is valid`, 'error', this.toastDurationError);
+                this.showToast(`❌ ${filename} failed to load. Try re-exporting the image`, 'error', this.toastDurationError);
             }
         );
     }

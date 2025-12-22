@@ -4,6 +4,13 @@
 const noop = () => {};
 const DEFAULT_CONFIRM_MESSAGE = 'Clear all images? This cannot be undone.';
 
+// Camera rotation step in radians (~5 degrees)
+const ROTATION_STEP = Math.PI / 36;
+// Camera pan step in pixels
+const PAN_STEP = 20;
+// Camera zoom step
+const ZOOM_STEP = 50;
+
 function createOverlay(documentRef) {
     const overlay = documentRef?.createElement?.('div');
     if (!overlay) {
@@ -11,15 +18,22 @@ function createOverlay(documentRef) {
     }
 
     overlay.id = 'keyboard-help';
+    // ARIA: Modal dialog accessibility
+    overlay.setAttribute('role', 'dialog');
+    overlay.setAttribute('aria-modal', 'true');
+    overlay.setAttribute('aria-labelledby', 'keyboard-help-title');
     overlay.style = overlay.style ?? {};
     overlay.style.display = overlay.style.display ?? 'none';
     overlay.innerHTML = `
-        <h2 style="margin-top: 0;">Keyboard Shortcuts</h2>
+        <h2 id="keyboard-help-title" style="margin-top: 0;">Keyboard Shortcuts</h2>
         <table style="width: 100%; border-collapse: collapse;">
             <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + E</kbd></td><td>Export PNG</td></tr>
             <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + Z</kbd></td><td>Undo</td></tr>
             <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + Shift + Z</kbd></td><td>Redo</td></tr>
             <tr><td style="padding: 8px;"><kbd>Ctrl/Cmd + Delete</kbd></td><td>Clear all images</td></tr>
+            <tr><td style="padding: 8px;"><kbd>Arrow Keys</kbd></td><td>Rotate camera</td></tr>
+            <tr><td style="padding: 8px;"><kbd>Shift + Arrows</kbd></td><td>Pan camera</td></tr>
+            <tr><td style="padding: 8px;"><kbd>+ / -</kbd></td><td>Zoom in/out</td></tr>
             <tr><td style="padding: 8px;"><kbd>?</kbd></td><td>Show this help</td></tr>
             <tr><td style="padding: 8px;"><kbd>Esc</kbd></td><td>Close help</td></tr>
         </table>
@@ -46,6 +60,7 @@ function createOverlay(documentRef) {
  * @param {() => void} [options.clearAll]
  * @param {Array} [options.imageStack]
  * @param {(message: string) => boolean} [options.confirm]
+ * @param {{ rotateCamera?: Function, panCamera?: Function, zoomCamera?: Function }} [options.cameraControls]
  * @returns {{ teardown: () => void, toggleHelp: () => void }}
  */
 export function setupKeyboardShortcuts(options = {}) {
@@ -62,6 +77,7 @@ export function setupKeyboardShortcuts(options = {}) {
     const clearAll = options.clearAll ?? noop;
     const imageStack = options.imageStack ?? [];
     const confirmDialog = options.confirm ?? ((message) => (typeof globalThis.confirm === 'function' ? globalThis.confirm(message) : true));
+    const cameraControls = options.cameraControls ?? {};
 
     let helpOverlay = null;
     let removeKeydownListener = null;
@@ -159,6 +175,52 @@ export function setupKeyboardShortcuts(options = {}) {
                     logUI.info?.('Keyboard shortcut: Clear all (Ctrl/Cmd+Delete)');
                     clearAll();
                 }
+            }
+            return;
+        }
+
+        // Arrow keys: rotate camera (or pan with Shift)
+        if (event.key === 'ArrowLeft' || event.key === 'ArrowRight' ||
+            event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            // Skip if in input field
+            if (event.target?.tagName === 'INPUT' || event.target?.tagName === 'TEXTAREA') {
+                return;
+            }
+            event.preventDefault?.();
+
+            if (event.shiftKey) {
+                // Shift + arrows = pan
+                const deltaX = event.key === 'ArrowLeft' ? -PAN_STEP : (event.key === 'ArrowRight' ? PAN_STEP : 0);
+                const deltaY = event.key === 'ArrowUp' ? PAN_STEP : (event.key === 'ArrowDown' ? -PAN_STEP : 0);
+                if (cameraControls.panCamera) {
+                    cameraControls.panCamera(deltaX, deltaY);
+                    logCamera.info?.(`Pan camera: ${deltaX}, ${deltaY}`);
+                }
+            } else {
+                // Plain arrows = rotate
+                const deltaAzimuth = event.key === 'ArrowLeft' ? ROTATION_STEP : (event.key === 'ArrowRight' ? -ROTATION_STEP : 0);
+                const deltaPolar = event.key === 'ArrowUp' ? -ROTATION_STEP : (event.key === 'ArrowDown' ? ROTATION_STEP : 0);
+                if (cameraControls.rotateCamera) {
+                    cameraControls.rotateCamera(deltaAzimuth, deltaPolar);
+                    logCamera.info?.(`Rotate camera: azimuth ${deltaAzimuth.toFixed(3)}, polar ${deltaPolar.toFixed(3)}`);
+                }
+            }
+            return;
+        }
+
+        // +/- keys: zoom in/out
+        if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '_') {
+            // Skip if in input field
+            if (event.target?.tagName === 'INPUT' || event.target?.tagName === 'TEXTAREA') {
+                return;
+            }
+            event.preventDefault?.();
+
+            const zoomIn = event.key === '+' || event.key === '=';
+            const delta = zoomIn ? -ZOOM_STEP : ZOOM_STEP;
+            if (cameraControls.zoomCamera) {
+                cameraControls.zoomCamera(delta);
+                logCamera.info?.(`Zoom camera: ${zoomIn ? 'in' : 'out'}`);
             }
         }
     };

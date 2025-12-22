@@ -18,7 +18,7 @@ import {
  * @param {string} hexColor - Hex color string (e.g. '#ffffff')
  * @returns {number} Luminance value between 0 (black) and 1 (white)
  */
-function calculateLuminance(hexColor) {
+export function calculateLuminance(hexColor) {
     // Parse hex color to RGB
     const color = new THREE.Color(hexColor);
     const r = color.r;
@@ -99,10 +99,10 @@ export class LightingManager {
     setup() {
         // Defensive checks
         if (!this.scene) {
-            throw new Error('[LightingManager] Cannot setup: scene is required');
+            throw new Error('[LightingManager] Cannot setup: scene is required. Fix: pass a THREE.Scene instance as the first argument to the constructor.');
         }
         if (!this.params || !this.params.bgColor) {
-            throw new Error('[LightingManager] Cannot setup: params with bgColor is required');
+            throw new Error('[LightingManager] Cannot setup: params with bgColor is required. Fix: pass a params object with a bgColor property (hex string like "#000000").');
         }
 
         // Calculate adaptive ambient light intensity based on background
@@ -179,6 +179,17 @@ export class LightingManager {
     getEmissiveIntensity() {
         const bgLuminance = calculateLuminance(this.params.bgColor);
         return getAdaptiveEmissiveIntensity(bgLuminance);
+    }
+
+    /**
+     * Set ambient light intensity directly
+     * Used by ambience slider to control lighting intensity
+     * @param {number} intensity - Light intensity (0-1)
+     */
+    setAmbientIntensity(intensity) {
+        if (this.ambientLight) {
+            this.ambientLight.intensity = intensity;
+        }
     }
 
     /**
