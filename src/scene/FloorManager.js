@@ -82,8 +82,9 @@ export class FloorManager {
      * Create floor plane.
      * SCENE.md: Floor is positioned 3px below the tallest slide's bottom.
      * Floor uses the same material type as slides for consistent lighting.
+     * @param {number} [initialY] - Optional initial Y position (default: FLOOR_Y constant)
      */
-    create() {
+    create(initialY) {
         if (!this.scene) {
             throw new Error('[FloorManager] Cannot create floor: scene is required.');
         }
@@ -101,13 +102,15 @@ export class FloorManager {
 
         this.floor = new THREE.Mesh(geometry, material);
         this.floor.rotation.x = -Math.PI / 2; // Lay flat
-        this.floor.position.y = FLOOR_Y;
+        // Use provided Y position or default constant
+        const yPosition = typeof initialY === 'number' && !isNaN(initialY) ? initialY : FLOOR_Y;
+        this.floor.position.y = yPosition;
         this.floor.name = 'floor';
         // Enable shadows when ambience is on
         this.floor.receiveShadow = (this.params?.ambience ?? 0) > 0;
 
         this.scene.add(this.floor);
-        console.log(`Floor created at y=${FLOOR_Y}`);
+        console.log(`[FloorManager] Floor created at y=${yPosition}`);
         // NOTE: Do NOT call onAmbienceChange here - floor creation should not trigger ambience toggle
     }
 
@@ -230,15 +233,21 @@ export class FloorManager {
     }
 
     /**
-     * Set floor Y position (SCENE.md §1: floor is 1px below tallest slide's bottom)
+     * Set floor Y position (SCENE.md §1: floor is 3px below tallest slide's bottom)
      * @param {number} y - Y position for the floor plane
      */
     setPositionY(y) {
         if (!this.floor) {
+            console.warn('[FloorManager] Cannot set position: floor not created');
             return;
         }
+        if (typeof y !== 'number' || isNaN(y)) {
+            console.warn(`[FloorManager] Invalid Y position: ${y}, keeping current position`);
+            return;
+        }
+        const previousY = this.floor.position.y;
         this.floor.position.y = y;
-        console.log(`Floor position set to y=${y}`);
+        console.log(`[FloorManager] Floor position updated: ${previousY} → ${y}`);
     }
 
     /**

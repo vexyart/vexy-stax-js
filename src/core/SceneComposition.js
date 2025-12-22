@@ -361,6 +361,12 @@ export class SceneComposition {
         if (this.imageStack.length === 0) return;
 
         const tallestHeight = this.#getTallestHeight();
+        // Guard against invalid height (could cause NaN)
+        if (!tallestHeight || tallestHeight <= 0) {
+            console.warn('[SceneComposition] Invalid tallestHeight:', tallestHeight);
+            return;
+        }
+
         // Tallest slide center at Y=0, so bottom at -tallestHeight/2
         const bottomY = -tallestHeight / 2;
 
@@ -371,9 +377,15 @@ export class SceneComposition {
             imageData.mesh.position.y = bottomY + (height / 2);
         });
 
+        // SCENE.md: Floor is 3px below the bottom of all slides
+        const floorY = bottomY - 3;
+        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, bottomY=${bottomY}, floorY=${floorY}`);
+
         // Notify floor manager to update position (3px below slides)
         if (typeof this.onLayoutChanged === 'function') {
-            this.onLayoutChanged(bottomY - 3);
+            this.onLayoutChanged(floorY);
+        } else {
+            console.warn('[SceneComposition] onLayoutChanged callback not set');
         }
     }
 }

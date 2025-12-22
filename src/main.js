@@ -550,8 +550,11 @@ function init() {
         },
         // SCENE.md §1: Update floor position when vertical layout changes
         onLayoutChanged: (floorY) => {
+            console.log(`[main.js] onLayoutChanged called with floorY=${floorY}, floorManager exists=${!!floorManager}`);
             if (floorManager) {
                 floorManager.setPositionY(floorY);
+            } else {
+                console.warn('[main.js] floorManager is null/undefined');
             }
         }
     });
