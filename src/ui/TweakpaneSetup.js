@@ -311,7 +311,7 @@ export class TweakpaneSetup {
         });
 
         slidesFolder.addBinding(this.params, 'zSpacing', {
-            label: 'Layer Depth',
+            label: 'Slide Space',
             min: 0,
             max: 500,
             step: 10
@@ -481,7 +481,7 @@ export class TweakpaneSetup {
             'Y': 'Vertical pan offset in pixels',
             // Slides folder
             'Material': 'Surface appearance preset',
-            'Layer Depth': 'Z-spacing between slides in pixels',
+            'Slide Space': 'Distance between slides in pixels (minimum 3)',
             // Video tab
             'Duration': 'Animation duration in seconds',
             'Easing': 'Animation timing curve'

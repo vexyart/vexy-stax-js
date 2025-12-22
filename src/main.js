@@ -461,18 +461,8 @@ function init() {
         }
     });
 
-    // Coordinate ambience toggle between FloorManager and AmbienceManager
-    // When user toggles ambience mode:
-    // 1. FloorManager callback fires
-    // 2. AmbienceManager rebuilds all image meshes with appropriate materials
-    // 3. If enabled, applies emissive intensity from LightingManager
-    floorManager.onAmbienceChange = (enabled) => {
-        ambienceManager.updateMaterials(enabled);
-        if (enabled) {
-            const emissiveIntensity = lightingManager.getEmissiveIntensity();
-            ambienceManager.applyEmissiveIntensity(emissiveIntensity);
-        }
-    };
+    // NOTE: Ambience coordination is handled in toggleAmbience() function.
+    // FloorManager.onAmbienceChange is NOT used - keeps floor subordinate to slides.
     sceneManager.onResizeCallback = () => {
         if (params.ambience) {
             floorManager.updateReflectionSettings();
@@ -716,7 +706,8 @@ function toggleAmbience(intensity) {
     params.ambience = intensity;
     const enabled = intensity > 0;
 
-    // Floor is always visible, ambience only affects lighting/materials
+    // SCENE.md: Slides are the core, floor is subordinate.
+    // Update slide materials FIRST, then floor material to match.
     if (enabled) {
         if (ambienceManager) {
             ambienceManager.updateMaterials(true);
@@ -733,6 +724,11 @@ function toggleAmbience(intensity) {
             ambienceManager.updateMaterials(false);
         }
         updateBackground();
+    }
+
+    // Update floor material to match slides (Standard when ambience on, Basic when off)
+    if (floorManager) {
+        floorManager.updateMaterial(enabled);
     }
 
     // After mesh rebuilding, just update the controls without changing the target

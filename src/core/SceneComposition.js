@@ -339,23 +339,23 @@ export class SceneComposition {
 
     /**
      * Get the current floor Y position.
-     * SCENE.md §1: Floor is 1px below the bottom of the tallest slide.
+     * SCENE.md: Floor is 3px below the bottom of the tallest slide.
      * @returns {number} The Y position for the floor
      */
     getFloorY() {
         const tallestHeight = this.#getTallestHeight();
         if (tallestHeight === 0) return 0; // Default when no slides
         // Tallest slide centered at Y=0, bottom at -tallestHeight/2
-        // Floor is 1px below that
-        return -tallestHeight / 2 - 1;
+        // Floor is 3px below that
+        return -tallestHeight / 2 - 3;
     }
 
     /**
      * Recalculate Z and Y positions for all slides and notify floor.
-     * SCENE.md §1:
+     * SCENE.md:
      * - Tallest slide is vertically centered in scene (center at Y=0)
      * - All slides are bottom-aligned to the tallest slide's bottom
-     * - Floor is positioned 1px below the slides
+     * - Floor is positioned 3px below the slides
      */
     #recalculateLayout() {
         if (this.imageStack.length === 0) return;
@@ -371,9 +371,9 @@ export class SceneComposition {
             imageData.mesh.position.y = bottomY + (height / 2);
         });
 
-        // Notify floor manager to update position (1px below slides)
+        // Notify floor manager to update position (3px below slides)
         if (typeof this.onLayoutChanged === 'function') {
-            this.onLayoutChanged(bottomY - 1);
+            this.onLayoutChanged(bottomY - 3);
         }
     }
 }

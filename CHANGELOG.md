@@ -1,6 +1,64 @@
 # <!-- this_file: CHANGELOG.md -->
 # Changelog
 
+## [0.2.7] - 2025-12-23
+
+### Ambience Toggle Y-Jump Fix (Root Cause)
+
+**Problem**: Slides jumped vertically when toggling Ambience on/off.
+
+**Root cause**: `FloorManager.create()` called `onAmbienceChange(true)` which triggered `AmbienceManager.updateMaterials()` immediately on floor creation - even before any slides existed.
+
+**Fixes applied**:
+1. **Removed `onAmbienceChange(true)` call from `FloorManager.create()`** - Floor creation should NOT trigger ambience toggle
+2. **Ambience coordination moved to `toggleAmbience()` function** - Single point of control for ambience state changes
+3. **Floor uses dynamically generated RGBA texture** - New `#createColorTexture()` creates canvas-based texture for proper color/opacity
+4. **Floor material matches slides** - `MeshStandardMaterial` when ambience on, `MeshBasicMaterial` when off
+5. **New `updateMaterial(enabled)` method** - FloorManager can update material type when ambience changes
+
+### Floor RGBA Color Fix
+
+**Problem**: Changing floor RGBA color didn't update the floor appearance.
+
+**Fix**: `updateColor()` now recreates the material with new texture instead of just setting color properties.
+
+### Floor Positioning
+
+**Changed**: Floor is now positioned 3px below tallest slide's bottom (was 1px).
+
+### Tests
+- **369/369 unit tests passing** (reduced by 1 - consolidated 5 floor color tests into 4)
+
+---
+
+## [0.2.6] - 2025-12-22
+
+### SCENE.md §6: Slide Space and Floor Positioning Fixes
+
+**Issue 1 & 2 & 3 Fix: MIN_LAYER_GAP increased from 0.1 to 3**
+- Effective spacing formula: `slider_value + 3`
+- When slider shows 0, actual distance is 3 (prevents z-fighting)
+- Hero viewpoint and Hero Shot animation now use same constant
+- Removed duplicate `MIN_SLIDE_GAP` from animation.js
+
+**Issue 4 Fix: AmbienceManager Y-positioning removed**
+- No longer overrides Y positions (was `FLOOR_Y + height/2` when enabled, `0` when disabled)
+- Now calls `onMaterialsUpdated()` to trigger `SceneComposition.recalculateLayout()`
+- Layout is handled consistently in one place (SceneComposition)
+
+**FloorManager.setPositionY() added**
+- Floor can now be repositioned when layout changes
+- Called via `onLayoutChanged` callback from SceneComposition
+
+**UI Rename**
+- "Layer Depth" slider renamed to "Slide Space"
+- Updated tooltip: "Distance between slides in pixels (minimum 3)"
+
+### Tests
+- **370/370 unit tests passing** (updated AmbienceManager tests for new behavior)
+
+---
+
 ## [0.2.5] - 2025-12-22
 
 ### SCENE.md §1: Tallest-Based Vertical Alignment

@@ -182,18 +182,19 @@ export const DEFAULT_BG_COLOR = '#000000';
 export const DEFAULT_Z_SPACING = 100;
 
 /**
- * Minimum gap between slides to prevent z-fighting when Layer Depth is 0.
+ * Minimum gap between slides to prevent z-fighting when Slide Space is 0.
  * Added to the effective z-spacing regardless of user setting.
- * Set to 0.1 to ensure slides never perfectly overlap.
+ * Set to 3 to ensure slides never perfectly overlap.
+ * Formula: effective spacing = slider_value + MIN_LAYER_GAP
  * @type {number}
  * @constant
- * @default 0.1
+ * @default 3
  * @unit world units (pixels)
  * @example
  * // In getEffectiveZSpacing():
  * return (params.zSpacing ?? autoDistance) + MIN_LAYER_GAP;
  */
-export const MIN_LAYER_GAP = 0.1;
+export const MIN_LAYER_GAP = 3;
 
 /**
  * Default studio canvas dimensions (HD 16:9 quarter resolution).

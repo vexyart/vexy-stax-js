@@ -3,7 +3,6 @@
 // this_file: src/scene/AmbienceManager.js
 
 import * as THREE from 'three';
-import { FLOOR_Y } from '../core/constants.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('AmbienceManager');
@@ -38,6 +37,7 @@ export class AmbienceManager {
      * @param {Object} params - Application parameters (zSpacing, materialThickness, materialRoughness, materialMetalness)
      * @param {Object} [options] - Optional configuration
      * @param {() => number} [options.getEffectiveZSpacing] - Callback to get effective z-spacing (handles null/auto)
+     * @param {() => void} [options.onMaterialsUpdated] - Callback after materials are updated (SCENE.md §1: triggers layout recalculation)
      */
     constructor(scene, imageStack, params, options = {}) {
         if (!scene) {
@@ -54,6 +54,8 @@ export class AmbienceManager {
         this.imageStack = imageStack;
         this.params = params;
         this.getEffectiveZSpacing = options.getEffectiveZSpacing ?? (() => this.params.zSpacing ?? 100);
+        // SCENE.md §1: Callback to trigger layout recalculation after material updates
+        this.onMaterialsUpdated = options.onMaterialsUpdated ?? null;
     }
 
     /**
@@ -124,30 +126,33 @@ export class AmbienceManager {
             // Create new mesh
             const mesh = new THREE.Mesh(geometry, material);
 
-            // Get effective z-spacing (handles null/auto)
-            const effectiveZSpacing = this.getEffectiveZSpacing();
-
             if (enabled) {
                 // Enable shadows for depth perception
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
-
-                // Position slides on floor: Y = floor level + half height so bottom edge sits on floor
-                mesh.rotation.y = 0;
-                mesh.position.y = FLOOR_Y + (height / 2);
-                mesh.position.z = index * effectiveZSpacing;
-            } else {
-                // Centered positioning for flat mode
-                mesh.position.z = index * effectiveZSpacing;
-                mesh.position.y = 0;
             }
+
+            // NOTE: Y positioning is handled by SceneComposition.recalculateLayout()
+            // which is triggered via onMaterialsUpdated callback.
+            // Z positioning is temporary; will be recalculated by layout.
+            mesh.position.z = index * this.getEffectiveZSpacing();
 
             // Update image data reference
             imageData.mesh = mesh;
+            // Preserve dimensions for layout calculation
+            imageData.width = width;
+            imageData.height = height;
             this.scene.add(mesh);
+            // Ensure world matrix is up-to-date for layout calculations
+            mesh.updateMatrixWorld(true);
         });
 
         log.info(`Materials updated for ambience mode: ${enabled ? 'enabled' : 'disabled'}`);
+
+        // SCENE.md §1: Trigger layout recalculation to set correct Y positions
+        if (typeof this.onMaterialsUpdated === 'function') {
+            this.onMaterialsUpdated();
+        }
     }
 
     /**

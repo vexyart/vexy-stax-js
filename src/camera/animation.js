@@ -5,13 +5,11 @@
 import gsap from 'gsap';
 import * as THREE from 'three';
 
-import { DEFAULT_CANVAS_SIZE, CAMERA_MIN_DISTANCE } from '../core/constants.js';
+import { DEFAULT_CANVAS_SIZE, CAMERA_MIN_DISTANCE, MIN_LAYER_GAP } from '../core/constants.js';
 
 // Strict fit: 1.0 = slide fills canvas exactly, no padding
 const FRONT_VIEW_PADDING = 1.0;
 const DEFAULT_HOLD_RATIO = 0.35;
-// Tiny gap between slides to prevent z-fighting when collapsed
-const MIN_SLIDE_GAP = 0.5;
 
 /**
  * Handles camera animations for Vexy Stax
@@ -75,12 +73,12 @@ export class CameraAnimator {
     const width = size.x || 1;
     const height = size.y || 1;
 
-    // Calculate collapse positions with tiny gaps to prevent z-fighting
-    // Front slide (highest index) at z=0, others spaced behind with MIN_SLIDE_GAP
+    // Calculate collapse positions with minimum gaps to prevent z-fighting
+    // Front slide (highest index) at z=0, others spaced behind with MIN_LAYER_GAP
     const collapsePositions = [];
     for (let i = 0; i < slideCount; i++) {
       // Back slides have lower z values (negative direction from front)
-      const offset = (slideCount - 1 - i) * MIN_SLIDE_GAP;
+      const offset = (slideCount - 1 - i) * MIN_LAYER_GAP;
       collapsePositions.push(-offset);
     }
 

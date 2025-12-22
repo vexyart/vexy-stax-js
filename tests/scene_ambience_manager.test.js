@@ -142,7 +142,7 @@ describe('AmbienceManager', () => {
         assert.strictEqual(imageStack[1].mesh.position.z, params.zSpacing);
     });
 
-    it('updateMaterials should position slides on floor when enabled', async () => {
+    it('updateMaterials should call onMaterialsUpdated callback when provided', async () => {
         // Setup: create image mesh with known height
         const texture = new THREE.Texture();
         const geometry = new THREE.PlaneGeometry(100, 200); // 200 height
@@ -156,19 +156,23 @@ describe('AmbienceManager', () => {
             height: 200
         });
 
-        manager = new AmbienceManager(scene, imageStack, params);
+        let callbackCalled = false;
+        manager = new AmbienceManager(scene, imageStack, params, {
+            onMaterialsUpdated: () => { callbackCalled = true; }
+        });
         manager.updateMaterials(true);
 
-        // When enabled: Y = FLOOR_Y (0) + height/2 = 100
-        assert.strictEqual(imageStack[0].mesh.position.y, 100);
+        // onMaterialsUpdated should be called so SceneComposition can handle layout
+        assert.strictEqual(callbackCalled, true);
     });
 
-    it('updateMaterials should center slides at Y=0 when disabled', () => {
+    it('updateMaterials should NOT set Y positions (layout handled by SceneComposition)', () => {
         // Setup: create image mesh
         const texture = new THREE.Texture();
         const geometry = new THREE.PlaneGeometry(100, 200); // 200 height
         const material = new THREE.MeshStandardMaterial({ map: texture });
         const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.y = 999; // Set initial Y position
         scene.add(mesh);
 
         imageStack.push({
@@ -180,7 +184,8 @@ describe('AmbienceManager', () => {
         manager = new AmbienceManager(scene, imageStack, params);
         manager.updateMaterials(false);
 
-        // When disabled: Y = 0 (centered)
+        // AmbienceManager no longer sets Y - new mesh starts at 0, layout handles positioning
+        // The key is that it doesn't force a specific Y position like FLOOR_Y + height/2
         assert.strictEqual(imageStack[0].mesh.position.y, 0);
     });
 

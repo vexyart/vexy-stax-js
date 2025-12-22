@@ -48,7 +48,40 @@ export class FloorManager {
     }
 
     /**
-     * Create floor plane at Y=0
+     * Create a 1x1 pixel canvas texture filled with the specified RGBA color.
+     * This creates a proper texture that can receive lighting when using MeshStandardMaterial.
+     * Returns null in Node.js environment (for unit tests).
+     * @returns {THREE.CanvasTexture|null}
+     */
+    #createColorTexture() {
+        // Guard for Node.js environment (unit tests)
+        if (typeof document === 'undefined') {
+            return null;
+        }
+
+        const floorColor = this.#getFloorColor();
+        const r = Math.round(this.#normalizeColorComponent(floorColor.r) * 255);
+        const g = Math.round(this.#normalizeColorComponent(floorColor.g) * 255);
+        const b = Math.round(this.#normalizeColorComponent(floorColor.b) * 255);
+        const a = floorColor.a;
+
+        // Create a small canvas to generate the color texture
+        const canvas = document.createElement('canvas');
+        canvas.width = 4;
+        canvas.height = 4;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${a})`;
+        ctx.fillRect(0, 0, 4, 4);
+
+        const texture = new THREE.CanvasTexture(canvas);
+        texture.needsUpdate = true;
+        return texture;
+    }
+
+    /**
+     * Create floor plane.
+     * SCENE.md: Floor is positioned 3px below the tallest slide's bottom.
+     * Floor uses the same material type as slides for consistent lighting.
      */
     create() {
         if (!this.scene) {
@@ -60,30 +93,58 @@ export class FloorManager {
             return;
         }
 
-        const floorColor = this.#getFloorColor();
-        const r = this.#normalizeColorComponent(floorColor.r);
-        const g = this.#normalizeColorComponent(floorColor.g);
-        const b = this.#normalizeColorComponent(floorColor.b);
-
         const geometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
-        const material = new THREE.MeshBasicMaterial({
-            color: new THREE.Color(r, g, b),
-            transparent: true,
-            opacity: floorColor.a,
-            side: THREE.DoubleSide,
-            depthWrite: false
-        });
+
+        // Create floor with textured material (can switch between Basic and Standard)
+        const texture = this.#createColorTexture();
+        const material = this.#createMaterial(texture);
 
         this.floor = new THREE.Mesh(geometry, material);
         this.floor.rotation.x = -Math.PI / 2; // Lay flat
         this.floor.position.y = FLOOR_Y;
         this.floor.name = 'floor';
+        // Enable shadows when ambience is on
+        this.floor.receiveShadow = (this.params?.ambience ?? 0) > 0;
 
         this.scene.add(this.floor);
         console.log(`Floor created at y=${FLOOR_Y}`);
+        // NOTE: Do NOT call onAmbienceChange here - floor creation should not trigger ambience toggle
+    }
 
-        if (this.onAmbienceChange) {
-            this.onAmbienceChange(true);
+    /**
+     * Create material based on current ambience state.
+     * Uses MeshStandardMaterial when ambience is on (to receive lighting),
+     * MeshBasicMaterial when off (for flat appearance).
+     * @param {THREE.Texture} texture - The floor color texture (can be null in tests)
+     * @returns {THREE.Material}
+     */
+    #createMaterial(texture) {
+        const floorColor = this.#getFloorColor();
+        const ambience = this.params?.ambience ?? 0;
+
+        if (ambience > 0) {
+            // Use StandardMaterial to receive lighting like slides do
+            return new THREE.MeshStandardMaterial({
+                map: texture,
+                transparent: true,
+                opacity: floorColor.a,
+                side: THREE.DoubleSide,
+                depthWrite: false,
+                roughness: this.params.materialRoughness ?? 0.5,
+                metalness: this.params.materialMetalness ?? 0.0
+            });
+        } else {
+            // Use BasicMaterial for flat appearance
+            const r = this.#normalizeColorComponent(floorColor.r);
+            const g = this.#normalizeColorComponent(floorColor.g);
+            const b = this.#normalizeColorComponent(floorColor.b);
+            return new THREE.MeshBasicMaterial({
+                color: new THREE.Color(r, g, b),
+                transparent: true,
+                opacity: floorColor.a,
+                side: THREE.DoubleSide,
+                depthWrite: false
+            });
         }
     }
 
@@ -108,24 +169,49 @@ export class FloorManager {
     }
 
     /**
-     * Update floor color and opacity from params
+     * Update floor color and opacity from params.
+     * Recreates the floor texture and material to apply new RGBA values.
      */
     updateColor() {
         if (!this.floor) {
             return;
         }
 
-        const floorColor = this.#getFloorColor();
+        // Dispose old material
+        this.floor.material.dispose();
+        if (this.floor.material.map) {
+            this.floor.material.map.dispose();
+        }
 
-        // Normalize RGB values (handles both 0-255 and 0-1 formats)
-        const r = this.#normalizeColorComponent(floorColor.r);
-        const g = this.#normalizeColorComponent(floorColor.g);
-        const b = this.#normalizeColorComponent(floorColor.b);
+        // Create new material with updated color
+        const texture = this.#createColorTexture();
+        this.floor.material = this.#createMaterial(texture);
+        console.log('Floor color updated');
+    }
 
-        this.floor.material.color.setRGB(r, g, b);
-        // Alpha is always 0-1 range
-        this.floor.material.opacity = floorColor.a;
-        this.floor.material.needsUpdate = true;
+    /**
+     * Update floor material when ambience state changes.
+     * Called when toggling between ambience on/off.
+     * @param {boolean} ambienceEnabled - Whether ambience is now enabled
+     */
+    updateMaterial(ambienceEnabled) {
+        if (!this.floor) {
+            return;
+        }
+
+        // Dispose old material
+        this.floor.material.dispose();
+        if (this.floor.material.map) {
+            this.floor.material.map.dispose();
+        }
+
+        // Create new material appropriate for ambience state
+        const texture = this.#createColorTexture();
+        this.floor.material = this.#createMaterial(texture);
+
+        // Update shadow receiving
+        this.floor.receiveShadow = ambienceEnabled;
+        console.log(`Floor material updated for ambience: ${ambienceEnabled}`);
     }
 
     /**
@@ -141,6 +227,18 @@ export class FloorManager {
      */
     isActive() {
         return this.floor !== null;
+    }
+
+    /**
+     * Set floor Y position (SCENE.md §1: floor is 1px below tallest slide's bottom)
+     * @param {number} y - Y position for the floor plane
+     */
+    setPositionY(y) {
+        if (!this.floor) {
+            return;
+        }
+        this.floor.position.y = y;
+        console.log(`Floor position set to y=${y}`);
     }
 
     /**
