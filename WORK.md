@@ -1,10 +1,34 @@
 # <!-- this_file: WORK.md -->
 # Vexy Stax JS - Work Progress
 
-## Status (2025-12-22)
-- **Tests**: 370 unit pass, 2/7 E2E pass (5 blocked: automation bridge texture loading)
-- **Build**: 1,193 kB (228 modules)
-- **main.js**: 2,537 lines (original: 2,567 lines)
+## Status (2025-12-23)
+- **Tests**: 369 unit pass, 6/7 E2E pass
+- **Build**: 1,195 kB (228 modules)
+
+## Session Update (2025-12-23)
+
+### Floor Y-Position Debugging
+
+**Issue**: Floor appears at Y=0 (vertical center) instead of below slides per SCENE.md.
+
+**Added diagnostic logging** to trace floor positioning:
+- `SceneComposition.#recalculateLayout()`: Logs tallest height, bottomY, floorY values
+- `main.js onLayoutChanged`: Logs when callback fires
+- `FloorManager.setPositionY()`: Logs before/after Y position
+
+**Defensive fixes**:
+- Guard against invalid `tallestHeight` (NaN/0) in SceneComposition
+- Validate Y value in `FloorManager.setPositionY()` (reject NaN)
+- `FloorManager.create()` accepts optional `initialY` parameter
+
+**To debug**: Check console for:
+```
+[SceneComposition] Layout: tallest=400, bottomY=-200, floorY=-203
+[main.js] onLayoutChanged called with floorY=-203, floorManager exists=true
+[FloorManager] Floor position updated: 0 → -203
+```
+
+---
 
 ## Session Update (2025-12-22, Late)
 

@@ -1,6 +1,28 @@
 # <!-- this_file: CHANGELOG.md -->
 # Changelog
 
+## [0.2.8] - 2025-12-23
+
+### Floor Y-Position Diagnostic Logging
+
+Added console traces to debug floor positioning issue (SCENE.md §1: floor must be 3px below slide bottoms):
+
+- **SceneComposition**: Log tallest height, bottomY, and floorY on every layout recalculation
+- **SceneComposition**: Guard against invalid tallestHeight (NaN/0) that could cause floor to stay at Y=0
+- **main.js**: Log when `onLayoutChanged` callback fires with floorY value
+- **FloorManager**: Log before/after Y position on `setPositionY()` calls
+- **FloorManager**: Validate Y value is a valid number (reject NaN)
+- **FloorManager**: `create()` now accepts optional `initialY` parameter
+
+**To debug**: Load images and check console for logs:
+```
+[SceneComposition] Layout: tallest=X, bottomY=Y, floorY=Z
+[main.js] onLayoutChanged called with floorY=Z, floorManager exists=true
+[FloorManager] Floor position updated: 0 → Z
+```
+
+---
+
 ## [0.2.7] - 2025-12-23
 
 ### Ambience Toggle Y-Jump Fix (Root Cause)
