@@ -550,11 +550,12 @@ function init() {
             params.zSpacing = null; // null triggers auto calculation
             updateCanvasAriaLabel();
         },
-        // SCENE.md §1: Update floor position when vertical layout changes
-        onLayoutChanged: (floorY) => {
-            console.log(`[main.js] onLayoutChanged called with floorY=${floorY}, floorManager exists=${!!floorManager}`);
+        // SCENE.md §1: Update floor position and size when layout changes
+        onLayoutChanged: (floorY, stackDepth, zSpacing) => {
+            console.log(`[main.js] onLayoutChanged: floorY=${floorY}, stackDepth=${stackDepth}, zSpacing=${zSpacing}`);
             if (floorManager) {
                 floorManager.setPositionY(floorY);
+                floorManager.resize(stackDepth, zSpacing);
             } else {
                 console.warn('[main.js] floorManager is null/undefined');
             }

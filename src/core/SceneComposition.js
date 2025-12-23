@@ -29,7 +29,7 @@ const MAX_THUMBNAIL_DIMENSION = 400;
  * @property {(luminance: number) => number} [getAdaptiveEmissiveIntensity]
  * @property {() => number} [getEffectiveZSpacing]
  * @property {(slideCount: number) => void} [onFirstSlide] - Called when first slide is added (SCENE.md §2)
- * @property {(floorY: number) => void} [onLayoutChanged] - Called when vertical layout changes (SCENE.md §1)
+ * @property {(floorY: number, stackDepth: number, zSpacing: number) => void} [onLayoutChanged] - Called when layout changes (SCENE.md §1)
  */
 
 export class SceneComposition {
@@ -356,6 +356,7 @@ export class SceneComposition {
      * - Tallest slide is vertically centered in scene (center at Y=0)
      * - All slides are bottom-aligned to the tallest slide's bottom
      * - Floor is positioned 3px below the slides
+     * - Floor size adapts to stack depth and zSpacing
      */
     #recalculateLayout() {
         if (this.imageStack.length === 0) return;
@@ -370,20 +371,24 @@ export class SceneComposition {
         // Tallest slide center at Y=0, so bottom at -tallestHeight/2
         const bottomY = -tallestHeight / 2;
 
+        const zSpacing = this.getEffectiveZSpacing();
         this.imageStack.forEach((imageData, index) => {
-            imageData.mesh.position.z = index * this.getEffectiveZSpacing();
+            imageData.mesh.position.z = index * zSpacing;
             // Bottom-align: bottom edge at bottomY, center at bottomY + height/2
             const height = imageData.mesh.geometry.parameters.height ?? imageData.height;
             imageData.mesh.position.y = bottomY + (height / 2);
         });
 
+        // Calculate stack depth (Z-span from first to last slide)
+        const stackDepth = (this.imageStack.length - 1) * zSpacing;
+
         // SCENE.md: Floor is 3px below the bottom of all slides
         const floorY = bottomY - 3;
-        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, bottomY=${bottomY}, floorY=${floorY}`);
+        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, bottomY=${bottomY}, floorY=${floorY}, stackDepth=${stackDepth}`);
 
-        // Notify floor manager to update position (3px below slides)
+        // Notify floor manager to update position and size
         if (typeof this.onLayoutChanged === 'function') {
-            this.onLayoutChanged(floorY);
+            this.onLayoutChanged(floorY, stackDepth, zSpacing);
         } else {
             console.warn('[SceneComposition] onLayoutChanged callback not set');
         }

@@ -308,10 +308,12 @@ export class TweakpaneSetup {
         if (this.params.zSpacing === null || this.params.zSpacing === undefined) {
             this.params.zSpacing = 0;
         }
+        // Slide Space slider: 0 (minimum) to STUDIO_WIDTH * 2
+        const studioWidth = this.params.canvasSize?.x ?? 960;
         slidesFolder.addBinding(this.params, 'zSpacing', {
             label: 'Slide Space',
             min: 0,
-            max: 500,
+            max: studioWidth * 2,
             step: 10
         }).on('change', (ev) => {
             this.callbacks.updateZSpacing(ev.value);

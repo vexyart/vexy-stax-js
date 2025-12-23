@@ -4,7 +4,7 @@
 // this_file: src/scene/FloorManager.js
 
 import * as THREE from 'three';
-import { FLOOR_SIZE, FLOOR_Y } from '../core/constants.js';
+import { FLOOR_Y, DEFAULT_CANVAS_SIZE } from '../core/constants.js';
 
 /**
  * FloorManager - Manages simple transparent floor plane
@@ -79,12 +79,34 @@ export class FloorManager {
     }
 
     /**
+     * Calculate floor dimensions based on slide layout.
+     * @param {number} stackDepth - Z-axis span from first to last slide
+     * @param {number} zSpacing - Current slide spacing value
+     * @returns {{width: number, length: number}} Floor width (X) and length (Z)
+     */
+    #calculateFloorDimensions(stackDepth, zSpacing) {
+        const studioWidth = this.params?.canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x;
+        const effectiveSpacing = zSpacing ?? 0;
+
+        // Floor width (X direction) = STUDIO_WIDTH + zSpacing * 0.4
+        const floorWidth = studioWidth + effectiveSpacing * 0.4;
+
+        // Floor length (Z direction) = stack depth + zSpacing * 0.2 padding on each end
+        const padding = effectiveSpacing * 0.2;
+        const floorLength = Math.max(stackDepth + padding * 2, studioWidth); // At least as wide as studio
+
+        return { width: floorWidth, length: floorLength };
+    }
+
+    /**
      * Create floor plane.
      * SCENE.md: Floor is positioned 3px below the tallest slide's bottom.
      * Floor uses the same material type as slides for consistent lighting.
      * @param {number} [initialY] - Optional initial Y position (default: FLOOR_Y constant)
+     * @param {number} [stackDepth] - Z-axis span from first to last slide
+     * @param {number} [zSpacing] - Current slide spacing value
      */
-    create(initialY) {
+    create(initialY, stackDepth = 0, zSpacing = 0) {
         if (!this.scene) {
             throw new Error('[FloorManager] Cannot create floor: scene is required.');
         }
@@ -94,7 +116,8 @@ export class FloorManager {
             return;
         }
 
-        const geometry = new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE);
+        const { width, length } = this.#calculateFloorDimensions(stackDepth, zSpacing);
+        const geometry = new THREE.PlaneGeometry(width, length);
 
         // Create floor with textured material (can switch between Basic and Standard)
         const texture = this.#createColorTexture();
@@ -105,13 +128,39 @@ export class FloorManager {
         // Use provided Y position or default constant
         const yPosition = typeof initialY === 'number' && !isNaN(initialY) ? initialY : FLOOR_Y;
         this.floor.position.y = yPosition;
+        // Center floor Z position to cover stack from first to last slide
+        this.floor.position.z = stackDepth / 2;
         this.floor.name = 'floor';
         // Enable shadows when ambience is on
         this.floor.receiveShadow = (this.params?.ambience ?? 0) > 0;
 
         this.scene.add(this.floor);
-        console.log(`[FloorManager] Floor created at y=${yPosition}`);
+        console.log(`[FloorManager] Floor created: ${width.toFixed(0)}×${length.toFixed(0)} at y=${yPosition}, z=${this.floor.position.z.toFixed(0)}`);
         // NOTE: Do NOT call onAmbienceChange here - floor creation should not trigger ambience toggle
+    }
+
+    /**
+     * Resize floor to match current slide layout.
+     * Called when slides are added/removed or zSpacing changes.
+     * @param {number} stackDepth - Z-axis span from first to last slide
+     * @param {number} zSpacing - Current slide spacing value
+     */
+    resize(stackDepth, zSpacing) {
+        if (!this.floor) {
+            console.warn('[FloorManager] Cannot resize: floor not created');
+            return;
+        }
+
+        const { width, length } = this.#calculateFloorDimensions(stackDepth, zSpacing);
+
+        // Dispose old geometry and create new one
+        this.floor.geometry.dispose();
+        this.floor.geometry = new THREE.PlaneGeometry(width, length);
+
+        // Center floor Z position to cover stack
+        this.floor.position.z = stackDepth / 2;
+
+        console.log(`[FloorManager] Floor resized: ${width.toFixed(0)}×${length.toFixed(0)}, z=${this.floor.position.z.toFixed(0)}`);
     }
 
     /**
