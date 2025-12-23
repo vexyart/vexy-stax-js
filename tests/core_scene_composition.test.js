@@ -559,3 +559,119 @@ test('SceneComposition_addImage_when_noOnFirstSlideCallback_then_doesNotThrow', 
         composition.addImage(createTexture(400, 300), 'first.png');
     }, 'addImage should handle missing onFirstSlide callback gracefully');
 });
+
+test('SceneComposition_addImage_when_slideAdded_then_onLayoutChangedFiresWithFloorY', () => {
+    appState.reset();
+
+    const scene = {
+        added: [],
+        removed: [],
+        add(mesh) { this.added.push(mesh); },
+        remove(mesh) { this.removed.push(mesh); }
+    };
+
+    const params = {
+        materialThickness: 1,
+        ambience: false,
+        materialRoughness: 0.5,
+        materialMetalness: 0.3,
+        materialBorderWidth: 0,
+        zSpacing: 50
+    };
+
+    const imageStack = [];
+    const layoutChangeCalls = [];
+
+    const composition = new SceneComposition({
+        scene,
+        params,
+        imageStack,
+        saveHistory: () => {},
+        emitStackUpdated: () => {},
+        updateImageList: () => {},
+        showToast: () => {},
+        checkMemoryUsage: () => true,
+        onLayoutChanged: (floorY) => {
+            layoutChangeCalls.push(floorY);
+        }
+    });
+
+    // Add slide with height 400 (will be scaled to 400 which is at MAX_THUMBNAIL_DIMENSION boundary)
+    // Tallest slide centered at Y=0, bottom at -height/2
+    // Floor should be 3px below: floorY = -height/2 - 3
+    composition.addImage(createTexture(400, 400), 'slide1.png');
+
+    assert.equal(layoutChangeCalls.length, 1, 'onLayoutChanged should fire once when slide added');
+    // Slide height will be 400 (at boundary), centered at Y=0
+    // Bottom at -200, floor at -203
+    assert.equal(layoutChangeCalls[0], -203, 'floorY should be 3px below tallest slide bottom');
+
+    // Add a taller slide (600 height, but will be scaled to 400 max)
+    composition.addImage(createTexture(400, 600), 'slide2.png');
+
+    assert.equal(layoutChangeCalls.length, 2, 'onLayoutChanged should fire again when second slide added');
+    // After scaling, height becomes 400 (still at max thumbnail dimension)
+    // So floorY remains at -203
+});
+
+test('SceneComposition_recalculateLayout_when_called_then_positionsAllSlidesCorrectly', () => {
+    appState.reset();
+
+    const scene = {
+        added: [],
+        removed: [],
+        add(mesh) { this.added.push(mesh); },
+        remove(mesh) { this.removed.push(mesh); }
+    };
+
+    const params = {
+        materialThickness: 1,
+        ambience: false,
+        materialRoughness: 0.5,
+        materialMetalness: 0.3,
+        materialBorderWidth: 0,
+        zSpacing: 100
+    };
+
+    const imageStack = [];
+    let lastFloorY = null;
+
+    const composition = new SceneComposition({
+        scene,
+        params,
+        imageStack,
+        saveHistory: () => {},
+        emitStackUpdated: () => {},
+        updateImageList: () => {},
+        showToast: () => {},
+        checkMemoryUsage: () => true,
+        getEffectiveZSpacing: () => 100,
+        onLayoutChanged: (floorY) => {
+            lastFloorY = floorY;
+        }
+    });
+
+    // Add slides of different heights
+    composition.addImage(createTexture(300, 200), 'short.png'); // height=200
+    composition.addImage(createTexture(300, 400), 'tall.png');  // height=400 (tallest)
+
+    // After adding both: tallest is 400, centered at Y=0
+    // Bottom of all slides at -200
+    // Floor at -203
+    assert.equal(lastFloorY, -203, 'floor should be 3px below tallest slide bottom');
+
+    // Verify Z positions
+    assert.equal(imageStack[0].mesh.position.z, 0, 'first slide should be at z=0');
+    assert.equal(imageStack[1].mesh.position.z, 100, 'second slide should be at z=zSpacing');
+
+    // Verify Y positions (bottom-aligned)
+    // Tallest (400) is centered at Y=0, so bottom at -200
+    // All slides have bottom at -200, so center at -200 + height/2
+    const shortSlideY = imageStack[0].mesh.position.y;
+    const tallSlideY = imageStack[1].mesh.position.y;
+
+    // Short slide: height 200, bottom at -200, center at -200 + 100 = -100
+    assert.equal(shortSlideY, -100, 'short slide should be bottom-aligned (center at -100)');
+    // Tall slide: height 400, bottom at -200, center at -200 + 200 = 0
+    assert.equal(tallSlideY, 0, 'tall slide (tallest) should be centered at Y=0');
+});

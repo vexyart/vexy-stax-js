@@ -68,6 +68,7 @@ export class ExportManager {
      * @param {{ createObjectURL?: Function, revokeObjectURL?: Function }} [options.urlAPI]
      * @param {() => Date} [options.now]
      * @param {() => number} [options.getEffectiveZSpacing]
+     * @param {() => void} [options.onImportComplete] - Called after all images loaded from JSON import
      */
     constructor(options) {
         this.renderer = options.renderer;
@@ -86,6 +87,7 @@ export class ExportManager {
         this.pane = options.pane ?? { refresh: () => {} };
         this.getActiveCamera = options.getActiveCamera ?? (() => this.camera);
         this.getEffectiveZSpacing = options.getEffectiveZSpacing ?? (() => this.params.zSpacing ?? 100);
+        this.onImportComplete = options.onImportComplete ?? (() => {});
 
         this.document = options.document ?? globalThis.document;
         this.window = options.window ?? globalThis;
@@ -470,14 +472,25 @@ export class ExportManager {
             this.controls.update();
         }
 
+        // Track loading progress to call onImportComplete when all images loaded
+        const totalImages = config.images.length;
+        let loadedCount = 0;
+        const onImageLoaded = () => {
+            loadedCount++;
+            if (loadedCount === totalImages) {
+                // All images loaded - trigger layout recalculation
+                this.onImportComplete();
+            }
+        };
+
         config.images.forEach((imageConfig, index) => {
-            this.#loadTextureWithRetry(imageConfig, index, 0);
+            this.#loadTextureWithRetry(imageConfig, index, 0, onImageLoaded);
         });
 
         this.pane?.refresh?.();
     }
 
-    #loadTextureWithRetry(imageConfig, index, attempt) {
+    #loadTextureWithRetry(imageConfig, index, attempt, onComplete = () => {}) {
         const loader = this.createTextureLoader();
         loader.load(
             imageConfig.dataURL,
@@ -524,6 +537,7 @@ export class ExportManager {
                 this.updateImageList();
                 this.emitStackUpdated('imported');
                 this.logExport?.info?.(`Loaded ${imageConfig.filename} from config`);
+                onComplete();
             },
             undefined,
             (error) => {
@@ -531,11 +545,13 @@ export class ExportManager {
                     const delay = RETRY_DELAYS_MS[attempt];
                     this.logExport?.warn?.(`Failed to load ${imageConfig.filename} (attempt ${attempt + 1}/${MAX_LOAD_RETRIES + 1}). Retrying in ${delay}ms...`, error);
                     this.setTimeout?.(() => {
-                        this.#loadTextureWithRetry(imageConfig, index, attempt + 1);
+                        this.#loadTextureWithRetry(imageConfig, index, attempt + 1, onComplete);
                     }, delay);
                 } else {
                     this.logExport?.error?.(`Failed to load ${imageConfig.filename} after ${MAX_LOAD_RETRIES + 1} attempts:`, error);
                     this.showToast(`❌ Failed to load: ${imageConfig.filename}. Check file is valid`, 'error', TOAST_DURATION_ERROR);
+                    // Still call onComplete to not block the import completion
+                    onComplete();
                 }
             }
         );

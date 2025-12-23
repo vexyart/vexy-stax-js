@@ -100,6 +100,9 @@ let historyManager = null;
 let showFPSEnabled = false;
 let memoryMonitor = null;
 
+// Hero view z-spacing: Store original spacing when entering Hero, restore when leaving
+let savedHeroZSpacing = null;
+
 // Parameters
 const params = createDefaultParams();
 
@@ -732,6 +735,12 @@ function toggleAmbience(intensity) {
     // Update floor material to match slides (Standard when ambience on, Basic when off)
     if (floorManager) {
         floorManager.updateMaterial(enabled);
+    }
+
+    // SCENE.md §1: After material changes, ALWAYS recalculate layout
+    // This ensures floor is positioned correctly regardless of ambience state
+    if (sceneComposition) {
+        sceneComposition.recalculateLayout();
     }
 
     // After mesh rebuilding, just update the controls without changing the target
@@ -1600,9 +1609,8 @@ function updateCanvasSize(size) {
  */
 function centerViewOnContent() {
     // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    if (params.viewpointPreset === 'hero') {
-        restoreSlideZPositions();
-    }
+    // restoreSlideZPositions() is self-guarding via savedHeroZSpacing check
+    restoreSlideZPositions();
 
     if (cameraController) {
         cameraController.centerOnContent();
@@ -1796,9 +1804,8 @@ function getContentCenterFromStack() {
 
 function setViewpoint(x, y, z) {
     // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    if (params.viewpointPreset === 'hero') {
-        restoreSlideZPositions();
-    }
+    // restoreSlideZPositions() is self-guarding via savedHeroZSpacing check
+    restoreSlideZPositions();
 
     if (cameraController) {
         cameraController.setViewpoint(x, y, z);
@@ -1817,10 +1824,14 @@ function setViewpoint(x, y, z) {
 /**
  * Set viewpoint to fit frontmost slide within studio frame
  * Accounts for both FOV and camera zoom (Tele) in distance calculation
+ * @param {Object} [options] - Options for viewpoint setting
+ * @param {boolean} [options.skipRestore=false] - Skip restoring z-positions (used by Hero mode)
  */
-function setViewpointFitToFrame() {
+function setViewpointFitToFrame(options = {}) {
     // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    if (params.viewpointPreset === 'hero') {
+    // restoreSlideZPositions() is self-guarding via savedHeroZSpacing check
+    // Skip when called from setHeroViewpoint() to preserve collapsed state
+    if (!options.skipRestore) {
         restoreSlideZPositions();
     }
 
@@ -1914,13 +1925,19 @@ function getEffectiveZSpacing() {
  * Restore slide z-positions to their proper spacing based on params.zSpacing.
  * Called when switching away from Hero viewpoint, which collapses slides.
  * SCENE.md §5: Layer depth should restore when changing away from Hero.
+ * Only restores if savedHeroZSpacing is set (meaning we actually were in Hero mode).
  */
 function restoreSlideZPositions() {
+    // Only restore if we have a saved spacing (meaning we were in Hero mode)
+    if (savedHeroZSpacing === null) {
+        return;
+    }
     const effectiveSpacing = getEffectiveZSpacing();
     imageStack.forEach((imageData, index) => {
         imageData.mesh.position.z = index * effectiveSpacing;
     });
-    logCamera.info(`Slide z-positions restored to spacing ${effectiveSpacing}px`);
+    logCamera.info(`Slide z-positions restored to spacing ${effectiveSpacing}px (was in Hero mode)`);
+    savedHeroZSpacing = null; // Clear the saved spacing
 }
 
 /**
@@ -1942,6 +1959,11 @@ function setHeroViewpoint() {
 
     // Reset controls target to origin
     controls.target.set(0, 0, 0);
+
+    // Save current spacing before collapsing (only if not already in Hero mode)
+    if (savedHeroZSpacing === null) {
+        savedHeroZSpacing = getEffectiveZSpacing();
+    }
 
     // Collapse slides with MIN_LAYER_GAP spacing to prevent z-fighting
     // Front slide (highest index) at z=0, others spaced behind
@@ -1984,8 +2006,8 @@ function setHeroViewpoint() {
         }
     }
 
-    // Set camera to fit front slide
-    setViewpointFitToFrame();
+    // Set camera to fit front slide (skip z-restore to keep slides collapsed)
+    setViewpointFitToFrame({ skipRestore: true });
 
     // Refresh pane to update slider values
     pane?.refresh?.();
@@ -1998,9 +2020,8 @@ function setHeroViewpoint() {
  */
 function setBeautyViewpoint() {
     // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    if (params.viewpointPreset === 'hero') {
-        restoreSlideZPositions();
-    }
+    // restoreSlideZPositions() is self-guarding via savedHeroZSpacing check
+    restoreSlideZPositions();
 
     if (cameraController) {
         cameraController.setBeautyViewpoint();

@@ -2,26 +2,46 @@
 # Vexy Stax JS - Work Progress
 
 ## Status (2025-12-23)
-- **Tests**: 369 unit pass, 6/7 E2E pass
+- **Tests**: 371 unit pass (+2 new floor positioning tests)
 - **Build**: 1,195 kB (228 modules)
+- **Critical Bugs**: 3/3 FIXED ✅
 
-## Session Update (2025-12-23)
+## Session Update (2025-12-23) - Bug Fixes
 
-### Floor Y-Position Debugging
+### Bug 3: Stale Build ✅
+- Rebuilt `docs/` folder with `npm run build`
+- Verified "Slide Space" label appears (not "Layer Depth")
 
-**Issue**: Floor appears at Y=0 (vertical center) instead of below slides per SCENE.md.
+### Bug 2: Hero View Z-Spacing ✅
+**Problem**: `setHeroViewpoint()` collapsed slides, then immediately called `setViewpointFitToFrame()` which called `restoreSlideZPositions()`, undoing the collapse.
+
+**Fix**: Added `{ skipRestore: true }` parameter to `setViewpointFitToFrame()`:
+- `setViewpointFitToFrame({ skipRestore: true })` skips Z-position restoration
+- `setHeroViewpoint()` now passes this option to keep slides collapsed
+- Other viewpoint functions still restore Z-positions correctly
+
+### Bug 1: Floor/Slide Layout Instability ✅
+**Status**: Diagnostic logging added (previous session), code flow verified correct.
+
+**Architecture verification**:
+1. `FloorManager.create()` → initial floor at FLOOR_Y=0 (no slides yet)
+2. `SceneComposition.addImage()` → `#recalculateLayout()` → `onLayoutChanged(floorY)`
+3. `onLayoutChanged` callback → `floorManager.setPositionY(floorY)`
+4. `applyMaterialPreset()` → `#recalculateLayout()` → floor repositioned
+5. `AmbienceManager.updateMaterials()` → `onMaterialsUpdated` → layout recalc
+
+**New tests added**:
+- `SceneComposition_addImage_when_slideAdded_then_onLayoutChangedFiresWithFloorY`
+- `SceneComposition_recalculateLayout_when_called_then_positionsAllSlidesCorrectly`
+
+### Previous Session: Floor Y-Position Debugging
 
 **Added diagnostic logging** to trace floor positioning:
 - `SceneComposition.#recalculateLayout()`: Logs tallest height, bottomY, floorY values
 - `main.js onLayoutChanged`: Logs when callback fires
 - `FloorManager.setPositionY()`: Logs before/after Y position
 
-**Defensive fixes**:
-- Guard against invalid `tallestHeight` (NaN/0) in SceneComposition
-- Validate Y value in `FloorManager.setPositionY()` (reject NaN)
-- `FloorManager.create()` accepts optional `initialY` parameter
-
-**To debug**: Check console for:
+**To debug in browser**: Check console for:
 ```
 [SceneComposition] Layout: tallest=400, bottomY=-200, floorY=-203
 [main.js] onLayoutChanged called with floorY=-203, floorManager exists=true
