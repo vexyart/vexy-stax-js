@@ -4,9 +4,25 @@
 ## Status (2025-12-23)
 - **Tests**: 504 unit + 7 E2E pass
 - **Build**: 1,212 kB
-- **main.js**: 2,049 → 1,850 lines (−199 lines)
+- **main.js**: 2,049 → 1,716 lines (−333 lines)
 
-## Session Update (2025-12-23) - Refactoring Phase B
+## Session Update (2025-12-23) - Refactoring Phase C
+
+### Export Wrapper Elimination
+Inlined export wrapper functions in callbacks:
+- `exportPNG()` → `exportManager?.exportPNG(scale)`
+- `exportJSON()` → `exportManager?.exportJSON()`
+- `importJSON()` → `exportManager?.importJSON(file)`
+- `copyJSON()` → `exportManager?.copyJSON()`
+- `pasteJSON()` → `exportManager?.pasteJSON()`
+
+Updated all call sites: TweakpaneSetup, DebugAPI, AutomationBridge, FileHandler.
+
+**Result**: −134 lines (removed 5 wrapper functions with JSDoc)
+
+---
+
+## Previous Session (2025-12-23) - Refactoring Phase B
 
 ### Dead Code Removal
 Removed duplicate code in main.js that duplicated SlidePanelController functionality:
@@ -60,6 +76,8 @@ Inlined wrapper functions that just delegated to modules:
 - `src/ui/ToolbarController.js` - Toolbar button setup
 
 ### Next Steps
-1. Continue wrapper elimination in main.js
-2. Extract export wrappers (exportPNG, exportJSON, etc.)
-3. Reduce main.js toward <500 lines
+1. ~~Extract export wrappers~~ ✅ Complete
+2. Continue with remaining wrapper elimination (viewpoint functions)
+3. Create EventCoordinator.js for emit* functions
+4. Move init() body to Application.init()
+5. Target: main.js <100 lines

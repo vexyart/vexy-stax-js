@@ -584,7 +584,7 @@ function init() {
         },
         onJSONFileAccepted: (file) => {
             // Import JSON scene - same as JSON > Open
-            importJSON(file);
+            exportManager?.importJSON(file);
         },
         shouldProceedAfterMemoryCheck: () => checkMemoryUsage(true),
         showToast,
@@ -646,7 +646,7 @@ function init() {
         showToast,
         logUI,
         logCamera,
-        exportPNG: (scale) => exportPNG(scale),
+        exportPNG: (scale) => exportManager?.exportPNG(scale),
         undo,
         redo,
         clearAll,
@@ -704,7 +704,7 @@ function init() {
         },
         pane,
         callbacks: {
-            exportPNG,
+            exportPNG: (scale) => exportManager?.exportPNG(scale),
             clearAll,
             loadSettings: () => settingsManager.loadSettings(),
             saveSettings: () => settingsManager.saveSettings(),
@@ -1139,11 +1139,11 @@ function setupTweakpane() {
             setHeroViewpoint: () => { setHeroViewpoint(); updateCanvasAriaLabel(); },
             applyMaterialPreset: (preset) => { applyMaterialPreset(preset); updateCanvasAriaLabel(); },
             updateZSpacing,
-            exportPNG,
-            exportJSON,
-            importJSON,
-            copyJSON,
-            pasteJSON,
+            exportPNG: (scale) => exportManager?.exportPNG(scale),
+            exportJSON: () => exportManager?.exportJSON(),
+            importJSON: (file) => exportManager?.importJSON(file),
+            copyJSON: () => exportManager?.copyJSON(),
+            pasteJSON: () => exportManager?.pasteJSON(),
             resetSettings: () => settingsManager.resetSettings(),
             clearAll,
             undo: () => historyManager?.undo?.(),
@@ -1180,36 +1180,6 @@ function setupTweakpane() {
     if (paneInstance) {
         pane = paneInstance;
     }
-}
-
-/**
- * Export current 3D scene as PNG image with configurable resolution
- *
- * @param {number} [scale=1] - Resolution multiplier (1x, 2x, or 4x). Values outside 1-4 range default to 1x.
- * @returns {Promise<void>}
- *
- * @example
- * // Export at standard resolution (window size)
- * window.vexyStax.exportPNG(1);
- *
- * @example
- * // Export at 2x resolution for high-DPI displays
- * window.vexyStax.exportPNG(2);
- *
- * @example
- * // Export at 4x resolution for print quality
- * window.vexyStax.exportPNG(4);
- *
- * @example
- * // Use default 1x if no parameter
- * window.vexyStax.exportPNG();
- */
-function exportPNG(scale = 1) {
-    if (!exportManager) {
-        logExport.warn('Export manager not initialized');
-        return;
-    }
-    return exportManager.exportPNG(scale);
 }
 
 function getActiveCamera() {
@@ -1740,89 +1710,6 @@ function onWindowResize() {
     if (params.ambience) {
         floorManager?.updateReflectionSettings();
     }
-}
-
-/**
- * Export the current scene configuration (camera, materials, stack) as JSON.
- *
- * Delegates to `ExportManager` to serialise params, mesh transforms, and
- * embedded texture data. The resulting file is downloaded immediately.
- *
- * @returns {Promise<void>} Resolves once the download has been triggered.
- *
- * @example
- * // Trigger a JSON export from the public API
- * window.vexyStax.exportJSON();
- */
-function exportJSON() {
-    if (!exportManager) {
-        logExport.warn('Export manager not initialized');
-        return;
-    }
-    return exportManager.exportJSON();
-}
-
-/**
- * Import scene configuration from JSON file
- *
- * Loads a previously exported JSON file containing scene parameters,
- * camera position, and image data (encoded as base64). Clears current
- * scene before applying imported configuration.
- *
- * @param {File} file - File object from file input or drag-and-drop event
- * @returns {Promise<void>}
- *
- * @example
- * // Import from file input
- * const fileInput = document.getElementById('json-input');
- * fileInput.addEventListener('change', (e) => {
- *   const file = e.target.files[0];
- *   if (file) {
- *     window.vexyStax.importJSON(file);
- *   }
- * });
- *
- * @example
- * // Import from drag-and-drop
- * dropZone.addEventListener('drop', (e) => {
- *   e.preventDefault();
- *   const files = Array.from(e.dataTransfer.files);
- *   const jsonFile = files.find(f => f.name.endsWith('.json'));
- *   if (jsonFile) {
- *     window.vexyStax.importJSON(jsonFile);
- *   }
- * });
- *
- * @example
- * // Import with error handling
- * try {
- *   window.vexyStax.importJSON(file);
- * } catch (error) {
- *   console.error('Import failed:', error);
- * }
- */
-function importJSON(file) {
-    if (!exportManager) {
-        logExport.warn('Export manager not initialized');
-        return;
-    }
-    return exportManager.importJSON(file);
-}
-
-function copyJSON() {
-    if (!exportManager) {
-        logExport.warn('Export manager not initialized');
-        return;
-    }
-    return exportManager.copyJSON();
-}
-
-function pasteJSON() {
-    if (!exportManager) {
-        logExport.warn('Export manager not initialized');
-        return;
-    }
-    return exportManager.pasteJSON();
 }
 
 // Initialize when DOM is ready
