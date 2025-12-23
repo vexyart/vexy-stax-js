@@ -157,7 +157,7 @@ const settingsManager = createSettingsManager({
     switchCameraMode: (mode) => switchCameraMode(mode),
     updateZoom: (zoom) => updateZoom(zoom),
     updateBackground: () => app?.sceneDirector?.updateBackground(),
-    updateFloorColor: () => updateFloorColor(),
+    updateFloorColor: () => floorManager?.updateColor(),
     updateZSpacing: (spacing) => updateZSpacing(spacing),
     autoZSpacing: () => {
         const autoValue = calculateAutoDistance();
@@ -537,7 +537,7 @@ function init() {
         imageStack,
         saveHistory,
         emitStackUpdated,
-        updateImageList,
+        updateImageList: () => app?.slidePanelController?.updateImageList(),
         showToast,
         checkMemoryUsage,
         logImages,
@@ -615,11 +615,11 @@ function init() {
         controls,
         logExport,
         showToast,
-        clearAll,
-        updateImageList,
+        clearAll: () => sceneComposition?.clearAll(),
+        updateImageList: () => app?.slidePanelController?.updateImageList(),
         emitStackUpdated,
-        updateBackground,
-        updateFloorColor,
+        updateBackground: () => app?.sceneDirector?.updateBackground(),
+        updateFloorColor: () => floorManager?.updateColor(),
         pane,
         getActiveCamera: () => getActiveCamera(),
         getEffectiveZSpacing,
@@ -650,7 +650,7 @@ function init() {
         exportPNG: (scale) => exportManager?.exportPNG(scale),
         undo,
         redo,
-        clearAll,
+        clearAll: () => sceneComposition?.clearAll(),
         imageStack,
         confirm: (message) => confirm(message),
         cameraControls: {
@@ -706,7 +706,7 @@ function init() {
         pane,
         callbacks: {
             exportPNG: (scale) => exportManager?.exportPNG(scale),
-            clearAll,
+            clearAll: () => sceneComposition?.clearAll(),
             loadSettings: () => settingsManager.loadSettings(),
             saveSettings: () => settingsManager.saveSettings(),
             resetSettings: () => settingsManager.resetSettings(),
@@ -1083,7 +1083,7 @@ function applyHistorySnapshot(state, meta = {}) {
 
     clearCurrentImageStack();
     restoreImageStackFromSnapshot(state.images);
-    updateImageList();
+    app?.slidePanelController?.updateImageList();
 
     const stackSize = historyManager ? historyManager.size() : historyStack.length;
     if (meta.action === 'undo') {
@@ -1119,7 +1119,7 @@ function setupTweakpane() {
         callbacks: {
             updateCanvasSize,
             updateBackground: () => app?.sceneDirector?.updateBackground(),
-            updateFloorColor,
+            updateFloorColor: () => floorManager?.updateColor(),
             toggleAmbience: (intensity) => app?.sceneDirector?.setAmbience(intensity),
             centerViewOnContent,
             setViewpoint: (...args) => { setViewpoint(...args); updateCanvasAriaLabel(); },
@@ -1127,8 +1127,8 @@ function setupTweakpane() {
             setViewpointFitToFrame: () => { app?.viewpointController?.setViewpointFitToFrame(); emitCameraUpdated('viewpoint'); updateCanvasAriaLabel(); },
             switchCameraMode,
             updateZoom,
-            updateCameraDistance,
-            updateCameraOffset,
+            updateCameraDistance: (distance) => cameraController?.setDistance(distance),
+            updateCameraOffset: (x, y) => cameraController?.setOffset(x, y),
             setCameraFOV: (value) => {
                 if (cameraController) {
                     cameraController.setFOV(value);
@@ -1138,7 +1138,7 @@ function setupTweakpane() {
                 }
             },
             setHeroViewpoint: () => { app?.viewpointController?.setHeroViewpoint(); pane?.refresh?.(); updateCanvasAriaLabel(); },
-            applyMaterialPreset: (preset) => { applyMaterialPreset(preset); updateCanvasAriaLabel(); },
+            applyMaterialPreset: (preset) => { sceneComposition?.applyMaterialPreset(preset); updateCanvasAriaLabel(); },
             updateZSpacing,
             exportPNG: (scale) => exportManager?.exportPNG(scale),
             exportJSON: () => exportManager?.exportJSON(),
@@ -1146,7 +1146,7 @@ function setupTweakpane() {
             copyJSON: () => exportManager?.copyJSON(),
             pasteJSON: () => exportManager?.pasteJSON(),
             resetSettings: () => settingsManager.resetSettings(),
-            clearAll,
+            clearAll: () => sceneComposition?.clearAll(),
             undo: () => historyManager?.undo?.(),
             redo: () => historyManager?.redo?.(),
             showToast,
@@ -1207,27 +1207,6 @@ function updateZoom(zoomValue) {
 
     logCamera.info(`Zoom updated to ${zoomValue.toFixed(1)}x`);
     emitCameraUpdated('zoom');
-}
-
-/**
- * Update camera distance (delegates to CameraController)
- * @param {number} distance - Camera distance from target
- */
-function updateCameraDistance(distance) {
-    if (cameraController) {
-        cameraController.setDistance(distance);
-    }
-}
-
-/**
- * Update camera X/Y offset (delegates to CameraController)
- * @param {number} offsetX - X offset (positive = right in screen space)
- * @param {number} offsetY - Y offset (positive = up in screen space)
- */
-function updateCameraOffset(offsetX, offsetY) {
-    if (cameraController) {
-        cameraController.setOffset(offsetX, offsetY);
-    }
 }
 
 function syncRendererDimensions(size, pixelRatioOverride) {
@@ -1372,15 +1351,6 @@ function switchCameraMode(mode) {
 
     controls.update();
     emitCameraUpdated('mode-change');
-}
-
-/**
- * Update floor color and opacity from params.floorColor
- */
-function updateFloorColor() {
-    if (floorManager) {
-        floorManager.updateColor();
-    }
 }
 
 /**
@@ -1552,25 +1522,13 @@ function restoreSlideZPositions() {
  * if (window.vexyStax.getImageStack().length > 0) {
  *   window.vexyStax.clearAll();
  * }
- *
- * @example
- * // Clear and reload from JSON
- * window.vexyStax.clearAll();
- * // Then load new configuration
- * const fileInput = document.getElementById('json-input');
- * fileInput.click();
- */
-function clearAll() {
-    sceneComposition?.clearAll();
-}
-
 /**
  * Load example images for quick onboarding.
  * Creates 3 gradient placeholder images programmatically.
  */
 function loadExample() {
     // Clear existing images first
-    clearAll();
+    sceneComposition?.clearAll();
 
     // Create 3 example gradient images
     const colors = [
@@ -1609,10 +1567,6 @@ function loadExample() {
 
     showToast('Loaded 3 example layers', 'success');
     logImages.info('Example images loaded');
-}
-
-function applyMaterialPreset(preset) {
-    sceneComposition?.applyMaterialPreset(preset);
 }
 
 function loadImage(file) {
@@ -1655,12 +1609,6 @@ function loadImage(file) {
     };
 
     reader.readAsDataURL(file);
-}
-
-function updateImageList() {
-    if (app?.slidePanelController) {
-        app.slidePanelController.updateImageList();
-    }
 }
 
 // Global function for delete button
