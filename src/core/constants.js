@@ -471,8 +471,7 @@ export const VIEWPOINT_PRESETS = Object.freeze({
  * @private
  * @constant
  * @property {Object} canvasSize - Canvas dimensions (x:960, y:540)
- * @property {string} bgColor - Background color hex (#000000 = black)
- * @property {boolean} transparentBg - Transparent background toggle (false)
+ * @property {Object} bgColor - Background color RGBA {r, g, b, a} where r,g,b are 0-255 and a is 0-1
  * @property {boolean} ambience - Ambient mode toggle (false)
  * @property {string} cameraMode - Camera projection mode ('perspective')
  * @property {number} cameraFOV - Field of view in degrees (75)
@@ -493,9 +492,8 @@ export const VIEWPOINT_PRESETS = Object.freeze({
  */
 const PARAM_TEMPLATE = {
     canvasSize: { ...DEFAULT_CANVAS_SIZE },
-    bgColor: '#ffffff',
+    bgColor: { r: 255, g: 255, b: 255, a: 1 },
     floorColor: { r: 236, g: 236, b: 236, a: 0.05 },
-    transparentBg: false,
     ambience: false,
     cameraMode: 'perspective',
     cameraFOV: 75,
@@ -521,7 +519,7 @@ const PARAM_TEMPLATE = {
  * @description Returns a new object instance to prevent accidental mutation of defaults
  * @example
  * const params = createDefaultParams();
- * params.bgColor = '#ffffff'; // Safe - modifies copy, not template
+ * params.bgColor = { r: 255, g: 255, b: 255, a: 1 }; // Safe - modifies copy, not template
  */
 export function createDefaultParams() {
     return clonePlain(PARAM_TEMPLATE);

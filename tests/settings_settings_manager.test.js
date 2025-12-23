@@ -38,8 +38,7 @@ function defaultParams() {
         cameraMode: 'perspective',
         cameraFOV: 40,
         cameraZoom: 1,
-        bgColor: '#222222',
-        transparentBg: false,
+        bgColor: { r: 34, g: 34, b: 34, a: 1 },
         zSpacing: 120
     };
 }
@@ -96,8 +95,7 @@ function createManager(overrides = {}) {
             cameraMode: 'perspective',
             cameraFOV: 50,
             cameraZoom: 1,
-            bgColor: '#000000',
-            transparentBg: false,
+            bgColor: { r: 0, g: 0, b: 0, a: 1 },
             zSpacing: 100
         }
     });
@@ -120,8 +118,7 @@ test('createSettingsManager_loadSettings_when_snapshotValid_then_updatesParams',
         cameraMode: 'telephoto',
         cameraFOV: 25,
         cameraZoom: 1.5,
-        bgColor: '#abcdef',
-        transparentBg: true,
+        bgColor: { r: 171, g: 205, b: 239, a: 0 },
         zSpacing: 180
     };
 
@@ -213,8 +210,7 @@ test('createSettingsManager_resetSettings_when_called_then_restoresDefaultsAndUp
             cameraMode: 'perspective',
             cameraFOV: 50,
             cameraZoom: 1,
-            bgColor: '#000000',
-            transparentBg: false,
+            bgColor: { r: 0, g: 0, b: 0, a: 1 },
             zSpacing: 100
         },
         'params should revert to defaults'

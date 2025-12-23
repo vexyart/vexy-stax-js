@@ -160,8 +160,7 @@ const settingsManager = createSettingsManager({
         cameraMode: 'perspective',
         cameraFOV: DEFAULT_CAMERA_FOV,
         cameraZoom: 1.0,
-        bgColor: '#ffffff',
-        transparentBg: false,
+        bgColor: { r: 255, g: 255, b: 255, a: 1 },
         zSpacing: null,
         viewpointPreset: 'beauty'
     }
@@ -193,7 +192,6 @@ function emitBackgroundChanged(reason) {
     eventBus.emit(EVENTS.backgroundChanged, {
         reason,
         color: params.bgColor,
-        transparent: params.transparentBg,
         ambience: params.ambience
     });
 }
@@ -891,7 +889,6 @@ function exposeDebugAPI() {
                     cameraFOV: params.cameraFOV,
                     cameraZoom: params.cameraZoom,
                     bgColor: params.bgColor,
-                    transparentBg: params.transparentBg,
                     zSpacing: params.zSpacing
                 },
                 performance: {

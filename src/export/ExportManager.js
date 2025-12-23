@@ -395,7 +395,6 @@ export class ExportManager {
         if (includeExtendedParams) {
             config.params.cameraMode = this.params.cameraMode;
             config.params.cameraFOV = this.params.cameraFOV;
-            config.params.transparentBg = this.params.transparentBg;
         }
 
         this.imageStack.forEach((imageData) => {
@@ -442,22 +441,28 @@ export class ExportManager {
         this.clearAll();
 
         this.params.zSpacing = config.params.zSpacing;
-        this.params.bgColor = config.params.bgColor;
+
+        // Handle bgColor migration: convert old hex+transparentBg to new RGBA format
+        if (config.params.bgColor) {
+            if (typeof config.params.bgColor === 'string') {
+                // Old format: hex string + separate transparentBg flag
+                const hex = config.params.bgColor;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                const a = config.params.transparentBg ? 0 : 1;
+                this.params.bgColor = { r, g, b, a };
+            } else {
+                // New format: RGBA object
+                this.params.bgColor = config.params.bgColor;
+            }
+        }
+
         if (config.params.cameraMode) {
             this.params.cameraMode = config.params.cameraMode;
         }
         if (config.params.cameraFOV) {
             this.params.cameraFOV = config.params.cameraFOV;
-        }
-        if (config.params.transparentBg !== undefined) {
-            this.params.transparentBg = config.params.transparentBg;
-        }
-
-        if (this.scene) {
-            this.scene.background = new THREE.Color(this.params.transparentBg ? 0x000000 : this.params.bgColor);
-            if (this.params.transparentBg) {
-                this.scene.background = null;
-            }
         }
 
         this.updateBackground();

@@ -130,18 +130,30 @@ export class SceneDirector {
     }
 
     /**
-     * Update background color and emissive intensity
+     * Update background color with alpha transparency and emissive intensity.
+     * bgColor is now RGBA: {r, g, b, a} where r,g,b are 0-255 and a is 0-1.
      */
     updateBackground() {
+        const bgColor = this.params.bgColor;
+
         if (this.sceneManager) {
-            this.sceneManager.updateBackground(this.params.bgColor, this.params.transparentBg);
+            this.sceneManager.updateBackground(bgColor);
         } else if (this.renderer) {
-            if (this.params.transparentBg) {
+            // Normalize color components
+            const r = bgColor.r > 1 ? bgColor.r / 255 : bgColor.r;
+            const g = bgColor.g > 1 ? bgColor.g / 255 : bgColor.g;
+            const b = bgColor.b > 1 ? bgColor.b / 255 : bgColor.b;
+            const a = bgColor.a ?? 1;
+
+            if (a < 0.01) {
                 this.scene.background = null;
                 this.renderer.setClearColor(0x000000, 0);
+            } else if (a < 1) {
+                this.scene.background = null;
+                this.renderer.setClearColor(new THREE.Color(r, g, b), a);
             } else {
-                this.scene.background = new THREE.Color(this.params.bgColor);
-                this.renderer.setClearColor(this.params.bgColor, 1);
+                this.scene.background = new THREE.Color(r, g, b);
+                this.renderer.setClearColor(new THREE.Color(r, g, b), 1);
             }
         }
 
@@ -149,7 +161,7 @@ export class SceneDirector {
 
         // Update emissive intensity based on background luminance
         if (this.params.ambience) {
-            const bgLuminance = calculateLuminance(this.params.bgColor);
+            const bgLuminance = calculateLuminance(bgColor);
             const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
 
             this.imageStack.forEach((imageData) => {

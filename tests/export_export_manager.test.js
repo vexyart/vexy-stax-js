@@ -179,10 +179,9 @@ function createManagerHarness(overrides = {}) {
 
     const params = overrides.params ?? {
         zSpacing: 50,
-        bgColor: '#000000',
+        bgColor: { r: 0, g: 0, b: 0, a: 1 },
         cameraMode: 'perspective',
-        cameraFOV: 50,
-        transparentBg: false
+        cameraFOV: 50
     };
 
     const scene = overrides.scene ?? {
@@ -370,10 +369,9 @@ test('ExportManager_importJSON_when_validFile_then_appliesConfig', async () => {
         version: '1.0',
         params: {
             zSpacing: 120,
-            bgColor: '#123456',
+            bgColor: { r: 18, g: 52, b: 86, a: 0 },
             cameraMode: 'orthographic',
-            cameraFOV: 60,
-            transparentBg: true
+            cameraFOV: 60
         },
         camera: {
             position: { x: 5, y: 6, z: 7 }
@@ -398,7 +396,7 @@ test('ExportManager_importJSON_when_validFile_then_appliesConfig', async () => {
     assert.equal(ctx.wasCleared(), true, 'import should clear existing stack first');
     assert.equal(ctx.imageStack.length, 1, 'import should push loaded images into the stack');
     assert.equal(ctx.params.zSpacing, 120, 'import should carry over zSpacing');
-    assert.equal(ctx.params.bgColor, '#123456', 'import should carry over background colour');
+    assert.deepEqual(ctx.params.bgColor, { r: 18, g: 52, b: 86, a: 0 }, 'import should carry over background colour');
     assert.equal(ctx.camera.position.x, 5, 'camera position should update from config');
     assert.equal(ctx.getPaneRefreshCount(), 1, 'pane should refresh after import');
 });
@@ -426,7 +424,7 @@ test('ExportManager_pasteJSON_when_clipboardValid_then_appliesConfigAndAlertsSuc
         version: '1.0',
         params: {
             zSpacing: 90,
-            bgColor: '#654321',
+            bgColor: { r: 101, g: 67, b: 33, a: 1 },
             cameraMode: 'orthographic'
         },
         camera: {

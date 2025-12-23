@@ -162,8 +162,7 @@ function createDocument({ controlsElement = null } = {}) {
 function createSetupContext(overrides = {}) {
     const params = {
         canvasSize: { x: 960, y: 540 },
-        bgColor: '#111111',
-        transparentBg: false,
+        bgColor: { r: 17, g: 17, b: 17, a: 1 },
         ambience: false,
         cameraMode: 'perspective',
         cameraZoom: 1,

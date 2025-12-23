@@ -142,9 +142,9 @@ export class TweakpaneSetup {
             this.callbacks.saveSettings();
         });
 
+        // Background color with alpha (alpha=0 for transparent, alpha=1 for opaque)
         studioFolder.addBinding(this.params, 'bgColor', {
             label: 'Background',
-            view: 'color',
             picker: 'inline',
             expanded: false
         }).on('change', () => {
@@ -158,13 +158,6 @@ export class TweakpaneSetup {
             expanded: false
         }).on('change', () => {
             this.callbacks.updateFloorColor();
-            this.callbacks.saveSettings();
-        });
-
-        studioFolder.addBinding(this.params, 'transparentBg', {
-            label: 'Transparent'
-        }).on('change', () => {
-            this.callbacks.updateBackground();
             this.callbacks.saveSettings();
         });
 

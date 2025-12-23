@@ -80,7 +80,7 @@ export class SceneManager {
 
         // Create scene
         this.scene = new THREE.Scene();
-        this.scene.background = new THREE.Color(this.params.bgColor);
+        // Background will be set by updateBackground() after init
 
         // Create renderer with advanced photorealistic features
         this.renderer = new THREE.WebGLRenderer({
@@ -185,17 +185,28 @@ export class SceneManager {
     }
 
     /**
-     * Update scene background color
-     * @param {string} color - Hex color string
-     * @param {boolean} transparent - Whether background should be transparent
+     * Update scene background color with alpha transparency.
+     * @param {Object} bgColor - RGBA color object {r, g, b, a} where r,g,b are 0-255 and a is 0-1
      */
-    updateBackground(color, transparent) {
-        if (transparent) {
+    updateBackground(bgColor) {
+        // Normalize color components (handle both 0-255 and 0-1 ranges)
+        const r = bgColor.r > 1 ? bgColor.r / 255 : bgColor.r;
+        const g = bgColor.g > 1 ? bgColor.g / 255 : bgColor.g;
+        const b = bgColor.b > 1 ? bgColor.b / 255 : bgColor.b;
+        const a = bgColor.a ?? 1;
+
+        if (a < 0.01) {
+            // Fully transparent - no background
             this.scene.background = null;
-            this.renderer.setClearColor(0x000000, 0);  // Transparent
+            this.renderer.setClearColor(0x000000, 0);
+        } else if (a < 1) {
+            // Semi-transparent - use clear color with alpha
+            this.scene.background = null;
+            this.renderer.setClearColor(new THREE.Color(r, g, b), a);
         } else {
-            this.scene.background = new THREE.Color(color);
-            this.renderer.setClearColor(color, 1);  // Opaque
+            // Fully opaque
+            this.scene.background = new THREE.Color(r, g, b);
+            this.renderer.setClearColor(new THREE.Color(r, g, b), 1);
         }
     }
 
@@ -285,7 +296,10 @@ export class SceneManager {
             this.syncRendererDimensions(this.params.canvasSize, window.devicePixelRatio);
             this.renderer.shadowMap.enabled = true;
             this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-            this.renderer.setClearColor(this.params.bgColor, this.params.transparentBg ? 0 : 1);
+            // Restore background using RGBA format
+            if (this.params.bgColor) {
+                this.updateBackground(this.params.bgColor);
+            }
 
             // Trigger texture reloads via callback
             if (this.onContextRestoredCallback) {

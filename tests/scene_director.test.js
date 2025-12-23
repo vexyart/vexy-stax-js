@@ -12,8 +12,7 @@ describe('SceneDirector', () => {
         scene = new THREE.Scene();
         params = {
             ambience: 0,
-            bgColor: '#101010',
-            transparentBg: false
+            bgColor: { r: 16, g: 16, b: 16, a: 1 }
         };
     });
 
@@ -147,7 +146,7 @@ describe('SceneDirector', () => {
     });
 
     it('updateBackground should set null background when transparent', () => {
-        params.transparentBg = true;
+        params.bgColor = { r: 0, g: 0, b: 0, a: 0 };
         let clearColorAlpha = 1;
 
         director = new SceneDirector({

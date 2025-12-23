@@ -102,7 +102,7 @@ export class LightingManager {
             throw new Error('[LightingManager] Cannot setup: scene is required. Fix: pass a THREE.Scene instance as the first argument to the constructor.');
         }
         if (!this.params || !this.params.bgColor) {
-            throw new Error('[LightingManager] Cannot setup: params with bgColor is required. Fix: pass a params object with a bgColor property (hex string like "#000000").');
+            throw new Error('[LightingManager] Cannot setup: params with bgColor is required. Fix: pass a params object with a bgColor property (RGBA object like {r:255,g:255,b:255,a:1}).');
         }
 
         // Calculate adaptive ambient light intensity based on background

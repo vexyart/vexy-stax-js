@@ -15,21 +15,28 @@ import * as THREE from 'three';
 /**
  * Calculate relative luminance of a color (0-1 range)
  * Uses formula from WCAG 2.0
- * @param {string} hexColor - Hex color string (e.g. '#ffffff')
+ * @param {string|Object} color - Hex color string (e.g. '#ffffff') OR RGBA object {r, g, b, a}
  * @returns {number} Luminance value between 0 (black) and 1 (white)
- * @throws {TypeError} If hexColor is not a valid hex color string
+ * @throws {TypeError} If color is not a valid hex color string or RGBA object
  */
-export function calculateLuminance(hexColor) {
-    // Input validation
-    if (!isValidHexColor(hexColor)) {
-        throw new TypeError(`calculateLuminance: expected valid hex color, got "${hexColor}". Fix: pass a hex string such as "#ffffff".`);
-    }
+export function calculateLuminance(color) {
+    let r, g, b;
 
-    // Parse hex color to RGB
-    const color = new THREE.Color(hexColor);
-    const r = color.r;
-    const g = color.g;
-    const b = color.b;
+    // Handle RGBA object format
+    if (color && typeof color === 'object' && 'r' in color && 'g' in color && 'b' in color) {
+        // Normalize to 0-1 range (handle both 0-255 and 0-1 inputs)
+        r = color.r > 1 ? color.r / 255 : color.r;
+        g = color.g > 1 ? color.g / 255 : color.g;
+        b = color.b > 1 ? color.b / 255 : color.b;
+    } else if (isValidHexColor(color)) {
+        // Handle hex color string
+        const threeColor = new THREE.Color(color);
+        r = threeColor.r;
+        g = threeColor.g;
+        b = threeColor.b;
+    } else {
+        throw new TypeError(`calculateLuminance: expected valid hex color or RGBA object, got "${JSON.stringify(color)}". Fix: pass a hex string like "#ffffff" or RGBA object like {r:255,g:255,b:255,a:1}.`);
+    }
 
     // Apply gamma correction
     const rsRGB = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);

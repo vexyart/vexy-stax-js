@@ -36,8 +36,20 @@ export function createSettingsManager(options = {}) {
         if (settings.cameraMode !== undefined) params.cameraMode = settings.cameraMode;
         if (settings.cameraFOV !== undefined) params.cameraFOV = settings.cameraFOV;
         if (settings.cameraZoom !== undefined) params.cameraZoom = settings.cameraZoom;
-        if (settings.bgColor !== undefined) params.bgColor = settings.bgColor;
-        if (settings.transparentBg !== undefined) params.transparentBg = settings.transparentBg;
+        // Handle bgColor migration: old hex+transparentBg → new RGBA format
+        if (settings.bgColor !== undefined) {
+            if (typeof settings.bgColor === 'string') {
+                // Old format: convert hex string to RGBA
+                const hex = settings.bgColor;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                const a = settings.transparentBg ? 0 : 1;
+                params.bgColor = { r, g, b, a };
+            } else {
+                params.bgColor = settings.bgColor;
+            }
+        }
         if (settings.zSpacing !== undefined) params.zSpacing = settings.zSpacing;
     };
 
@@ -46,7 +58,6 @@ export function createSettingsManager(options = {}) {
         cameraFOV: params.cameraFOV,
         cameraZoom: params.cameraZoom,
         bgColor: params.bgColor,
-        transparentBg: params.transparentBg,
         zSpacing: params.zSpacing
     });
 
