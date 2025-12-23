@@ -308,7 +308,7 @@ function init() {
         return;
     }
 
-    loadSettings();
+    settingsManager.loadSettings();
     canvas = document.getElementById('canvas');
 
     // Accessibility: Canvas needs aria-label and tabindex for keyboard users
@@ -686,9 +686,6 @@ function init() {
         }
     });
 
-    // Wire up toolbar buttons
-    setupToolbarButtons();
-
     // Expose debug API (window.vexyStax)
     debugAPI = new DebugAPI({
         imageStack,
@@ -994,43 +991,6 @@ function setupDebouncedResize() {
 }
 
 /**
- * Setup toolbar button click handlers for Undo/Redo/Reset Camera/Help
- */
-function setupToolbarButtons() {
-    const btnUndo = document.getElementById('btn-undo');
-    const btnRedo = document.getElementById('btn-redo');
-    const btnResetCamera = document.getElementById('btn-reset-camera');
-    const btnHelp = document.getElementById('btn-help');
-
-    if (btnUndo) {
-        addTrackedEventListener(btnUndo, 'click', () => {
-            undo();
-        });
-    }
-
-    if (btnRedo) {
-        addTrackedEventListener(btnRedo, 'click', () => {
-            redo();
-        });
-    }
-
-    if (btnResetCamera) {
-        addTrackedEventListener(btnResetCamera, 'click', () => {
-            setViewpointFitToFrame();
-            showToast('Camera reset to fit', 'info');
-        });
-    }
-
-    if (btnHelp && keyboardShortcuts?.toggleHelp) {
-        addTrackedEventListener(btnHelp, 'click', () => {
-            keyboardShortcuts.toggleHelp();
-        });
-    }
-
-    logUI.info('Toolbar buttons initialized');
-}
-
-/**
  * Setup auto-save interval to persist settings every 30 seconds
  */
 let autoSaveIntervalId = null;
@@ -1041,7 +1001,7 @@ function setupAutoSave() {
     }
 
     autoSaveIntervalId = setInterval(() => {
-        saveSettings();
+        settingsManager.saveSettings();
         logUI.info('Settings auto-saved');
     }, AUTO_SAVE_INTERVAL);
 
@@ -1161,58 +1121,6 @@ function saveHistory() {
     logHistory.info(` Saved state (${index + 1}/${size})`);
 }
 
-function undo() {
-    if (!historyManager) {
-        logHistory.warn(' HistoryManager not initialised; cannot undo');
-        return;
-    }
-    historyManager.undo();
-}
-
-function redo() {
-    if (!historyManager) {
-        logHistory.warn(' HistoryManager not initialised; cannot redo');
-        return;
-    }
-    historyManager.redo();
-}
-
-/**
- * Load persisted studio settings from `localStorage` into `params`.
- *
- * @returns {boolean} `true` when a snapshot was applied successfully.
- *
- * @example
- * if (!loadSettings()) {
- *   console.info('First run – using defaults');
- * }
- */
-function loadSettings() {
-    return settingsManager.loadSettings();
-}
-
-/**
- * Persist current camera/background/z-spacing preferences to `localStorage`.
- * Handles quota errors by offering to clear stale data before retrying.
- */
-function saveSettings() {
-    settingsManager.saveSettings();
-}
-
-/**
- * Restore default studio settings, refresh UI, and clear persisted storage.
- *
- * @returns {void}
- *
- * @example
- * // Restore factory defaults
- * resetSettings();
- */
-function resetSettings() {
-    settingsManager.resetSettings();
-}
-
-
 function setupTweakpane() {
     tweakpaneSetup = new TweakpaneSetup({
         params,
@@ -1247,12 +1155,12 @@ function setupTweakpane() {
             importJSON,
             copyJSON,
             pasteJSON,
-            resetSettings,
+            resetSettings: () => settingsManager.resetSettings(),
             clearAll,
-            undo,
-            redo,
+            undo: () => historyManager?.undo?.(),
+            redo: () => historyManager?.redo?.(),
             showToast,
-            saveSettings,
+            saveSettings: () => settingsManager.saveSettings(),
             loadExample,
             // Hero Shot animation ambience transition
             onAmbienceChange: (value) => {
@@ -1837,113 +1745,6 @@ function updateImageList() {
     if (app?.slidePanelController) {
         app.slidePanelController.updateImageList();
     }
-}
-
-/**
- * Handle keyboard navigation within image list
- * @param {KeyboardEvent} e - Keyboard event
- */
-function handleImageListKeydown(e) {
-    const item = e.currentTarget;
-    const index = parseInt(item.dataset.index);
-    const listContainer = document.getElementById('image-list');
-    const items = Array.from(listContainer.children);
-
-    switch(e.key) {
-        case 'ArrowUp':
-            e.preventDefault();
-            // Focus previous item
-            if (index > 0) {
-                items[index - 1].focus();
-            }
-            break;
-
-        case 'ArrowDown':
-            e.preventDefault();
-            // Focus next item
-            if (index < items.length - 1) {
-                items[index + 1].focus();
-            }
-            break;
-
-        case 'Delete':
-        case 'Backspace':
-            e.preventDefault();
-            // Delete with confirmation
-            const imageData = imageStack[index];
-            if (confirm(`Delete "${imageData.filename}"?`)) {
-                deleteImage(index);
-                // Focus next or previous item if available
-                setTimeout(() => {
-                    const newItems = Array.from(listContainer.children);
-                    if (newItems.length > 0) {
-                        const focusIndex = Math.min(index, newItems.length - 1);
-                        newItems[focusIndex]?.focus();
-                    }
-                }, 100);
-            }
-            break;
-
-        case 'Enter':
-            e.preventDefault();
-            // Highlight/zoom to image in 3D view
-            const mesh = imageStack[index].mesh;
-            if (mesh) {
-                // Briefly highlight by changing material emissive
-                const originalEmissive = mesh.material.emissive.getHex();
-                mesh.material.emissive.setHex(0x44ff44);
-
-                // Restore after 500ms
-                setTimeout(() => {
-                    mesh.material.emissive.setHex(originalEmissive);
-                }, 500);
-
-                logKeyboard.info(`Highlighted image ${index + 1}: ${imageData.filename}`);
-                showToast(`✨ Image ${index + 1}: ${imageData.filename}`, 'info', 2000);
-            }
-            break;
-    }
-}
-
-let draggedElement = null;
-let draggedIndex = null;
-
-function handleDragStart(e) {
-    const item = e.currentTarget;
-    draggedElement = item;
-    draggedIndex = parseInt(item.dataset.index, 10);
-    item.classList.add('dragging');
-
-    if (e.dataTransfer) {
-        e.dataTransfer.effectAllowed = 'move';
-        e.dataTransfer.setData('text/plain', String(draggedIndex));
-    }
-}
-
-function handleDragOver(e) {
-    e.preventDefault();
-    if (e.dataTransfer) {
-        e.dataTransfer.dropEffect = 'move';
-    }
-    return false;
-}
-
-function handleDrop(e) {
-    e.preventDefault();
-
-    const dropIndex = parseInt(e.currentTarget.dataset.index, 10);
-
-    if (draggedIndex !== null && draggedIndex !== dropIndex) {
-        sceneComposition?.reorder(draggedIndex, dropIndex);
-    }
-
-    return false;
-}
-
-function handleDragEnd(e) {
-    e.currentTarget.classList.remove('dragging');
-    draggedElement = null;
-    draggedIndex = null;
 }
 
 // Global function for delete button

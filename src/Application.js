@@ -154,6 +154,7 @@ export class Application {
                 showToast: callbacks.showToast,
                 addTrackedEventListener: (el, evt, fn) => this.events.add(el, evt, fn)
             });
+            this.toolbarController.setup();
             this.container.register('toolbarController', this.toolbarController);
             console.log('[Application] ToolbarController wired');
         }

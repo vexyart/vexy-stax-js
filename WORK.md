@@ -2,41 +2,41 @@
 # Vexy Stax JS - Work Progress
 
 ## Status (2025-12-23)
-- **Tests**: 462 unit + 7 E2E pass
+- **Tests**: 504 unit + 7 E2E pass
 - **Build**: 1,212 kB
-- **Critical Bugs**: 4/4 FIXED
+- **main.js**: 2,049 → 1,850 lines (−199 lines)
 
-## Session Update (2025-12-23) - Hero→Beauty Fix
+## Session Update (2025-12-23) - Refactoring Phase B
 
-### Bug 4: Hero→Beauty State Restoration ✅
-**Problem**: E2E test "Hero→Beauty restores layer depth" failed. Slides stayed collapsed after switching from Hero to Beauty viewpoint.
+### Dead Code Removal
+Removed duplicate code in main.js that duplicated SlidePanelController functionality:
+- `handleImageListKeydown()` - keyboard navigation (61 lines)
+- `handleDragStart/Over/Drop/End()` - drag handlers (37 lines)
+- `draggedElement`/`draggedIndex` module variables
 
-**Root Causes**:
-1. `pane.refresh()` triggered cascading onChange callbacks causing multiple viewpoint calls
-2. `cameraController.setViewpointFitToFrame()` overwrote 'hero' preset to 'front'
+**Result**: −105 lines
 
-**Fixes Applied**:
-1. Added `_isChangingViewpoint` re-entry guard to all viewpoint methods
-2. Don't delegate to cameraController when `skipPresetChange=true`
+### ToolbarController Wiring
+- Added `setup()` call to Application.wireControllers()
+- Added DOM guard for Node.js test environment
+- Removed duplicate `setupToolbarButtons()` from main.js
 
-### Coordinate System Compliance (PLAN.md §1)
-Updated all slide positioning to use new formula:
-- **Final slide** (highest index) always at **Z=0** (immovable anchor)
-- **Other slides** at `z = -(slideCount - 1 - index) * effectiveSpacing`
-- **Hero mode** collapses to `z = -(slideCount - 1 - index) * MIN_LAYER_GAP`
+**Result**: −40 lines
 
-**Files Updated**:
-- `ViewpointController.#restoreHeroState()` - restore formula
-- `SceneComposition.#recalculateLayout()` - layout formula
-- `AmbienceManager.updateMaterials()` - temporary positioning
-- `ExportManager.#loadTextureWithRetry()` - JSON loading
-- `main.js updateZSpacing()` - z-spacing updates
-- `FloorManager` - floor Z position = `-stackDepth / 2`
+### Wrapper Function Elimination
+Inlined wrapper functions that just delegated to modules:
+- `undo()` → `historyManager?.undo?.()`
+- `redo()` → `historyManager?.redo?.()`
+- `loadSettings()` → `settingsManager.loadSettings()`
+- `saveSettings()` → `settingsManager.saveSettings()`
+- `resetSettings()` → `settingsManager.resetSettings()`
 
-**Tests Updated**:
-- `camera_viewpoint_controller.test.js`
-- `core_scene_composition.test.js`
-- `scene_ambience_manager.test.js`
+**Result**: −52 lines
+
+### Files Changed
+- `src/main.js` - Dead code removed, wrappers inlined
+- `src/Application.js` - Added toolbarController.setup() call
+- `src/ui/ToolbarController.js` - Added DOM guard for tests
 
 ---
 
@@ -54,18 +54,12 @@ Updated all slide positioning to use new formula:
 
 **Phase 3: ViewpointController (434 tests)**
 - `src/camera/ViewpointController.js` - Extracts all viewpoint functions
-  - setHeroViewpoint() with proper skipPresetChange option
-  - restoreSlideZPositions()
-  - setBeautyViewpoint()
-  - setViewpointFitToFrame() with skipRestore/skipPresetChange options
-  - centerViewOnContent()
 
 **Phase 4: UI Controllers (456 tests)**
 - `src/ui/SlidePanelController.js` - Slide thumbnail panel management
 - `src/ui/ToolbarController.js` - Toolbar button setup
 
 ### Next Steps
-1. Wire Application class to orchestrate all managers
-2. Replace inline code in main.js with controller calls
-3. Move remaining functions to appropriate controllers
-4. Reduce main.js to entry point only
+1. Continue wrapper elimination in main.js
+2. Extract export wrappers (exportPNG, exportJSON, etc.)
+3. Reduce main.js toward <500 lines

@@ -62,6 +62,13 @@ export class ToolbarController {
             return;
         }
 
+        // Guard for test environment (no DOM)
+        if (typeof document === 'undefined') {
+            this.initialized = true;
+            log.info('Toolbar setup skipped (no DOM)');
+            return;
+        }
+
         const btnUndo = document.getElementById('btn-undo');
         const btnRedo = document.getElementById('btn-redo');
         const btnResetCamera = document.getElementById('btn-reset-camera');
