@@ -68,7 +68,8 @@ export class TweakpaneSetup {
             showToast: callbacks.showToast ?? noop,
             saveSettings: callbacks.saveSettings ?? noop,
             playHeroShot: callbacks.playHeroShot ?? (async () => {}),
-            loadExample: callbacks.loadExample ?? noop
+            loadExample: callbacks.loadExample ?? noop,
+            onAmbienceChange: callbacks.onAmbienceChange ?? noop
         };
         this.cameraAnimator = dependencies.cameraAnimator ?? { playHeroShot: async () => {} };
         this.logUI = dependencies.logUI ?? { info: noop, error: noop };
@@ -426,7 +427,9 @@ export class TweakpaneSetup {
                     duration: this.params.animDuration,
                     easing: this.params.animEasing,
                     imageStack: this.imageStack,
-                    holdTime: this.params.animHold ?? 0.5
+                    holdTime: this.params.animHold ?? 0.5,
+                    startAmbience: this.params.ambience ?? 0,
+                    onAmbienceChange: this.callbacks.onAmbienceChange
                 });
                 this.callbacks.showToast('Animation complete', 'success');
             } catch (error) {

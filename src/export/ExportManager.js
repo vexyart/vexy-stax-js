@@ -489,13 +489,13 @@ export class ExportManager {
         };
 
         config.images.forEach((imageConfig, index) => {
-            this.#loadTextureWithRetry(imageConfig, index, 0, onImageLoaded);
+            this.#loadTextureWithRetry(imageConfig, index, totalImages, 0, onImageLoaded);
         });
 
         this.pane?.refresh?.();
     }
 
-    #loadTextureWithRetry(imageConfig, index, attempt, onComplete = () => {}) {
+    #loadTextureWithRetry(imageConfig, index, totalImages, attempt, onComplete = () => {}) {
         const loader = this.createTextureLoader();
         loader.load(
             imageConfig.dataURL,
@@ -524,7 +524,9 @@ export class ExportManager {
                 const mesh = new THREE.Mesh(geometry, material);
                 mesh.castShadow = true;
                 mesh.receiveShadow = true;
-                mesh.position.z = index * this.getEffectiveZSpacing();
+                // PLAN.md §1: Final slide at z=0, others at negative z
+                const offset = (totalImages - 1 - index) * this.getEffectiveZSpacing();
+                mesh.position.z = offset === 0 ? 0 : -offset;
 
                 const imageData = {
                     mesh,
@@ -550,7 +552,7 @@ export class ExportManager {
                     const delay = RETRY_DELAYS_MS[attempt];
                     this.logExport?.warn?.(`Failed to load ${imageConfig.filename} (attempt ${attempt + 1}/${MAX_LOAD_RETRIES + 1}). Retrying in ${delay}ms...`, error);
                     this.setTimeout?.(() => {
-                        this.#loadTextureWithRetry(imageConfig, index, attempt + 1, onComplete);
+                        this.#loadTextureWithRetry(imageConfig, index, totalImages, attempt + 1, onComplete);
                     }, delay);
                 } else {
                     this.logExport?.error?.(`Failed to load ${imageConfig.filename} after ${MAX_LOAD_RETRIES + 1} attempts:`, error);

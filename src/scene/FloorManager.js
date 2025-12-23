@@ -128,8 +128,8 @@ export class FloorManager {
         // Use provided Y position or default constant
         const yPosition = typeof initialY === 'number' && !isNaN(initialY) ? initialY : FLOOR_Y;
         this.floor.position.y = yPosition;
-        // Center floor Z position to cover stack from first to last slide
-        this.floor.position.z = stackDepth / 2;
+        // PLAN.md §1: Center floor Z position (slides span from -stackDepth to 0)
+        this.floor.position.z = -stackDepth / 2;
         this.floor.name = 'floor';
         // Enable shadows when ambience is on
         this.floor.receiveShadow = (this.params?.ambience ?? 0) > 0;
@@ -157,8 +157,8 @@ export class FloorManager {
         this.floor.geometry.dispose();
         this.floor.geometry = new THREE.PlaneGeometry(width, length);
 
-        // Center floor Z position to cover stack
-        this.floor.position.z = stackDepth / 2;
+        // PLAN.md §1: Center floor Z position (slides span from -stackDepth to 0)
+        this.floor.position.z = -stackDepth / 2;
 
         console.log(`[FloorManager] Floor resized: ${width.toFixed(0)}×${length.toFixed(0)}, z=${this.floor.position.z.toFixed(0)}`);
     }

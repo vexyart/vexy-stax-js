@@ -138,8 +138,9 @@ describe('AmbienceManager', () => {
         manager = new AmbienceManager(scene, imageStack, params);
         manager.updateMaterials(true);
 
-        assert.strictEqual(imageStack[0].mesh.position.z, 0);
-        assert.strictEqual(imageStack[1].mesh.position.z, params.zSpacing);
+        // PLAN.md §1: Final slide at z=0, first at -spacing
+        assert.strictEqual(imageStack[0].mesh.position.z, -params.zSpacing);
+        assert.strictEqual(imageStack[1].mesh.position.z, 0);
     });
 
     it('updateMaterials should call onMaterialsUpdated callback when provided', async () => {
@@ -235,8 +236,8 @@ describe('AmbienceManager', () => {
         manager = new AmbienceManager(scene, imageStack, params);
         manager.updateMaterials(true);
 
-        // Second slide should be at params.zSpacing
-        assert.strictEqual(imageStack[1].mesh.position.z, params.zSpacing);
+        // PLAN.md §1: Final slide at z=0
+        assert.strictEqual(imageStack[1].mesh.position.z, 0);
     });
 
     it('applyEmissiveIntensity should update materials with emissiveIntensity property', () => {

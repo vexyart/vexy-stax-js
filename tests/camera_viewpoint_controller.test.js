@@ -111,16 +111,18 @@ describe('ViewpointController', () => {
             { mesh: new THREE.Mesh(geometry, material) },
             { mesh: new THREE.Mesh(geometry, material) }
         ];
-        imageStack[0].mesh.position.set(0, 0, 0);
-        imageStack[1].mesh.position.set(0, 0, 100);
+        // PLAN.md §1: Final slide at z=0, first slide at negative z
+        imageStack[0].mesh.position.set(0, 0, -100);
+        imageStack[1].mesh.position.set(0, 0, 0);
 
         controller = createController({ imageStack });
         controller.setHeroViewpoint();
         controller.restoreSlideZPositions();
 
         assert.strictEqual(controller.isInHeroMode(), false);
-        assert.strictEqual(imageStack[0].mesh.position.z, 0);
-        assert.strictEqual(imageStack[1].mesh.position.z, 100);
+        // PLAN.md §1: 2 slides, spacing 100: slide[0] at -100, slide[1] at 0
+        assert.strictEqual(imageStack[0].mesh.position.z, -100);
+        assert.strictEqual(imageStack[1].mesh.position.z, 0);
     });
 
     it('restoreSlideZPositions should do nothing if not in hero mode', () => {

@@ -271,6 +271,14 @@ test('first slide triggers auto-defaults (SCENE.md §2)', async ({ page }) => {
 });
 
 test('Hero→Beauty restores layer depth (SCENE.md §5)', async ({ page }) => {
+  // Capture console logs
+  const consoleLogs = [];
+  page.on('console', msg => {
+    if (msg.text().includes('restoreSlideZPositions') || msg.text().includes('[ViewpointController]')) {
+      consoleLogs.push(msg.text());
+    }
+  });
+
   await page.goto('/');
   await page.waitForSelector('#canvas');
   await page.waitForFunction(() => typeof window.__vexyStaxAutomation !== 'undefined');
@@ -344,6 +352,14 @@ test('Hero→Beauty restores layer depth (SCENE.md §5)', async ({ page }) => {
   });
 
   const beautySpacing = Math.abs(beautyPositions[0] - beautyPositions[1]);
+  // Print debug logs
+  console.log('=== Debug Logs ===');
+  consoleLogs.forEach(log => console.log(log));
+  console.log('Initial positions:', initialPositions);
+  console.log('Hero positions:', heroPositions);
+  console.log('Beauty positions:', beautyPositions);
+  console.log('Initial spacing:', initialSpacing);
+  console.log('Beauty spacing:', beautySpacing);
   // Should be approximately back to initial spacing (tolerance of 10%)
   expect(beautySpacing).toBeGreaterThan(initialSpacing * 0.9);
 });

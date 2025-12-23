@@ -84,6 +84,14 @@ export class ViewpointController {
          * @type {Object|null}
          */
         this.savedHeroState = null;
+
+        /**
+         * Re-entry guard to prevent cascading viewpoint changes.
+         * Set to true while a viewpoint method is executing.
+         * @private
+         * @type {boolean}
+         */
+        this._isChangingViewpoint = false;
     }
 
     /**
@@ -127,9 +135,12 @@ export class ViewpointController {
         const state = this.savedHeroState;
 
         // Restore slide z-positions to user's setting
+        // PLAN.md §1: Final slide at z=0, others at negative z
         const effectiveSpacing = this.getEffectiveZSpacing();
+        const slideCount = this.imageStack.length;
         this.imageStack.forEach((imageData, index) => {
-            imageData.mesh.position.z = index * effectiveSpacing;
+            const offset = (slideCount - 1 - index) * effectiveSpacing;
+            imageData.mesh.position.z = offset === 0 ? 0 : -offset;
         });
 
         // Notify that Hero mode is exiting - callback can restore ambience/materials
@@ -168,48 +179,57 @@ export class ViewpointController {
      * When any other viewpoint is selected, state snaps back to user's settings.
      */
     setHeroViewpoint() {
-        this.params.viewpointPreset = 'hero';
+        // Re-entry guard: prevent cascading viewpoint changes from pane.refresh()
+        if (this._isChangingViewpoint) {
+            return;
+        }
+        this._isChangingViewpoint = true;
 
-        // Save current state before entering Hero mode (only if not already in Hero mode)
-        if (!this.savedHeroState) {
-            this.savedHeroState = this.#saveHeroState();
-            log.info('Hero state saved:', this.savedHeroState);
+        try {
+            this.params.viewpointPreset = 'hero';
 
-            // Notify that Hero mode is entering - callback can set ambience to 0
-            if (typeof this.onHeroModeEnter === 'function') {
-                this.onHeroModeEnter(this.savedHeroState);
+            // Save current state before entering Hero mode (only if not already in Hero mode)
+            if (!this.savedHeroState) {
+                this.savedHeroState = this.#saveHeroState();
+
+                // Notify that Hero mode is entering - callback can set ambience to 0
+                if (typeof this.onHeroModeEnter === 'function') {
+                    this.onHeroModeEnter(this.savedHeroState);
+                }
             }
+
+            // Reset X/Y offsets for Hero view
+            if (this.cameraController?.resetOffset) {
+                this.cameraController.resetOffset();
+            } else {
+                this.params.cameraOffsetX = 0;
+                this.params.cameraOffsetY = 0;
+            }
+
+            // Reset controls target to origin (front slide)
+            this.controls.target.set(0, 0, 0);
+
+            // Collapse slides with MIN_LAYER_GAP spacing
+            // Front slide (highest index) at z=0, back slides at negative z
+            const slideCount = this.imageStack.length;
+            this.imageStack.forEach((imageData, index) => {
+                const offset = (slideCount - 1 - index) * MIN_LAYER_GAP;
+                imageData.mesh.position.z = offset === 0 ? 0 : -offset;
+            });
+
+            // Calculate camera distance to fit front slide exactly
+            this.#calculateHeroDistance();
+
+            // Set camera to fit (skip restore to keep collapsed, skip preset change to stay 'hero')
+            this.setViewpointFitToFrame({ skipRestore: true, skipPresetChange: true });
+
+            // Note: Don't call pane.refresh() here - let TweakpaneSetup handle it
+            // to avoid cascading onChange callbacks
+
+            this.#emitChange('hero');
+        } finally {
+            this._isChangingViewpoint = false;
         }
-
-        // Reset X/Y offsets for Hero view
-        if (this.cameraController?.resetOffset) {
-            this.cameraController.resetOffset();
-        } else {
-            this.params.cameraOffsetX = 0;
-            this.params.cameraOffsetY = 0;
-        }
-
-        // Reset controls target to origin (front slide)
-        this.controls.target.set(0, 0, 0);
-
-        // Collapse slides with MIN_LAYER_GAP spacing
-        // Front slide (highest index) at z=0, back slides at negative z
-        const slideCount = this.imageStack.length;
-        this.imageStack.forEach((imageData, index) => {
-            const offset = (slideCount - 1 - index) * MIN_LAYER_GAP;
-            imageData.mesh.position.z = offset === 0 ? 0 : -offset;
-        });
-
-        // Calculate camera distance to fit front slide exactly
-        this.#calculateHeroDistance();
-
-        // Set camera to fit (skip restore to keep collapsed, skip preset change to stay 'hero')
-        this.setViewpointFitToFrame({ skipRestore: true, skipPresetChange: true });
-
-        this.pane?.refresh?.();
-        log.info('Hero view: slides collapsed, X/Y reset, distance fit to frame');
-
-        this.#emitChange('hero');
     }
 
     /**
@@ -224,7 +244,9 @@ export class ViewpointController {
             this.#restoreHeroState();
         }
 
-        if (this.cameraController?.setViewpointFitToFrame) {
+        // Only delegate to cameraController if NOT skipping preset change
+        // (cameraController.setViewpointFitToFrame sets viewpointPreset='front')
+        if (this.cameraController?.setViewpointFitToFrame && !options.skipPresetChange) {
             this.cameraController.setViewpointFitToFrame();
             return;
         }
@@ -246,23 +268,32 @@ export class ViewpointController {
      * Exits Hero mode and restores saved state.
      */
     setBeautyViewpoint() {
-        // Exit Hero mode and restore saved state
-        this.#restoreHeroState();
-
-        if (this.cameraController) {
-            this.cameraController.setBeautyViewpoint();
+        // Re-entry guard: prevent cascading viewpoint changes from pane.refresh()
+        if (this._isChangingViewpoint) {
             return;
         }
+        this._isChangingViewpoint = true;
 
-        this.params.viewpointPreset = 'beauty';
-        // Default beauty position (can be refined)
-        const pos = { x: -1280, y: -40, z: 1400 };
-        this.camera.position.set(pos.x, pos.y, pos.z);
-        this.controls.target.set(0, 0, 0);
-        this.controls.update();
+        try {
+            // Exit Hero mode and restore saved state
+            this.#restoreHeroState();
 
-        log.info('Beauty viewpoint set');
-        this.#emitChange('beauty');
+            if (this.cameraController) {
+                this.cameraController.setBeautyViewpoint();
+                return;
+            }
+
+            this.params.viewpointPreset = 'beauty';
+            // Default beauty position (can be refined)
+            const pos = { x: -1280, y: -40, z: 1400 };
+            this.camera.position.set(pos.x, pos.y, pos.z);
+            this.controls.target.set(0, 0, 0);
+            this.controls.update();
+
+            this.#emitChange('beauty');
+        } finally {
+            this._isChangingViewpoint = false;
+        }
     }
 
     /**
@@ -273,15 +304,24 @@ export class ViewpointController {
      * @param {number} z
      */
     setViewpoint(x, y, z) {
-        // Exit Hero mode and restore saved state
-        this.#restoreHeroState();
+        // Re-entry guard: prevent cascading viewpoint changes from pane.refresh()
+        if (this._isChangingViewpoint) {
+            return;
+        }
+        this._isChangingViewpoint = true;
 
-        this.params.viewpointPreset = 'custom';
-        this.camera.position.set(x, y, z);
-        this.controls.update();
+        try {
+            // Exit Hero mode and restore saved state
+            this.#restoreHeroState();
 
-        log.info(`Viewpoint set to (${x}, ${y}, ${z})`);
-        this.#emitChange('custom');
+            this.params.viewpointPreset = 'custom';
+            this.camera.position.set(x, y, z);
+            this.controls.update();
+
+            this.#emitChange('custom');
+        } finally {
+            this._isChangingViewpoint = false;
+        }
     }
 
     /**
@@ -289,27 +329,36 @@ export class ViewpointController {
      * Exits Hero mode and restores saved state.
      */
     centerViewOnContent() {
-        // Exit Hero mode and restore saved state
-        this.#restoreHeroState();
-
-        if (this.imageStack.length === 0) return;
-
-        // Calculate content bounds
-        const box = new THREE.Box3();
-        this.imageStack.forEach((imageData) => {
-            if (imageData.mesh) {
-                box.expandByObject(imageData.mesh);
-            }
-        });
-
-        if (!box.isEmpty()) {
-            const center = box.getCenter(new THREE.Vector3());
-            this.controls.target.copy(center);
-            this.controls.update();
-            log.info(`Centered on content at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)})`);
+        // Re-entry guard: prevent cascading viewpoint changes from pane.refresh()
+        if (this._isChangingViewpoint) {
+            return;
         }
+        this._isChangingViewpoint = true;
 
-        this.#emitChange('centered');
+        try {
+            // Exit Hero mode and restore saved state
+            this.#restoreHeroState();
+
+            if (this.imageStack.length === 0) return;
+
+            // Calculate content bounds
+            const box = new THREE.Box3();
+            this.imageStack.forEach((imageData) => {
+                if (imageData.mesh) {
+                    box.expandByObject(imageData.mesh);
+                }
+            });
+
+            if (!box.isEmpty()) {
+                const center = box.getCenter(new THREE.Vector3());
+                this.controls.target.copy(center);
+                this.controls.update();
+            }
+
+            this.#emitChange('centered');
+        } finally {
+            this._isChangingViewpoint = false;
+        }
     }
 
     /**
@@ -379,6 +428,7 @@ export class ViewpointController {
      */
     dispose() {
         this.savedHeroState = null;
+        this._isChangingViewpoint = false;
         this.cameraController = null;
         this.pane = null;
         log.info('Disposed');

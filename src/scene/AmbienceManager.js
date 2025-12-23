@@ -135,7 +135,10 @@ export class AmbienceManager {
             // NOTE: Y positioning is handled by SceneComposition.recalculateLayout()
             // which is triggered via onMaterialsUpdated callback.
             // Z positioning is temporary; will be recalculated by layout.
-            mesh.position.z = index * this.getEffectiveZSpacing();
+            // PLAN.md §1: Final slide at z=0, others at negative z
+            const slideCount = this.imageStack.length;
+            const offset = (slideCount - 1 - index) * this.getEffectiveZSpacing();
+            mesh.position.z = offset === 0 ? 0 : -offset;
 
             // Update image data reference
             imageData.mesh = mesh;

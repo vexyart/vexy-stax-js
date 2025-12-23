@@ -372,19 +372,23 @@ export class SceneComposition {
         const bottomY = -tallestHeight / 2;
 
         const zSpacing = this.getEffectiveZSpacing();
+        const slideCount = this.imageStack.length;
+        // PLAN.md §1: Final slide at z=0, others at negative z
         this.imageStack.forEach((imageData, index) => {
-            imageData.mesh.position.z = index * zSpacing;
+            const offset = (slideCount - 1 - index) * zSpacing;
+            imageData.mesh.position.z = offset === 0 ? 0 : -offset;
             // Bottom-align: bottom edge at bottomY, center at bottomY + height/2
             const height = imageData.mesh.geometry.parameters.height ?? imageData.height;
             imageData.mesh.position.y = bottomY + (height / 2);
         });
 
         // Calculate stack depth (Z-span from first to last slide)
-        const stackDepth = (this.imageStack.length - 1) * zSpacing;
+        // With new coordinate system: slides span from z=-stackDepth to z=0
+        const stackDepth = (slideCount - 1) * zSpacing;
 
         // SCENE.md: Floor is 3px below the bottom of all slides
         const floorY = bottomY - 3;
-        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, bottomY=${bottomY}, floorY=${floorY}, stackDepth=${stackDepth}`);
+        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, bottomY=${bottomY}, floorY=${floorY}, stackDepth=${stackDepth}, zRange=[${-stackDepth}, 0]`);
 
         // Notify floor manager to update position and size
         if (typeof this.onLayoutChanged === 'function') {

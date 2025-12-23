@@ -932,7 +932,21 @@ function exposeDebugAPI() {
                     duration,
                     easing,
                     imageStack,
-                    holdTime: config.holdTime
+                    holdTime: config.holdTime,
+                    startAmbience: params.ambience ?? 0,
+                    onAmbienceChange: (value) => {
+                        params.ambience = value;
+                        const enabled = value > 0;
+                        if (ambienceManager) {
+                            ambienceManager.updateMaterials(enabled);
+                            if (enabled) {
+                                ambienceManager.applyEmissiveIntensity(value * 0.25);
+                            }
+                        }
+                        if (floorManager) {
+                            floorManager.updateMaterial(enabled);
+                        }
+                    }
                 });
                 logAPI.info(' Animation complete');
             } catch (error) {
@@ -987,6 +1001,7 @@ function exposeDebugAPI() {
 
                     // Load images and wait for all to complete
                     const textureLoader = new THREE.TextureLoader();
+                    const totalImages = config.images.length;
                     const loadPromises = config.images.map((imageConfig, index) => {
                         return new Promise((resolveImage, rejectImage) => {
                             textureLoader.load(
@@ -1009,7 +1024,9 @@ function exposeDebugAPI() {
                                     const mesh = new THREE.Mesh(geometry, material);
                                     // Slides always sit ON floor (bottom edge at Y=0)
                                     mesh.position.y = FLOOR_Y + (imageConfig.height / 2);
-                                    mesh.position.z = index * params.zSpacing;
+                                    // PLAN.md §1: Final slide at z=0, others at negative z
+                                    const offset = (totalImages - 1 - index) * params.zSpacing;
+                                    mesh.position.z = offset === 0 ? 0 : -offset;
 
                                     // Store and add to scene
                                     imageStack.push({
@@ -1498,7 +1515,21 @@ function setupTweakpane() {
             redo,
             showToast,
             saveSettings,
-            loadExample
+            loadExample,
+            // Hero Shot animation ambience transition
+            onAmbienceChange: (value) => {
+                params.ambience = value;
+                const enabled = value > 0;
+                if (ambienceManager) {
+                    ambienceManager.updateMaterials(enabled);
+                    if (enabled) {
+                        ambienceManager.applyEmissiveIntensity(value * 0.25);
+                    }
+                }
+                if (floorManager) {
+                    floorManager.updateMaterial(enabled);
+                }
+            }
         },
         dependencies: {
             cameraAnimator,
@@ -1797,8 +1828,11 @@ function updateZSpacing(newSpacing) {
     const effectiveSpacing = newSpacing === null ? calculateAutoDistance() : newSpacing;
 
     // Update all existing images
+    // PLAN.md §1: Final slide at z=0, others at negative z
+    const slideCount = imageStack.length;
     imageStack.forEach((imageData, index) => {
-        imageData.mesh.position.z = index * effectiveSpacing;
+        const offset = (slideCount - 1 - index) * effectiveSpacing;
+        imageData.mesh.position.z = offset === 0 ? 0 : -offset;
     });
     logImages.info(`Z-spacing updated to ${effectiveSpacing}px${newSpacing === null ? ' (auto)' : ''}`);
 }
@@ -1885,19 +1919,32 @@ function getEffectiveZSpacing() {
  * Restore slide z-positions to their proper spacing based on params.zSpacing.
  * Called when switching away from Hero viewpoint, which collapses slides.
  * SCENE.md §5: Layer depth should restore when changing away from Hero.
- * Only restores if savedHeroZSpacing is set (meaning we actually were in Hero mode).
+ *
+ * PLAN.md §1: Final slide stays at Z=0, other slides at negative Z.
+ * Formula: z = -(slideCount - 1 - index) * effectiveSpacing
  */
 function restoreSlideZPositions() {
-    // Only restore if we have a saved spacing (meaning we were in Hero mode)
-    if (savedHeroZSpacing === null) {
+    // Check ViewpointController's state (primary) or legacy savedHeroZSpacing
+    const isInHeroMode = app?.viewpointController?.isInHeroMode?.() || savedHeroZSpacing !== null;
+    if (!isInHeroMode) {
         return;
     }
+
     const effectiveSpacing = getEffectiveZSpacing();
+    const slideCount = imageStack.length;
+
+    // PLAN.md §1: Final slide at Z=0, others at negative Z
     imageStack.forEach((imageData, index) => {
-        imageData.mesh.position.z = index * effectiveSpacing;
+        const offset = (slideCount - 1 - index) * effectiveSpacing;
+        imageData.mesh.position.z = offset === 0 ? 0 : -offset;
     });
     logCamera.info(`Slide z-positions restored to spacing ${effectiveSpacing}px (was in Hero mode)`);
-    savedHeroZSpacing = null; // Clear the saved spacing
+
+    // Clear both state systems
+    savedHeroZSpacing = null;
+    if (app?.viewpointController?.savedHeroState) {
+        app.viewpointController.savedHeroState = null;
+    }
 }
 
 /**
@@ -2015,7 +2062,21 @@ function setupPlaywrightBridge() {
                 duration: options.duration ?? params.animDuration,
                 easing: options.easing ?? params.animEasing,
                 imageStack,
-                holdTime: options.holdTime
+                holdTime: options.holdTime,
+                startAmbience: params.ambience ?? 0,
+                onAmbienceChange: (value) => {
+                    params.ambience = value;
+                    const enabled = value > 0;
+                    if (ambienceManager) {
+                        ambienceManager.updateMaterials(enabled);
+                        if (enabled) {
+                            ambienceManager.applyEmissiveIntensity(value * 0.25);
+                        }
+                    }
+                    if (floorManager) {
+                        floorManager.updateMaterial(enabled);
+                    }
+                }
             });
         }
     };

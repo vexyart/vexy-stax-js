@@ -112,11 +112,18 @@ export class CameraAnimator {
    * Play hero shot animation
    * Animates camera from current position to Front viewpoint
    *
+   * At culmination (hold phase), the scene matches Hero viewpoint:
+   * - Slides collapsed with MIN_LAYER_GAP spacing
+   * - Ambience at 0 (flat materials, no lighting effects)
+   * - Camera positioned to fit front slide
+   *
    * @param {Object} params - Animation parameters
    * @param {Object} params.topSlide - The top slide data object
    * @param {Object} params.canvasSize - Studio canvas size {x, y}
    * @param {number} params.duration - Tween duration in seconds (default: 1.5)
    * @param {string} params.easing - GSAP easing function (default: "power2.inOut")
+   * @param {number} params.startAmbience - Current ambience value (default: 0)
+   * @param {Function} params.onAmbienceChange - Callback when ambience changes (receives value 0-1)
    * @returns {Promise} Resolves when animation completes, rejects on error
    */
   async playHeroShot({
@@ -125,7 +132,9 @@ export class CameraAnimator {
     duration = 1.5,
     easing = 'power2.inOut',
     imageStack = [],
-    holdTime
+    holdTime,
+    startAmbience = 0,
+    onAmbienceChange
   }) {
     return new Promise((resolve, reject) => {
       if (this.isAnimating) {
@@ -219,6 +228,18 @@ export class CameraAnimator {
           }, '<');
         });
 
+        // Animate ambience to 0 (flat materials) during zoom-in
+        // This matches Hero viewpoint behavior (SCENE.md §5)
+        const ambienceProxy = { value: startAmbience };
+        if (typeof onAmbienceChange === 'function' && startAmbience > 0) {
+          timeline.to(ambienceProxy, {
+            value: 0,
+            duration,
+            ease: easing,
+            onUpdate: () => onAmbienceChange(ambienceProxy.value)
+          }, '<');
+        }
+
         timeline.to({}, { duration: resolvedHold });
 
         if (originalState) {
@@ -246,6 +267,16 @@ export class CameraAnimator {
             ease: easing
           }, '<');
         });
+
+        // Animate ambience back to original value during zoom-out
+        if (typeof onAmbienceChange === 'function' && startAmbience > 0) {
+          timeline.to(ambienceProxy, {
+            value: startAmbience,
+            duration,
+            ease: easing,
+            onUpdate: () => onAmbienceChange(ambienceProxy.value)
+          }, '<');
+        }
 
         timeline.eventCallback('onUpdate', () => {
           this.controls.update?.();

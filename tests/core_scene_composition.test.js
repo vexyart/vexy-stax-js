@@ -191,7 +191,9 @@ test('SceneComposition_deleteAt_when_givenValidIndex_then_removesEntryAndReflows
     assert.equal(ctx.imageStack.length, 2, 'deleteAt should reduce stack length by one');
     assert.equal(ctx.imageStack[0].filename, 'first.png', 'first item should remain');
     assert.equal(ctx.imageStack[1].filename, 'third.png', 'third item should shift into second position');
-    assert.equal(ctx.imageStack[1].mesh.position.z, ctx.params.zSpacing, 'remaining meshes should reflow Z positions');
+    // PLAN.md §1: 2 slides, final at z=0, first at -spacing
+    // slide[1] (final) at z=0
+    assert.equal(ctx.imageStack[1].mesh.position.z, 0, 'remaining meshes should reflow Z positions');
     assert.deepEqual(
         ctx.calls.emitStackUpdated.slice(-1),
         ['removed'],
@@ -212,9 +214,10 @@ test('SceneComposition_reorder_when_indicesDiffer_then_stackOrderUpdated', () =>
         ['B.png', 'C.png', 'A.png'],
         'reorder should move source index to destination and shift others'
     );
+    // PLAN.md §1: 3 slides, final (index 2) at z=0
     assert.equal(
         ctx.imageStack[2].mesh.position.z,
-        ctx.params.zSpacing * 2,
+        0,
         'mesh Z offsets should align with new indices'
     );
     assert.deepEqual(
@@ -660,9 +663,9 @@ test('SceneComposition_recalculateLayout_when_called_then_positionsAllSlidesCorr
     // Floor at -203
     assert.equal(lastFloorY, -203, 'floor should be 3px below tallest slide bottom');
 
-    // Verify Z positions
-    assert.equal(imageStack[0].mesh.position.z, 0, 'first slide should be at z=0');
-    assert.equal(imageStack[1].mesh.position.z, 100, 'second slide should be at z=zSpacing');
+    // PLAN.md §1: Verify Z positions - final slide at z=0, first at -spacing
+    assert.equal(imageStack[0].mesh.position.z, -100, 'first slide should be at z=-spacing');
+    assert.equal(imageStack[1].mesh.position.z, 0, 'final slide should be at z=0');
 
     // Verify Y positions (bottom-aligned)
     // Tallest (400) is centered at Y=0, so bottom at -200
