@@ -4,9 +4,23 @@
 ## Status (2025-12-23)
 - **Tests**: 504 unit + 7 E2E pass
 - **Build**: 1,212 kB
-- **main.js**: 2,049 → 1,716 lines (−333 lines)
+- **main.js**: 2,049 → 1,683 lines (−366 lines)
 
-## Session Update (2025-12-23) - Refactoring Phase C
+## Session Update (2025-12-23) - Refactoring Phase C Continued
+
+### Viewpoint Wrapper Elimination
+Inlined viewpoint wrapper functions in callbacks:
+- `setBeautyViewpoint()` → `app?.viewpointController?.setBeautyViewpoint()`
+- `setHeroViewpoint()` → `app?.viewpointController?.setHeroViewpoint()`
+- `setViewpointFitToFrame()` → `app?.viewpointController?.setViewpointFitToFrame()`
+
+Updated all call sites: TweakpaneSetup, AutomationBridge, SceneComposition callbacks, ToolbarController.
+
+**Result**: −33 lines (removed 3 wrapper functions)
+
+---
+
+## Previous Session (2025-12-23) - Refactoring Phase C
 
 ### Export Wrapper Elimination
 Inlined export wrapper functions in callbacks:

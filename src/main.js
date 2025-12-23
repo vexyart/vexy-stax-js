@@ -549,7 +549,8 @@ function init() {
         onFirstSlide: (slideCount) => {
             logInit.info(`First slide added (${slideCount} total) - applying initial defaults`);
             // Set viewpoint to beauty
-            setBeautyViewpoint();
+            app?.viewpointController?.setBeautyViewpoint();
+            emitCameraUpdated('viewpoint');
             // Set material to default (neutral)
             params.materialPreset = 'neutral';
             applyMaterialPreset(MATERIAL_PRESETS.neutral);
@@ -728,9 +729,9 @@ function init() {
         callbacks: {
             loadImage,
             setViewpoint,
-            setBeautyViewpoint,
-            setHeroViewpoint,
-            setViewpointFitToFrame,
+            setBeautyViewpoint: () => { app?.viewpointController?.setBeautyViewpoint(); emitCameraUpdated('viewpoint'); },
+            setHeroViewpoint: () => { app?.viewpointController?.setHeroViewpoint(); pane?.refresh?.(); },
+            setViewpointFitToFrame: () => { app?.viewpointController?.setViewpointFitToFrame(); emitCameraUpdated('viewpoint'); },
             centerViewOnContent
         }
     });
@@ -793,7 +794,7 @@ function init() {
             showToast,
             onUndo: () => historyManager?.undo?.(),
             onRedo: () => historyManager?.redo?.(),
-            onResetCamera: () => setViewpointFitToFrame(),
+            onResetCamera: () => { app?.viewpointController?.setViewpointFitToFrame(); emitCameraUpdated('viewpoint'); },
             onToggleHelp: () => keyboardShortcuts?.toggleHelp?.(),
             // Hero mode callbacks: Set ambience to 0 (flat) on enter, restore on exit
             onHeroModeEnter: (savedState) => {
@@ -1122,8 +1123,8 @@ function setupTweakpane() {
             toggleAmbience: (intensity) => app?.sceneDirector?.setAmbience(intensity),
             centerViewOnContent,
             setViewpoint: (...args) => { setViewpoint(...args); updateCanvasAriaLabel(); },
-            setBeautyViewpoint: () => { setBeautyViewpoint(); updateCanvasAriaLabel(); },
-            setViewpointFitToFrame: () => { setViewpointFitToFrame(); updateCanvasAriaLabel(); },
+            setBeautyViewpoint: () => { app?.viewpointController?.setBeautyViewpoint(); emitCameraUpdated('viewpoint'); updateCanvasAriaLabel(); },
+            setViewpointFitToFrame: () => { app?.viewpointController?.setViewpointFitToFrame(); emitCameraUpdated('viewpoint'); updateCanvasAriaLabel(); },
             switchCameraMode,
             updateZoom,
             updateCameraDistance,
@@ -1136,7 +1137,7 @@ function setupTweakpane() {
                     camera.updateProjectionMatrix();
                 }
             },
-            setHeroViewpoint: () => { setHeroViewpoint(); updateCanvasAriaLabel(); },
+            setHeroViewpoint: () => { app?.viewpointController?.setHeroViewpoint(); pane?.refresh?.(); updateCanvasAriaLabel(); },
             applyMaterialPreset: (preset) => { applyMaterialPreset(preset); updateCanvasAriaLabel(); },
             updateZSpacing,
             exportPNG: (scale) => exportManager?.exportPNG(scale),
@@ -1477,19 +1478,6 @@ function setViewpoint(x, y, z) {
 }
 
 /**
- * Set viewpoint to fit frontmost slide within studio frame.
- * Delegates to ViewpointController for coordinated camera updates.
- * @param {Object} [options] - Options for viewpoint setting
- * @param {boolean} [options.skipRestore=false] - Skip restoring z-positions (used by Hero mode)
- */
-function setViewpointFitToFrame(options = {}) {
-    if (app?.viewpointController) {
-        app.viewpointController.setViewpointFitToFrame(options);
-        emitCameraUpdated('viewpoint');
-    }
-}
-
-/**
  * Calculate automatic slide distance based on tallest slide height.
  * Formula: tallest_slide_height * 0.6
  * @returns {number} The calculated automatic distance
@@ -1544,27 +1532,6 @@ function restoreSlideZPositions() {
     savedHeroZSpacing = null;
     if (app?.viewpointController?.savedHeroState) {
         app.viewpointController.savedHeroState = null;
-    }
-}
-
-/**
- * Set viewpoint to Hero view - front view with slides collapsed.
- * Delegates to ViewpointController for coordinated camera updates.
- */
-function setHeroViewpoint() {
-    if (app?.viewpointController) {
-        app.viewpointController.setHeroViewpoint();
-        pane?.refresh?.();
-    }
-}
-
-/**
- * Set viewpoint to a dynamic three-quarter "beauty" angle.
- */
-function setBeautyViewpoint() {
-    if (app?.viewpointController) {
-        app.viewpointController.setBeautyViewpoint();
-        emitCameraUpdated('viewpoint');
     }
 }
 
