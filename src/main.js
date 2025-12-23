@@ -23,6 +23,7 @@ import { LightingManager, getAdaptiveEmissiveIntensity, calculateLuminance } fro
 import { FloorManager } from './scene/FloorManager.js';
 import { AmbienceManager } from './scene/AmbienceManager.js';
 import { Application } from './Application.js';
+import { DebugAPI } from './automation/DebugAPI.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
@@ -71,6 +72,7 @@ let cameraAnimator; // Camera animation system
 let cameraController; // Handles camera orchestration
 let app; // Application orchestrator (Phase 5 integration)
 let tweakpaneSetup; // Encapsulates Tweakpane wiring
+let debugAPI; // Debug console API (window.vexyStax)
 
 let renderLoop; // Render animation loop manager
 let sceneComposition; // Manages image stack meshes
@@ -614,6 +616,7 @@ function init() {
         updateImageList,
         emitStackUpdated,
         updateBackground,
+        updateFloorColor,
         pane,
         getActiveCamera: () => getActiveCamera(),
         getEffectiveZSpacing,
@@ -684,7 +687,36 @@ function init() {
     // Wire up toolbar buttons
     setupToolbarButtons();
 
-    exposeDebugAPI();
+    // Expose debug API (window.vexyStax)
+    debugAPI = new DebugAPI({
+        imageStack,
+        params,
+        scene,
+        camera,
+        controls,
+        managers: {
+            renderLoop: null, // Set after creation
+            cameraAnimator: null,
+            cameraController,
+            ambienceManager,
+            floorManager,
+            memoryMonitor: null,
+            historyManager
+        },
+        pane,
+        callbacks: {
+            exportPNG,
+            clearAll,
+            loadSettings,
+            saveSettings,
+            resetSettings,
+            undo,
+            redo,
+            toggleAmbience
+        }
+    });
+    debugAPI.expose();
+
     setupPlaywrightBridge();
     setupCleanup();
 
@@ -695,6 +727,13 @@ function init() {
         renderer.render(scene, activeCamera);
     });
     renderLoop.start();
+
+    // Update debugAPI with late-bound managers
+    if (debugAPI) {
+        debugAPI.setManager('renderLoop', renderLoop);
+        debugAPI.setManager('cameraAnimator', cameraAnimator);
+        debugAPI.setManager('memoryMonitor', memoryMonitor);
+    }
 
     // Auto-save settings every 30 seconds
     setupAutoSave();
@@ -802,332 +841,6 @@ function addTrackedEventListener(target, event, handler, options = {}) {
     target.addEventListener(event, handler, options);
     eventListeners.push({ target, event, handler, options });
     storeSharedRef(SHARED_STATE_KEYS.eventListeners, eventListeners);
-}
-
-/** 
- * Expose debug API to window for console access and automation
- */
-function exposeDebugAPI() {
-    window.vexyStax = {
-        // Export functions
-        exportPNG: (scale = 1) => {
-            logAPI.info(` Exporting PNG at ${scale}x`);
-            exportPNG(scale);
-        },
-
-        // Image management
-        clearAll: () => {
-            logAPI.info(' Clearing all images');
-            clearAll();
-        },
-
-        getImageStack: () => {
-            const stack = imageStack.map((img, index) => ({
-                index,
-                filename: img.filename,
-                width: img.texture.image.width,
-                height: img.texture.image.height,
-                position: { x: img.mesh.position.x, y: img.mesh.position.y, z: img.mesh.position.z }
-            }));
-            logAPI.info(' Image stack:', stack);
-            return stack;
-        },
-
-        // Settings management
-        loadSettings: () => {
-            logAPI.info(' Loading settings');
-            return loadSettings();
-        },
-
-        saveSettings: () => {
-            logAPI.info(' Saving settings');
-            saveSettings();
-        },
-
-        resetSettings: () => {
-            logAPI.info(' Resetting settings to defaults');
-            resetSettings();
-        },
-
-        // History management
-        undo: () => {
-            logAPI.info(' Undo');
-            undo();
-        },
-
-        redo: () => {
-            logAPI.info(' Redo');
-            redo();
-        },
-
-        // Performance monitoring
-        showFPS: (enabled) => {
-            logAPI.info(` FPS display: ${enabled ? 'enabled' : 'disabled'}`);
-            showFPSEnabled = Boolean(enabled);
-            if (memoryMonitor) {
-                memoryMonitor.invalidateOverlay();
-            }
-            if (renderLoop) {
-                renderLoop.showFPS(showFPSEnabled);
-            }
-        },
-
-        // Stats and info
-        getStats: () => {
-            const fpsStats = renderLoop ? renderLoop.getFPSStats() : { average: null };
-            const fps = fpsStats.average;
-                null;
-
-            const stats = {
-                imageCount: imageStack.length,
-                totalPixels: imageStack.reduce((sum, img) => {
-                    const tex = img.texture.image;
-                    return sum + (tex.width * tex.height);
-                }, 0),
-                estimatedMemoryMB: imageStack.reduce((sum, img) => {
-                    const tex = img.texture.image;
-                    // Rough estimate: 4 bytes per pixel (RGBA)
-                    return sum + (tex.width * tex.height * 4) / BYTES_PER_MB;
-                }, 0).toFixed(2),
-                cameraMode: params.cameraMode,
-                currentSettings: {
-                    cameraMode: params.cameraMode,
-                    cameraFOV: params.cameraFOV,
-                    cameraZoom: params.cameraZoom,
-                    bgColor: params.bgColor,
-                    zSpacing: params.zSpacing
-                },
-                performance: {
-                    fpsMonitorEnabled: showFPSEnabled,
-                    currentFPS: fps,
-                    historySize: `${historyIndex + 1}/${historyStack.length}`
-                }
-            };
-            logAPI.info(' Stats:', stats);
-            return stats;
-        },
-
-        // Animation
-        playAnimation: async (config = {}) => {
-            if (!cameraAnimator) {
-                logAPI.error(' Camera animator not initialized');
-                return;
-            }
-
-            if (imageStack.length === 0) {
-                logAPI.error(' No images loaded');
-                return;
-            }
-
-            const topSlide = imageStack[imageStack.length - 1];
-            if (!topSlide) {
-                logAPI.error(' No top slide found');
-                return;
-            }
-
-            const duration = config.duration || params.animDuration;
-            const easing = config.easing || params.animEasing;
-
-            logAPI.info(` Playing hero shot animation (duration: ${duration}s, easing: ${easing})`);
-
-            try {
-                await cameraAnimator.playHeroShot({
-                    topSlide,
-                    canvasSize: params.canvasSize,
-                    duration,
-                    easing,
-                    imageStack,
-                    holdTime: config.holdTime,
-                    startAmbience: params.ambience ?? 0,
-                    onAmbienceChange: (value) => {
-                        params.ambience = value;
-                        const enabled = value > 0;
-                        if (ambienceManager) {
-                            ambienceManager.updateMaterials(enabled);
-                            if (enabled) {
-                                ambienceManager.applyEmissiveIntensity(value * 0.25);
-                            }
-                        }
-                        if (floorManager) {
-                            floorManager.updateMaterial(enabled);
-                        }
-                    }
-                });
-                logAPI.info(' Animation complete');
-            } catch (error) {
-                logAPI.error(' Animation failed:', error);
-            }
-        },
-
-        cancelAnimation: () => {
-            if (!cameraAnimator) {
-                logAPI.error(' Camera animator not initialized');
-                return;
-            }
-
-            logAPI.info(' Cancelling animation');
-            cameraAnimator.cancel();
-        },
-
-        // JSON configuration
-        loadConfig: (config) => {
-            logAPI.info(' Loading configuration from object');
-
-            // Return promise that resolves when all images are loaded
-            return new Promise((resolve, reject) => {
-                try {
-                    // Validate config
-                    if (!config.version || !config.params || !config.images) {
-                        throw new Error('importJSON: invalid config format, missing version, params, or images');
-                    }
-
-                    // Clear existing
-                    clearAll();
-
-                    // Apply params
-                    params.zSpacing = config.params.zSpacing;
-                    params.bgColor = config.params.bgColor;
-                    if (config.params.cameraMode) params.cameraMode = config.params.cameraMode;
-                    if (config.params.cameraFOV) params.cameraFOV = config.params.cameraFOV;
-
-                    // Update scene background
-                    scene.background = new THREE.Color(params.bgColor);
-
-                    // Update camera
-                    if (config.camera && config.camera.position) {
-                        camera.position.set(
-                            config.camera.position.x,
-                            config.camera.position.y,
-                            config.camera.position.z
-                        );
-                        camera.lookAt(0, 0, 0);
-                        controls.update();
-                    }
-
-                    // Load images and wait for all to complete
-                    const textureLoader = new THREE.TextureLoader();
-                    const totalImages = config.images.length;
-                    const loadPromises = config.images.map((imageConfig, index) => {
-                        return new Promise((resolveImage, rejectImage) => {
-                            textureLoader.load(
-                                imageConfig.dataURL,
-                                (texture) => {
-                                    // Create geometry with saved dimensions
-                                    const geometry = new THREE.PlaneGeometry(
-                                        imageConfig.width,
-                                        imageConfig.height
-                                    );
-
-                                    // Create material
-                                    const material = new THREE.MeshBasicMaterial({
-                                        map: texture,
-                                        side: THREE.FrontSide,
-                                        transparent: true
-                                    });
-
-                                    // Create mesh
-                                    const mesh = new THREE.Mesh(geometry, material);
-                                    // Slides always sit ON floor (bottom edge at Y=0)
-                                    mesh.position.y = FLOOR_Y + (imageConfig.height / 2);
-                                    // PLAN.md §1: Final slide at z=0, others at negative z
-                                    const offset = (totalImages - 1 - index) * params.zSpacing;
-                                    mesh.position.z = offset === 0 ? 0 : -offset;
-
-                                    // Store and add to scene
-                                    imageStack.push({
-                                        mesh: mesh,
-                                        texture: texture,
-                                        filename: imageConfig.filename,
-                                        width: imageConfig.width,
-                                        height: imageConfig.height
-                                    });
-
-                                    scene.add(mesh);
-
-                                    logAPI.info(` Loaded ${imageConfig.filename} from config`);
-                                    resolveImage();
-                                },
-                                undefined,
-                                (error) => {
-                                    logAPI.error(` Failed to load ${imageConfig.filename}:`, error);
-                                    rejectImage(error);
-                                }
-                            );
-                        });
-                    });
-
-                    // Wait for all images to load
-                    Promise.all(loadPromises)
-                        .then(() => {
-                            // Apply ambience if enabled (positions slides on floor)
-                            if (params.ambience > 0) {
-                                toggleAmbience(params.ambience);
-                            }
-
-                            // Recenter camera on content now that images are loaded
-                            // This ensures camera looks at content center, not origin
-                            if (cameraController) {
-                                const center = cameraController.getContentCenter();
-                                camera.lookAt(center);
-                                controls.target.copy(center);
-                                controls.update();
-                            }
-
-                            // Refresh Tweakpane (if available - may be absent in headless mode)
-                            if (pane) pane.refresh();
-                            logAPI.info(' Configuration loaded successfully');
-                            resolve();
-                        })
-                        .catch((error) => {
-                            logAPI.error(' Failed to load one or more images:', error);
-                            reject(error);
-                        });
-
-                } catch (error) {
-                    logAPI.error(' Failed to load configuration:', error);
-                    reject(error);
-                }
-            });
-        },
-
-        // Help
-        help: () => {
-            console.log(`
-%cVexy Stax Debug API
-%c
-Available commands:
-  vexyStax.exportPNG(scale)  - Export PNG at 1x, 2x, 3x, or 4x resolution
-  vexyStax.clearAll()        - Remove all images
-  vexyStax.getImageStack()   - Get info about loaded images
-  vexyStax.undo()            - Undo last change
-  vexyStax.redo()            - Redo last undone change
-  vexyStax.showFPS(enabled)  - Toggle FPS counter (true/false)
-  vexyStax.loadSettings()    - Load settings from localStorage
-  vexyStax.saveSettings()    - Save current settings
-  vexyStax.resetSettings()   - Reset to default settings
-  vexyStax.getStats()        - Get memory and image statistics
-  vexyStax.loadConfig(config) - Load JSON configuration object
-  vexyStax.playAnimation(config) - Play hero shot animation (config: { duration, holdTime, easing })
-  vexyStax.cancelAnimation() - Cancel current animation
-  vexyStax.help()            - Show this help
-
-Example usage:
-  vexyStax.exportPNG(2)      // Export at 2x resolution
-  vexyStax.showFPS(true)     // Enable FPS counter
-  vexyStax.undo()            // Undo last action
-  vexyStax.getStats()        // Check current state
-  vexyStax.loadConfig(config) // Load config from JSON object
-  vexyStax.playAnimation({ duration: 2, holdTime: 1.5 }) // Custom animation
-  vexyStax.cancelAnimation() // Stop current animation
-            `,
-            'color: #00ff00; font-size: 16px; font-weight: bold',
-            'color: #ccc'
-            );
-        }
-    };
-
-    // Log available API on init
-    logDebugAPI.log('%c Type vexyStax.help() for available commands', 'color: #00ff00');
 }
 
 /**

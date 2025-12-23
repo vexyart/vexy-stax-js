@@ -1,20 +1,18 @@
-# <!-- this_file: README.md -->
 # Vexy Stax JS
 
 Browser-based 3D image stacking visualizer built with Three.js. Load images, position them in 3D space, apply materials, and export high-resolution renders.
 
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-235%20passing-success)](tests/)
+[![Tests](https://img.shields.io/badge/tests-462%20passing-success)](tests/)
 [![Demo](https://img.shields.io/badge/demo-live-success)](https://vexyart.github.io/vexy-stax-js/)
 
 ---
 
 ## Quick Start
 
-### Try Online
-**https://vexyart.github.io/vexy-stax-js/**
+**Online**: https://vexyart.github.io/vexy-stax-js/
 
-### Run Locally
+**Local**:
 ```bash
 npm install
 npm run dev          # http://localhost:5173
@@ -24,171 +22,123 @@ npm test             # run all tests
 
 ---
 
-## What It Does
-
-Creates **3D visualizations of image stacks** with Z-axis depth positioning:
-
-- **Interactive 3D viewer** for layered artwork/designs
-- **4 camera modes**: Perspective, Orthographic, Isometric, Telephoto
-- **10 material presets**: Matte, glossy, plastic, glass, metal, 3D box
-- **Export**: PNG (1x/2x/4x), JSON with embedded images
-- **File support**: PNG, JPG, GIF, WebP, SVG (drag-and-drop or browse)
-
-### Core Workflow
-```
-[Load Images] → [Position in 3D] → [Adjust Materials/Camera] → [Export PNG/JSON]
-```
-
----
-
 ## Features
 
-- **Image Management**: Drag-and-drop loading, thumbnail reordering, memory monitoring (warns at 500MB), file validation (50MB max)
-- **3D Controls**: Z-spacing (0-500px), camera zoom (0.1x-3.0x), 7 viewpoint presets, background color + transparency, material properties
-- **Developer**: Undo/Redo (10 states), keyboard shortcuts, console debug API, FPS monitor, WebGL recovery, settings persistence
+- **3D Image Stacking**: Position images along Z-axis with adjustable spacing
+- **Camera Modes**: Perspective, Orthographic, Isometric, Telephoto
+- **Viewpoints**: Beauty (3/4 angle), Hero (front), Top, Side, custom
+- **Materials**: Matte, Glossy, Neutral presets
+- **Export**: PNG (1x/2x/4x), JSON with embedded images
+- **Hero Shot**: Animated camera fly-through with slide collapse
+
+### Camera System
+
+- **Beauty View**: Fits entire floor in viewport from 3/4 angle
+- **Hero View**: Front-on view with slides collapsed to minimum spacing
+- **Dynamic near plane**: Prevents z-fighting at large camera distances
+- **5-slider control**: FOV, Tele, Z (distance), X/Y (pan)
+
+### Scene Composition
+
+- Final slide anchored at Z=0, others at negative Z
+- Tallest slide centered at Y=0, all slides bottom-aligned
+- Floor positioned 3px below tallest slide
+- Auto slide spacing: `tallest_height × 0.6`
 
 ---
 
-## Technology
+## Commands
 
-- **Three.js r181**: WebGL 3D rendering with PBR materials
-- **Tweakpane 4.0.5**: Parameter controls UI
-- **GSAP**: Camera animations
-- **Vite 7.2.0**: Dev server + bundler
-
-**Build**: ES modules, 1,143 kB bundle
-**Tests**: 235/235 passing, 96%+ coverage on core utilities
-**Browser Support**: Chrome 90+, Edge 90+, Firefox 88+, Safari 14+
-
----
-
-## Development
-
-### Commands
 ```bash
 npm run dev                   # Start dev server
 npm run build                 # Build for production
-npm run preview               # Preview production build
-npm test                      # Run all tests (unit + E2E)
-npm run test:unit             # Run unit tests only (235 tests)
+npm test                      # Run all tests (462 unit + 7 E2E)
+npm run test:unit             # Unit tests only
 npm run test:coverage         # Generate coverage reports
-npm run test:coverage:check   # Enforce 80% coverage thresholds
-npm run clean                 # Remove build artifacts
-npm run help                  # Show all commands
 ```
-
-### Project Structure
-```
-src/
-├── main.js              # Entry point (3,367 lines)
-├── core/                # Core utilities (AppState, EventBus, RenderLoop, constants)
-├── camera/              # Camera animation
-├── managers/            # Scene/Lighting/Floor managers
-├── utils/               # Helpers, logger
-└── styles/              # Global CSS
-
-tests/                   # 17 test suites, 235 tests (includes cross-module integration)
-docs/                    # Production build output
-```
-
-### Code Quality
-- **Tests**: Node.js test runner with c8 coverage
-- **Logging**: 99.3% migrated to structured logger (19 module loggers)
-- **Constants**: All 36 exported constants validated
-- **Documentation**: Complete JSDoc on core modules
-- **Package**: npm-ready with proper entry points
 
 ---
 
-## Integration with vexy-stax-py
+## Project Structure
 
-Python CLI tools for testing and validation:
-```bash
-pip install vexy-stax
-vexy-stax-create-test    # Generate test images
-vexy-stax-validate       # Validate exported PNGs
 ```
+src/
+├── main.js              # Entry point (refactoring in progress)
+├── Application.js       # Lifecycle orchestration
+├── core/                # AppState, EventBus, RenderLoop, constants
+├── camera/              # CameraController, ViewpointController, animation
+├── scene/               # SceneManager, FloorManager, AmbienceManager
+├── ui/                  # TweakpaneSetup, SlidePanelController
+├── export/              # ExportManager (PNG/JSON)
+├── files/               # FileHandler, TextureLoader
+└── utils/               # helpers, logger
 
-Workflow: Python creates test images → Web app visualizes → Python validates exports
+tests/                   # 462 unit tests + 7 E2E tests
+docs/                    # Production build output
+```
 
 ---
 
 ## API Reference
-
-All functions accessible via `window.vexyStax`:
 
 ```javascript
 // Export
 vexyStax.exportPNG(scale)        // 1x, 2x, or 4x
 vexyStax.clearAll()              // Remove all images
 
-// Image info
-vexyStax.getImageStack()         // Array of loaded images
-vexyStax.getStats()              // Memory, FPS, image count
+// Camera
+vexyStax.setViewpoint(preset)    // 'beauty', 'hero', 'front', etc.
 
 // Settings
-vexyStax.loadSettings()          // Load from localStorage
-vexyStax.saveSettings()          // Save to localStorage
-vexyStax.resetSettings()         // Reset to defaults
+vexyStax.loadSettings()
+vexyStax.saveSettings()
+vexyStax.resetSettings()
 
 // History
-vexyStax.undo()                  // Undo last change
-vexyStax.redo()                  // Redo last undone change
-
-// Performance
-vexyStax.showFPS(enabled)        // Toggle FPS counter
-vexyStax.help()                  // Show all commands
-```
-
-See [detailed API documentation](API.md) for complete reference.
-
----
-
-## Deployment
-
-### GitHub Pages (Automatic)
-Push a git tag starting with `v`:
-```bash
-git tag v0.2.0
-git push origin v0.2.0
-```
-
-GitHub Action automatically:
-1. Updates `package.json` version from tag
-2. Runs `npm ci` + `npm run build`
-3. Deploys `docs/` folder to GitHub Pages
-
-### Manual Deployment
-```bash
-npm run build
-# Copy docs/ contents to your web server
+vexyStax.undo()
+vexyStax.redo()
 ```
 
 ---
 
-## Documentation
+## JSON Scene Format
 
-- [CHANGELOG.md](CHANGELOG.md) - Release notes and change history
-- [TODO.md](TODO.md) - Current tasks and iteration progress
-- [PLAN.md](PLAN.md) - Strategic planning and roadmap
-- [WORK.md](WORK.md) - Detailed work history
+```json
+{
+  "version": "1.0",
+  "params": {
+    "zSpacing": 648,
+    "bgColor": "#ffffff"
+  },
+  "settings": {
+    "floorColor": "#ececec",
+    "floorOpacity": 0.05,
+    "material": "neutral",
+    "viewpoint": "beauty"
+  },
+  "camera": {
+    "position": { "x": -2299, "y": 1916, "z": 1327 }
+  },
+  "images": [
+    { "filename": "slide1.png", "dataURL": "data:image/png;base64,...", "width": 1920, "height": 1080 }
+  ]
+}
+```
+
+---
+
+## Technical Notes
+
+- **Three.js r181**: WebGL rendering with PBR materials
+- **GSAP**: Camera animations
+- **Tweakpane 4.0.5**: Parameter controls
+- **Build**: ES modules, ~1.2MB bundle
+- **Browser**: Chrome 90+, Edge 90+, Firefox 88+, Safari 14+
 
 ---
 
 ## License
 
-Apache License 2.0 - See [LICENSE](LICENSE) file
+Apache License 2.0
 
 Copyright 2025 Adam Twardoch / VexyArt
-
----
-
-## Author
-
-**Adam Twardoch**
-[adam+npm@twardoch.com](mailto:adam+npm@twardoch.com)
-[https://twardoch.github.io/](https://twardoch.github.io/)
-
----
-
-**Made with Three.js, tested to exhaustion, documented obsessively.**

@@ -261,49 +261,41 @@ test('CameraController_setViewpointFitToFrame_when_slidePresent_then_centresOnSl
     assert.deepEqual(ctx.emissions.slice(-1), ['viewpoint'], 'viewpoint change should emit');
 });
 
-test('CameraController_setBeautyViewpoint_when_stackPopulated_then_offsetsAlongBeautyDirection', () => {
+test('CameraController_setBeautyViewpoint_when_stackPopulated_then_fitsFloorInViewport', () => {
     const ctx = createContext();
     const first = createSlide({
         width: 300,
         height: 200,
-        position: new THREE.Vector3(-60, 40, 0)
+        position: new THREE.Vector3(0, 100, -100)  // Back slide at negative Z
     });
     const second = createSlide({
-        width: 180,
-        height: 320,
-        position: new THREE.Vector3(90, 120, 180)
+        width: 300,
+        height: 200,
+        position: new THREE.Vector3(0, 100, 0)  // Front slide at Z=0
     });
     ctx.imageStack.push(first, second);
+    ctx.params.zSpacing = 100;
 
     ctx.controller.setBeautyViewpoint();
 
-    const box = new THREE.Box3();
-    ctx.imageStack.forEach((entry) => box.expandByObject(entry.mesh));
-    const center = new THREE.Vector3();
-    box.getCenter(center);
+    // PLAN.md Beauty View: Camera targets floor center, not stack center
+    const stackDepth = (ctx.imageStack.length - 1) * ctx.params.zSpacing;
+    const floorCenterZ = -stackDepth / 2;
+    const expectedTarget = new THREE.Vector3(0, 0, floorCenterZ);
 
-    assert.ok(ctx.controls.target.equals(center), 'beauty view should centre controls on stack');
+    assert.ok(
+        ctx.controls.target.distanceTo(expectedTarget) < 1,
+        `beauty view should target floor center (0, 0, ${floorCenterZ})`
+    );
     assert.equal(ctx.params.viewpointPreset, 'beauty', 'params should track beauty preset');
 
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-    const radius = Math.max(sphere.radius, 1);
-
-    const fovRadians = ctx.params.cameraFOV * (Math.PI / 180);
-    const halfVerticalTan = Math.max(Math.tan(fovRadians / 2), EPSILON);
-    const horizontalFov = 2 * Math.atan(halfVerticalTan * ctx.camera.aspect);
-    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), EPSILON);
-
-    const distanceForHeight = radius / halfVerticalTan;
-    const distanceForWidth = radius / halfHorizontalTan;
-    const expectedDistance = Math.max(Math.max(distanceForHeight, distanceForWidth) * 1.35, CAMERA_MIN_DISTANCE * 2);
-    const actualDistance = ctx.camera.position.distanceTo(center);
-
-    assert.ok(Math.abs(actualDistance - expectedDistance) < 1e-3, 'beauty view should respect padded bounding-sphere distance');
-
-    const expectedDirection = new THREE.Vector3(-0.82, -0.18, 1).normalize();
-    const actualDirection = ctx.camera.position.clone().sub(center).normalize();
-    assert.ok(actualDirection.distanceTo(expectedDirection) < 1e-3, 'beauty view camera direction should match configured vector');
+    // Camera direction should be left, above, in front
+    const expectedDirection = new THREE.Vector3(-0.6, 0.5, 0.6).normalize();
+    const actualDirection = ctx.camera.position.clone().sub(ctx.controls.target).normalize();
+    assert.ok(
+        actualDirection.distanceTo(expectedDirection) < 0.1,
+        'beauty view camera direction should point left, above, in front'
+    );
     assert.ok(ctx.controls.updateCalls > 0, 'controls should update during beauty viewpoint computation');
     assert.deepEqual(ctx.emissions.slice(-1), ['viewpoint'], 'beauty viewpoint should emit change');
 });

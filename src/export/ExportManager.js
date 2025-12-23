@@ -69,6 +69,7 @@ export class ExportManager {
      * @param {() => Date} [options.now]
      * @param {() => number} [options.getEffectiveZSpacing]
      * @param {() => void} [options.onImportComplete] - Called after all images loaded from JSON import
+     * @param {() => void} [options.updateFloorColor] - Called after floor color/opacity changes
      */
     constructor(options) {
         this.renderer = options.renderer;
@@ -88,6 +89,7 @@ export class ExportManager {
         this.getActiveCamera = options.getActiveCamera ?? (() => this.camera);
         this.getEffectiveZSpacing = options.getEffectiveZSpacing ?? (() => this.params.zSpacing ?? 100);
         this.onImportComplete = options.onImportComplete ?? (() => {});
+        this.updateFloorColor = options.updateFloorColor ?? (() => {});
 
         this.document = options.document ?? globalThis.document;
         this.window = options.window ?? globalThis;
@@ -463,6 +465,39 @@ export class ExportManager {
         }
         if (config.params.cameraFOV) {
             this.params.cameraFOV = config.params.cameraFOV;
+        }
+
+        // Load settings block (floorColor, floorOpacity, material, viewpoint, ambience)
+        if (config.settings) {
+            // Floor color: hex string "#ff0000" → RGBA object
+            if (config.settings.floorColor) {
+                const hex = config.settings.floorColor;
+                const r = parseInt(hex.slice(1, 3), 16);
+                const g = parseInt(hex.slice(3, 5), 16);
+                const b = parseInt(hex.slice(5, 7), 16);
+                const a = config.settings.floorOpacity ?? 0.05;
+                this.params.floorColor = { r, g, b, a };
+            } else if (typeof config.settings.floorOpacity === 'number') {
+                // Just opacity change, keep existing color
+                if (this.params.floorColor) {
+                    this.params.floorColor.a = config.settings.floorOpacity;
+                }
+            }
+
+            if (config.settings.material) {
+                this.params.materialPreset = config.settings.material;
+            }
+            if (config.settings.viewpoint) {
+                this.params.viewpointPreset = config.settings.viewpoint;
+            }
+            if (typeof config.settings.ambientMode === 'boolean') {
+                this.params.ambience = config.settings.ambientMode ? 1 : 0;
+            }
+
+            // Update floor if color/opacity changed
+            if (config.settings.floorColor || typeof config.settings.floorOpacity === 'number') {
+                this.updateFloorColor();
+            }
         }
 
         this.updateBackground();

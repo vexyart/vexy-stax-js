@@ -12,8 +12,9 @@ import {
 const TELEPHOTO_FOV = 30;
 const ISOMETRIC_POSITION = new THREE.Vector3(500, 500, 500);
 const FRONT_VIEW_PADDING = 1.1;
-const BEAUTY_VIEW_PADDING = 1.35;
-const BEAUTY_CAMERA_DIRECTION = new THREE.Vector3(-0.82, -0.18, 1).normalize();
+const BEAUTY_FILL = 0.85; // 15% margin around floor for cinematic framing
+// Camera direction: left, above, in front (looking down at floor)
+const BEAUTY_CAMERA_DIRECTION = new THREE.Vector3(-0.6, 0.5, 0.6).normalize();
 
 function noop() {}
 
@@ -209,14 +210,22 @@ export class CameraController {
 
         const position = new THREE.Vector3(x, y, z);
         const target = this.getContentCenter();
+        const distance = position.distanceTo(target);
 
         this.camera.position.copy(position);
         this.camera.lookAt(target);
         this.orthoCamera.position.copy(position);
         this.orthoCamera.lookAt(target);
         this.controls.target.copy(target);
+
+        // Dynamic near plane to prevent z-fighting at large distances
+        const dynamicNear = Math.max(1, distance * 0.005);
+        this.camera.near = dynamicNear;
+        this.camera.updateProjectionMatrix();
+
         this.controls.update?.();
-        this.logCamera?.info?.(`Viewpoint set to (${x}, ${y}, ${z}), target (${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)})`);
+        this.params.cameraDistance = distance;
+        this.logCamera?.info?.(`Viewpoint set to (${x}, ${y}, ${z}), target (${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}), near=${dynamicNear.toFixed(1)}`);
         this.emitCameraUpdated('viewpoint');
     }
 
@@ -275,17 +284,25 @@ export class CameraController {
         this.camera.position.copy(position);
         this.camera.lookAt(center);
         this.controls.target.copy(center);
+
+        // Dynamic near plane to prevent z-fighting at large distances
+        const dynamicNear = Math.max(1, distance * 0.005);
+        this.camera.near = dynamicNear;
+        this.camera.updateProjectionMatrix();
+
         this.controls.update?.();
         this.params.viewpointPreset = 'front';
+        this.params.cameraDistance = distance;
         this.logCamera?.info?.(
             `Front view centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
-            + `with distance ${distance.toFixed(1)} (width ${width.toFixed(1)}, height ${height.toFixed(1)}, aspect ${aspect.toFixed(2)})`
+            + `with distance ${distance.toFixed(1)} (width ${width.toFixed(1)}, height ${height.toFixed(1)}, near=${dynamicNear.toFixed(1)})`
         );
         this.emitCameraUpdated('viewpoint');
     }
 
     /**
-     * Position the camera at a three-quarter "beauty" angle while keeping the stack centred.
+     * Position the camera at a three-quarter "beauty" angle to fit the entire floor.
+     * PLAN.md Beauty View: Camera must fit the entire FLOOR within the viewport.
      */
     setBeautyViewpoint() {
         // Reset offsets when setting a new viewpoint
@@ -297,6 +314,7 @@ export class CameraController {
             return;
         }
 
+        // Get content dimensions from bounding box
         const box = new THREE.Box3();
         this.imageStack.forEach((entry) => {
             if (entry?.mesh) {
@@ -310,45 +328,60 @@ export class CameraController {
             return;
         }
 
-        const center = box.getCenter(new THREE.Vector3());
-        const sphere = new THREE.Sphere();
-        box.getBoundingSphere(sphere);
+        const size = box.getSize(new THREE.Vector3());
+        const maxWidth = size.x || 1;
 
-        const radius = Math.max(sphere.radius, 1);
+        // Calculate stack depth from slide positions
+        // PLAN.md §1: Final slide at Z=0, others at negative Z
+        const zSpacing = this.params.zSpacing ?? 100;
+        const stackDepth = (this.imageStack.length - 1) * zSpacing;
+
+        // Floor geometry (PLAN.md Floor Sizing Rules)
+        const floorWidth = maxWidth + 0.4 * zSpacing;
+        const floorLength = stackDepth + 0.4 * zSpacing;
+
+        // Floor center at Y=0 (floor plane), Z = center of stack depth
+        const floorCenterZ = -stackDepth / 2;
+        const target = new THREE.Vector3(0, 0, floorCenterZ);
+
+        // Camera distance to fit floor diagonal in FOV
+        const floorDiagonal = Math.sqrt(floorWidth * floorWidth + floorLength * floorLength);
         const fovRadians = (this.params.cameraFOV ?? 60) * (Math.PI / 180);
-        const aspect = this.camera.aspect || (
-            (this.params.canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x) /
-            (this.params.canvasSize?.y ?? DEFAULT_CANVAS_SIZE.y)
-        );
+        const halfTan = Math.max(Math.tan(fovRadians / 2), 1e-6);
 
-        const halfVerticalTan = Math.max(Math.tan(fovRadians / 2), 1e-6);
-        const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
-        const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
+        // Distance to fit floor with margin
+        const fitDistance = (floorDiagonal / 2) / halfTan * (1.0 / BEAUTY_FILL);
+        const distance = Math.max(fitDistance, CAMERA_MIN_DISTANCE * 2);
 
-        const distanceForHeight = radius / halfVerticalTan;
-        const distanceForWidth = radius / halfHorizontalTan;
-        const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
-        const distance = Math.max(desiredDistance * BEAUTY_VIEW_PADDING, CAMERA_MIN_DISTANCE * 2);
-
+        // Camera position = floor_center + direction * distance
         const offset = BEAUTY_CAMERA_DIRECTION.clone().multiplyScalar(distance);
-        const position = center.clone().add(offset);
+        const position = target.clone().add(offset);
 
         this.camera.position.copy(position);
-        this.camera.lookAt(center);
+        this.camera.lookAt(target);
         this.orthoCamera.position.copy(position);
-        this.orthoCamera.lookAt(center);
-        this.controls.target.copy(center);
+        this.orthoCamera.lookAt(target);
+        this.controls.target.copy(target);
+
+        // Dynamic near plane to prevent z-fighting at large distances
+        const dynamicNear = Math.max(1, distance * 0.005);
+        this.camera.near = dynamicNear;
+        this.camera.updateProjectionMatrix();
+
         this.controls.update?.();
         this.params.viewpointPreset = 'beauty';
+        this.params.cameraDistance = distance;
         this.logCamera?.info?.(
-            `Beauty view centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
-            + `radius ${radius.toFixed(1)} using distance ${distance.toFixed(1)}`
+            `Beauty view: floor ${floorWidth.toFixed(0)}x${floorLength.toFixed(0)}, `
+            + `target (${target.x.toFixed(1)}, ${target.y.toFixed(1)}, ${target.z.toFixed(1)}), `
+            + `distance ${distance.toFixed(1)}, near=${dynamicNear.toFixed(1)}`
         );
         this.emitCameraUpdated('viewpoint');
     }
 
     /**
      * Update camera distance from target along look vector.
+     * Dynamically adjusts near clipping plane to prevent depth buffer precision issues.
      * @param {number} distance - Distance from camera to target
      */
     setDistance(distance) {
@@ -360,8 +393,17 @@ export class CameraController {
             .normalize();
 
         activeCamera.position.copy(target).add(direction.multiplyScalar(distance));
+
+        // Dynamic near plane: prevents z-fighting at large distances
+        // Near plane scales with distance (minimum 1, ~0.5% of distance)
+        if (activeCamera.isPerspectiveCamera) {
+            const dynamicNear = Math.max(1, distance * 0.005);
+            activeCamera.near = dynamicNear;
+            activeCamera.updateProjectionMatrix();
+        }
+
         this.controls.update?.();
-        this.logCamera?.info?.(`Camera distance updated to ${distance.toFixed(0)}`);
+        this.logCamera?.info?.(`Camera distance updated to ${distance.toFixed(0)}, near=${activeCamera.near?.toFixed(1) ?? 'N/A'}`);
         this.emitCameraUpdated('distance');
     }
 
