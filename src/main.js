@@ -89,6 +89,9 @@ let imageStack = [];
 // Event listener tracking for proper cleanup
 let eventListeners = [];
 
+// Cleanup callbacks for resource disposal
+let cleanupCallbacks = [];
+
 // History management for undo/redo
 let historyStack = [];
 let historyIndex = -1;
@@ -1184,6 +1187,16 @@ function setupCleanup() {
                 keyboardShortcuts.teardown?.();
                 keyboardShortcuts = null;
             }
+
+            // Execute registered cleanup callbacks
+            cleanupCallbacks.forEach(callback => {
+                try {
+                    callback();
+                } catch (e) {
+                    logCleanup.error('Cleanup callback error:', e);
+                }
+            });
+            cleanupCallbacks = [];
 
             // Remove all tracked event listeners
             eventListeners.forEach(({ target, event, handler, options }) => {
