@@ -311,6 +311,10 @@ export class TweakpaneSetup {
             this.callbacks.saveSettings();
         });
 
+        // Ensure zSpacing is numeric for Tweakpane binding (null = auto = show as 0)
+        if (this.params.zSpacing === null || this.params.zSpacing === undefined) {
+            this.params.zSpacing = 0;
+        }
         slidesFolder.addBinding(this.params, 'zSpacing', {
             label: 'Slide Space',
             min: 0,
