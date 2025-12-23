@@ -80,20 +80,23 @@ export class FloorManager {
 
     /**
      * Calculate floor dimensions based on slide layout.
+     * PLAN.md §2: Floor width = widest slide + 0.4 * slide_space
      * @param {number} stackDepth - Z-axis span from first to last slide
      * @param {number} zSpacing - Current slide spacing value
+     * @param {number} [widestSlideWidth] - Width of the widest slide (optional, falls back to canvas width)
      * @returns {{width: number, length: number}} Floor width (X) and length (Z)
      */
-    #calculateFloorDimensions(stackDepth, zSpacing) {
+    #calculateFloorDimensions(stackDepth, zSpacing, widestSlideWidth) {
         const studioWidth = this.params?.canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x;
         const effectiveSpacing = zSpacing ?? 0;
 
-        // Floor width (X direction) = STUDIO_WIDTH + zSpacing * 0.4
-        const floorWidth = studioWidth + effectiveSpacing * 0.4;
+        // PLAN.md §2: Floor width = widest slide + 0.4 * slide_space
+        const baseWidth = widestSlideWidth && widestSlideWidth > 0 ? widestSlideWidth : studioWidth;
+        const floorWidth = baseWidth + effectiveSpacing * 0.4;
 
         // Floor length (Z direction) = stack depth + zSpacing * 0.2 padding on each end
         const padding = effectiveSpacing * 0.2;
-        const floorLength = Math.max(stackDepth + padding * 2, studioWidth); // At least as wide as studio
+        const floorLength = Math.max(stackDepth + padding * 2, baseWidth); // At least as wide as base
 
         return { width: floorWidth, length: floorLength };
     }
@@ -144,14 +147,15 @@ export class FloorManager {
      * Called when slides are added/removed or zSpacing changes.
      * @param {number} stackDepth - Z-axis span from first to last slide
      * @param {number} zSpacing - Current slide spacing value
+     * @param {number} [widestSlideWidth] - Width of the widest slide (optional)
      */
-    resize(stackDepth, zSpacing) {
+    resize(stackDepth, zSpacing, widestSlideWidth) {
         if (!this.floor) {
             console.warn('[FloorManager] Cannot resize: floor not created');
             return;
         }
 
-        const { width, length } = this.#calculateFloorDimensions(stackDepth, zSpacing);
+        const { width, length } = this.#calculateFloorDimensions(stackDepth, zSpacing, widestSlideWidth);
 
         // Dispose old geometry and create new one
         this.floor.geometry.dispose();

@@ -226,8 +226,8 @@ export class TweakpaneSetup {
         // FOV slider (field of view in degrees)
         cameraFolder.addBinding(this.params, 'cameraFOV', {
             label: 'FOV',
-            min: 30,
-            max: 120,
+            min: 5,
+            max: 360,
             step: 1
         }).on('change', (ev) => {
             this.callbacks.setCameraFOV(ev.value);
@@ -238,7 +238,7 @@ export class TweakpaneSetup {
         cameraFolder.addBinding(this.params, 'cameraZoom', {
             label: 'Tele',
             min: 0.1,
-            max: 3.0,
+            max: 6.0,
             step: 0.1
         }).on('change', (ev) => {
             this.callbacks.updateZoom(ev.value);
@@ -429,7 +429,8 @@ export class TweakpaneSetup {
                     imageStack: this.imageStack,
                     holdTime: this.params.animHold ?? 0.5,
                     startAmbience: this.params.ambience ?? 0,
-                    onAmbienceChange: this.callbacks.onAmbienceChange
+                    onAmbienceChange: this.callbacks.onAmbienceChange,
+                    params: this.params // Pass params for camera offset reset
                 });
                 this.callbacks.showToast('Animation complete', 'success');
             } catch (error) {

@@ -29,7 +29,7 @@ const MAX_THUMBNAIL_DIMENSION = 400;
  * @property {(luminance: number) => number} [getAdaptiveEmissiveIntensity]
  * @property {() => number} [getEffectiveZSpacing]
  * @property {(slideCount: number) => void} [onFirstSlide] - Called when first slide is added (SCENE.md §2)
- * @property {(floorY: number, stackDepth: number, zSpacing: number) => void} [onLayoutChanged] - Called when layout changes (SCENE.md §1)
+ * @property {(floorY: number, stackDepth: number, zSpacing: number, widestSlideWidth: number) => void} [onLayoutChanged] - Called when layout changes (SCENE.md §1)
  */
 
 export class SceneComposition {
@@ -338,6 +338,15 @@ export class SceneComposition {
     }
 
     /**
+     * Get the width of the widest slide in the stack.
+     * @returns {number} Widest slide width, or 0 if stack is empty
+     */
+    #getWidestWidth() {
+        if (this.imageStack.length === 0) return 0;
+        return Math.max(...this.imageStack.map(img => img.width));
+    }
+
+    /**
      * Get the current floor Y position.
      * SCENE.md: Floor is 3px below the bottom of the tallest slide.
      * @returns {number} The Y position for the floor
@@ -388,11 +397,15 @@ export class SceneComposition {
 
         // SCENE.md: Floor is 3px below the bottom of all slides
         const floorY = bottomY - 3;
-        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, bottomY=${bottomY}, floorY=${floorY}, stackDepth=${stackDepth}, zRange=[${-stackDepth}, 0]`);
+
+        // PLAN.md §2: Floor width uses widest slide, not canvas width
+        const widestSlideWidth = this.#getWidestWidth();
+
+        console.log(`[SceneComposition] Layout: tallest=${tallestHeight}, widest=${widestSlideWidth}, floorY=${floorY}, stackDepth=${stackDepth}`);
 
         // Notify floor manager to update position and size
         if (typeof this.onLayoutChanged === 'function') {
-            this.onLayoutChanged(floorY, stackDepth, zSpacing);
+            this.onLayoutChanged(floorY, stackDepth, zSpacing, widestSlideWidth);
         } else {
             console.warn('[SceneComposition] onLayoutChanged callback not set');
         }

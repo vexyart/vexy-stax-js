@@ -551,11 +551,11 @@ function init() {
             updateCanvasAriaLabel();
         },
         // SCENE.md §1: Update floor position and size when layout changes
-        onLayoutChanged: (floorY, stackDepth, zSpacing) => {
-            console.log(`[main.js] onLayoutChanged: floorY=${floorY}, stackDepth=${stackDepth}, zSpacing=${zSpacing}`);
+        onLayoutChanged: (floorY, stackDepth, zSpacing, widestSlideWidth) => {
+            console.log(`[main.js] onLayoutChanged: floorY=${floorY}, stackDepth=${stackDepth}, zSpacing=${zSpacing}, widest=${widestSlideWidth}`);
             if (floorManager) {
                 floorManager.setPositionY(floorY);
-                floorManager.resize(stackDepth, zSpacing);
+                floorManager.resize(stackDepth, zSpacing, widestSlideWidth);
             } else {
                 console.warn('[main.js] floorManager is null/undefined');
             }
@@ -1835,6 +1835,11 @@ function updateZSpacing(newSpacing) {
         imageData.mesh.position.z = offset === 0 ? 0 : -offset;
     });
     logImages.info(`Z-spacing updated to ${effectiveSpacing}px${newSpacing === null ? ' (auto)' : ''}`);
+
+    // PLAN.md §3(a): Trigger floor resize when slide space changes
+    if (sceneComposition) {
+        sceneComposition.recalculateLayout();
+    }
 }
 
 /**
@@ -1890,17 +1895,17 @@ function setViewpointFitToFrame(options = {}) {
 }
 
 /**
- * Calculate automatic slide distance based on studio width and number of slides.
- * Formula: STUDIOWIDTH / (NUM_SLIDES + 2)
+ * Calculate automatic slide distance based on tallest slide height.
+ * Formula: tallest_slide_height * 0.6
  * @returns {number} The calculated automatic distance
  */
 function calculateAutoDistance() {
-    const studioWidth = params.canvasSize?.x ?? 960;
-    const numSlides = imageStack.length;
-    if (numSlides === 0) {
+    if (imageStack.length === 0) {
         return DEFAULT_Z_SPACING;
     }
-    return Math.round(studioWidth / (numSlides + 2));
+    // PLAN.md: Default slide space = tallest_slide_height * 0.6
+    const tallestHeight = Math.max(...imageStack.map(img => img.height ?? 0), 100);
+    return Math.round(tallestHeight * 0.6);
 }
 
 /**

@@ -67,7 +67,7 @@ test('CameraAnimator_restoreState_when_unsaved_then_returnsUndefined', () => {
     assert.equal(result, undefined, 'restoreState should return undefined without prior save');
 });
 
-test('CameraAnimator_calculateFrontViewpoint_when_slideHasOffset_then_centresOnBounds', () => {
+test('CameraAnimator_calculateFrontViewpoint_when_slideHasOffset_then_targetsOrigin', () => {
     const { animator } = createAnimatorContext();
     const slide = createSlide(360, 220, new THREE.Vector3(80, 140, 280));
     const front = animator.calculateFrontViewpoint(slide, { x: 960, y: 540 }, 3);
@@ -75,12 +75,16 @@ test('CameraAnimator_calculateFrontViewpoint_when_slideHasOffset_then_centresOnB
     assert.ok(front.position instanceof THREE.Vector3, 'position should be a Vector3');
     assert.ok(front.target instanceof THREE.Vector3, 'target should be a Vector3');
     assert.ok(front.position.z > front.target.z, 'camera should sit in front of slide');
-    assert.ok(Math.abs(front.position.x - front.target.x) < EPSILON, 'camera X should align with target centre');
-    assert.ok(Math.abs(front.position.y - front.target.y) < EPSILON, 'camera Y should align with target centre');
-    assert.ok(Math.abs(front.target.x - 80) < EPSILON, 'target should match slide centre X');
-    assert.ok(Math.abs(front.target.y - 140) < EPSILON, 'target should match slide centre Y');
-    // Target Z is 0 (front slide position), not slide's current Z - slides collapse to origin
-    assert.ok(Math.abs(front.target.z - 0) < EPSILON, 'target Z should be 0');
+    // Camera and target at origin (0, 0) to match Hero View exactly
+    assert.ok(Math.abs(front.position.x - front.target.x) < EPSILON, 'camera X should align with target');
+    assert.ok(Math.abs(front.position.y - front.target.y) < EPSILON, 'camera Y should align with target');
+    // Target is at origin (0, 0, 0) to match Hero View which uses controls.target.set(0, 0, 0)
+    assert.ok(Math.abs(front.target.x) < EPSILON, 'target X should be 0 (origin) to match Hero View');
+    assert.ok(Math.abs(front.target.y) < EPSILON, 'target Y should be 0 (origin) to match Hero View');
+    assert.ok(Math.abs(front.target.z) < EPSILON, 'target Z should be 0 (origin)');
+    // Camera position at origin X, Y
+    assert.ok(Math.abs(front.position.x) < EPSILON, 'camera X should be 0 to match Hero View');
+    assert.ok(Math.abs(front.position.y) < EPSILON, 'camera Y should be 0 to match Hero View');
     // collapsePositions is array with positions for each slide (front slide at 0, others offset)
     assert.ok(Array.isArray(front.collapsePositions), 'collapsePositions should be an array');
     assert.equal(front.collapsePositions.length, 3, 'collapsePositions should have 3 entries');

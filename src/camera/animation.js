@@ -67,8 +67,7 @@ export class CameraAnimator {
       throw new Error('calculateFrontViewpoint: slide bounds empty');
     }
 
-    // Get slide center and dimensions
-    const center = box.getCenter(new THREE.Vector3());
+    // Get slide dimensions (center not used for target - Hero View uses origin)
     const size = box.getSize(new THREE.Vector3());
     const width = size.x || 1;
     const height = size.y || 1;
@@ -82,8 +81,9 @@ export class CameraAnimator {
       collapsePositions.push(-offset);
     }
 
-    // Target is at origin (front slide collapse position)
-    const target = new THREE.Vector3(center.x, center.y, 0);
+    // Target is at origin (0, 0, 0) to match Hero View exactly
+    // Hero View sets controls.target.set(0, 0, 0) - we must match this
+    const target = new THREE.Vector3(0, 0, 0);
 
     const widthPx = canvasSize?.x ?? DEFAULT_CANVAS_SIZE.x;
     const heightPx = canvasSize?.y ?? DEFAULT_CANVAS_SIZE.y;
@@ -102,8 +102,9 @@ export class CameraAnimator {
     const distanceForWidth = (width / 2) / halfHorizontalTan;
     const distance = Math.max(distanceForHeight, distanceForWidth, CAMERA_MIN_DISTANCE) * FRONT_VIEW_PADDING;
 
-    // Position camera directly in front of collapsed stack at target's X, Y
-    const position = new THREE.Vector3(center.x, center.y, distance);
+    // Position camera at (0, 0, distance) to match Hero View exactly
+    // Hero View centers camera on origin - we must match this
+    const position = new THREE.Vector3(0, 0, distance);
 
     return { position, target, collapsePositions };
   }
@@ -116,14 +117,16 @@ export class CameraAnimator {
    * - Slides collapsed with MIN_LAYER_GAP spacing
    * - Ambience at 0 (flat materials, no lighting effects)
    * - Camera positioned to fit front slide
+   * - Camera offsets reset to 0 (matching Hero View)
    *
-   * @param {Object} params - Animation parameters
-   * @param {Object} params.topSlide - The top slide data object
-   * @param {Object} params.canvasSize - Studio canvas size {x, y}
-   * @param {number} params.duration - Tween duration in seconds (default: 1.5)
-   * @param {string} params.easing - GSAP easing function (default: "power2.inOut")
-   * @param {number} params.startAmbience - Current ambience value (default: 0)
-   * @param {Function} params.onAmbienceChange - Callback when ambience changes (receives value 0-1)
+   * @param {Object} animParams - Animation parameters
+   * @param {Object} animParams.topSlide - The top slide data object
+   * @param {Object} animParams.canvasSize - Studio canvas size {x, y}
+   * @param {number} animParams.duration - Tween duration in seconds (default: 1.5)
+   * @param {string} animParams.easing - GSAP easing function (default: "power2.inOut")
+   * @param {number} animParams.startAmbience - Current ambience value (default: 0)
+   * @param {Function} animParams.onAmbienceChange - Callback when ambience changes (receives value 0-1)
+   * @param {Object} [animParams.params] - App params object (for resetting camera offsets)
    * @returns {Promise} Resolves when animation completes, rejects on error
    */
   async playHeroShot({
@@ -134,7 +137,8 @@ export class CameraAnimator {
     imageStack = [],
     holdTime,
     startAmbience = 0,
-    onAmbienceChange
+    onAmbienceChange,
+    params: appParams
   }) {
     return new Promise((resolve, reject) => {
       if (this.isAnimating) {
@@ -145,6 +149,12 @@ export class CameraAnimator {
       if (!topSlide?.mesh) {
         reject(new Error('No top slide provided'));
         return;
+      }
+
+      // Reset camera offsets to match Hero View (which resets to 0,0)
+      if (appParams) {
+        appParams.cameraOffsetX = 0;
+        appParams.cameraOffsetY = 0;
       }
 
       const slideCount = Array.isArray(imageStack) ? imageStack.length : 1;
