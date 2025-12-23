@@ -2,11 +2,45 @@
 # Vexy Stax JS - Work Progress
 
 ## Status (2025-12-23)
-- **Tests**: 456 unit pass
-- **Build**: 1,195 kB
-- **Critical Bugs**: 3/3 FIXED
+- **Tests**: 462 unit + 7 E2E pass
+- **Build**: 1,212 kB
+- **Critical Bugs**: 4/4 FIXED
 
-## Session Update (2025-12-23) - Architecture Refactoring
+## Session Update (2025-12-23) - Hero→Beauty Fix
+
+### Bug 4: Hero→Beauty State Restoration ✅
+**Problem**: E2E test "Hero→Beauty restores layer depth" failed. Slides stayed collapsed after switching from Hero to Beauty viewpoint.
+
+**Root Causes**:
+1. `pane.refresh()` triggered cascading onChange callbacks causing multiple viewpoint calls
+2. `cameraController.setViewpointFitToFrame()` overwrote 'hero' preset to 'front'
+
+**Fixes Applied**:
+1. Added `_isChangingViewpoint` re-entry guard to all viewpoint methods
+2. Don't delegate to cameraController when `skipPresetChange=true`
+
+### Coordinate System Compliance (PLAN.md §1)
+Updated all slide positioning to use new formula:
+- **Final slide** (highest index) always at **Z=0** (immovable anchor)
+- **Other slides** at `z = -(slideCount - 1 - index) * effectiveSpacing`
+- **Hero mode** collapses to `z = -(slideCount - 1 - index) * MIN_LAYER_GAP`
+
+**Files Updated**:
+- `ViewpointController.#restoreHeroState()` - restore formula
+- `SceneComposition.#recalculateLayout()` - layout formula
+- `AmbienceManager.updateMaterials()` - temporary positioning
+- `ExportManager.#loadTextureWithRetry()` - JSON loading
+- `main.js updateZSpacing()` - z-spacing updates
+- `FloorManager` - floor Z position = `-stackDepth / 2`
+
+**Tests Updated**:
+- `camera_viewpoint_controller.test.js`
+- `core_scene_composition.test.js`
+- `scene_ambience_manager.test.js`
+
+---
+
+## Previous Session: Architecture Refactoring
 
 ### Modules Created
 
@@ -30,27 +64,8 @@
 - `src/ui/SlidePanelController.js` - Slide thumbnail panel management
 - `src/ui/ToolbarController.js` - Toolbar button setup
 
-### Current State
-- **main.js**: 2,590 lines (target: <100 lines)
-- **New modules**: 7 classes created with full test coverage
-- **Integration pending**: Modules exist but main.js not yet wired to use them
-
 ### Next Steps
 1. Wire Application class to orchestrate all managers
 2. Replace inline code in main.js with controller calls
 3. Move remaining functions to appropriate controllers
 4. Reduce main.js to entry point only
-
----
-
-## Previous Session: Bug Fixes (2025-12-23)
-
-### Bug 3: Stale Build ✅
-- Rebuilt `docs/` folder with `npm run build`
-
-### Bug 2: Hero View Z-Spacing ✅
-- Added `{ skipRestore: true, skipPresetChange: true }` to setViewpointFitToFrame()
-- Hero mode now preserves collapsed state
-
-### Bug 1: Floor/Slide Layout ✅
-- Verified correct callback chain: SceneComposition → onLayoutChanged → FloorManager.setPositionY()
