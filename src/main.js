@@ -61,6 +61,7 @@ import {
 } from './core/constants.js';
 import { appState } from './core/AppState.js';
 import { eventBus } from './core/EventBus.js';
+import { EventCoordinator } from './core/EventCoordinator.js';
 import { storeSharedRef, SHARED_STATE_KEYS } from './core/sharedState.js';
 import { computeRetinaDimensions } from './core/studioSizing.js';
 import { debounce } from './utils/helpers.js';
@@ -75,6 +76,7 @@ let app; // Application orchestrator (Phase 5 integration)
 let tweakpaneSetup; // Encapsulates Tweakpane wiring
 let debugAPI; // Debug console API (window.vexyStax)
 let automationBridge; // Playwright automation API (window.__vexyStaxAutomation)
+let eventCoordinator; // Centralized event emission
 
 let renderLoop; // Render animation loop manager
 let sceneComposition; // Manages image stack meshes
@@ -197,51 +199,26 @@ historyManager = new HistoryManager({
 // UI
 let pane;
 
-function emitBackgroundChanged(reason) {
-    eventBus.emit(EVENTS.backgroundChanged, {
-        reason,
-        color: params.bgColor,
-        ambience: params.ambience
-    });
-}
+// Centralized event emission - replaces inline emit* functions
+eventCoordinator = new EventCoordinator({
+    eventBus,
+    getParams: () => params,
+    getImageStack: () => imageStack,
+    getCamera: () => camera,
+    getControls: () => controls,
+    getCameraMode: () => cameraMode
+});
 
-function emitStackUpdated(reason) {
-    eventBus.emit(EVENTS.stackUpdated, {
-        reason,
-        count: imageStack.length,
-        filenames: imageStack.map((image) => image.filename)
-    });
-}
+// Convenience aliases for emit methods
+const emitBackgroundChanged = (reason) => eventCoordinator.emitBackgroundChanged(reason);
+const emitStackUpdated = (reason) => eventCoordinator.emitStackUpdated(reason);
+const emitCameraUpdated = (reason) => eventCoordinator.emitCameraUpdated(reason);
 
 function handleHistoryStackChange(index, stack) {
     historyIndex = typeof index === 'number' ? index : -1;
     historyStack = Array.isArray(stack) ? stack.slice() : [];
     storeSharedRef(SHARED_STATE_KEYS.historyIndex, historyIndex);
     storeSharedRef(SHARED_STATE_KEYS.historyStack, historyStack);
-}
-
-function emitCameraUpdated(reason) {
-    const activeCamera = (controls && controls.object) ? controls.object : camera;
-    if (!activeCamera) {
-        return;
-    }
-
-    const payload = {
-        reason,
-        mode: cameraMode,
-        position: {
-            x: activeCamera.position.x,
-            y: activeCamera.position.y,
-            z: activeCamera.position.z
-        },
-        zoom: activeCamera.zoom
-    };
-
-    if (typeof activeCamera.fov === 'number') {
-        payload.fov = activeCamera.fov;
-    }
-
-    eventBus.emit(EVENTS.cameraUpdated, payload);
 }
 
 /**
