@@ -24,6 +24,7 @@ import { FloorManager } from './scene/FloorManager.js';
 import { AmbienceManager } from './scene/AmbienceManager.js';
 import { Application } from './Application.js';
 import { DebugAPI } from './automation/DebugAPI.js';
+import { AutomationBridge } from './automation/AutomationBridge.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
@@ -73,6 +74,7 @@ let cameraController; // Handles camera orchestration
 let app; // Application orchestrator (Phase 5 integration)
 let tweakpaneSetup; // Encapsulates Tweakpane wiring
 let debugAPI; // Debug console API (window.vexyStax)
+let automationBridge; // Playwright automation API (window.__vexyStaxAutomation)
 
 let renderLoop; // Render animation loop manager
 let sceneComposition; // Manages image stack meshes
@@ -717,7 +719,25 @@ function init() {
     });
     debugAPI.expose();
 
-    setupPlaywrightBridge();
+    // Playwright automation API (window.__vexyStaxAutomation)
+    automationBridge = new AutomationBridge({
+        imageStack,
+        params,
+        managers: {
+            cameraAnimator,
+            ambienceManager,
+            floorManager
+        },
+        callbacks: {
+            loadImage,
+            setViewpoint,
+            setBeautyViewpoint,
+            setHeroViewpoint,
+            setViewpointFitToFrame,
+            centerViewOnContent
+        }
+    });
+    automationBridge.expose();
     setupCleanup();
 
     renderLoop = new RenderLoop();
@@ -1689,122 +1709,6 @@ function setBeautyViewpoint() {
         app.viewpointController.setBeautyViewpoint();
         emitCameraUpdated('viewpoint');
     }
-}
-
-function setupPlaywrightBridge() {
-    if (typeof window === 'undefined') {
-        return;
-    }
-
-    const automation = {
-        async addSlideFromDataURL(dataURL, filename = 'playwright-slide.png') {
-            if (typeof dataURL !== 'string' || dataURL.length === 0) {
-                throw new Error('addSlideFromDataURL requires a base64 data URL string');
-            }
-            const response = await fetch(dataURL);
-            if (!response.ok) {
-                throw new Error(`Failed to fetch slide data (status ${response.status})`);
-            }
-            const blob = await response.blob();
-            const type = blob.type || 'image/png';
-            const file = new File([blob], filename, { type });
-            const initialCount = imageStack.length;
-            await new Promise((resolve, reject) => {
-                // Timeout after 30 seconds to prevent infinite hanging
-                const timeout = setTimeout(() => {
-                    unsubscribe();
-                    reject(new Error('addSlideFromDataURL timed out after 30s'));
-                }, 30000);
-                const unsubscribe = eventBus.once(EVENTS.stackUpdated, () => {
-                    clearTimeout(timeout);
-                    resolve();
-                });
-                try {
-                    loadImage(file);
-                } catch (error) {
-                    clearTimeout(timeout);
-                    unsubscribe();
-                    reject(error);
-                }
-            });
-        },
-        async addSlides(slides = []) {
-            for (const slide of slides) {
-                await automation.addSlideFromDataURL(slide?.dataURL, slide?.filename);
-            }
-        },
-        async setViewpointPreset(preset) {
-            const key = preset;
-            if (key === 'beauty') {
-                setBeautyViewpoint();
-                return;
-            }
-            if (key === 'hero') {
-                setHeroViewpoint();
-                return;
-            }
-            if (key === 'front') {
-                setViewpointFitToFrame();
-                return;
-            }
-            if (key === 'center' || preset === null) {
-                centerViewOnContent();
-                return;
-            }
-            const presetConfig = VIEWPOINT_PRESETS[key];
-            if (presetConfig === 'fitToFrame') {
-                setViewpointFitToFrame();
-                return;
-            }
-            if (presetConfig && typeof presetConfig === 'object') {
-                setViewpoint(presetConfig.x, presetConfig.y, presetConfig.z);
-                return;
-            }
-            if (Array.isArray(preset) && preset.length === 3) {
-                setViewpoint(preset[0], preset[1], preset[2]);
-                return;
-            }
-            if (typeof preset === 'object' && preset) {
-                const { x = 0, y = 0, z = CAMERA_DEFAULT_DISTANCE } = preset;
-                setViewpoint(x, y, z);
-                return;
-            }
-            throw new Error(`Unknown viewpoint preset: ${preset}`);
-        },
-        async playHeroShot(options = {}) {
-            if (!cameraAnimator) {
-                throw new Error('Camera animator not initialized');
-            }
-            const topSlide = imageStack[imageStack.length - 1];
-            if (!topSlide) {
-                throw new Error('No slides available for hero shot');
-            }
-            await cameraAnimator.playHeroShot({
-                topSlide,
-                canvasSize: params.canvasSize,
-                duration: options.duration ?? params.animDuration,
-                easing: options.easing ?? params.animEasing,
-                imageStack,
-                holdTime: options.holdTime,
-                startAmbience: params.ambience ?? 0,
-                onAmbienceChange: (value) => {
-                    params.ambience = value;
-                    const enabled = value > 0;
-                    if (ambienceManager) {
-                        ambienceManager.updateMaterials(enabled);
-                        if (enabled) {
-                            ambienceManager.applyEmissiveIntensity(value * 0.25);
-                        }
-                    }
-                    if (floorManager) {
-                        floorManager.updateMaterial(enabled);
-                    }
-                }
-            });
-        }
-    };
-
-    window.__vexyStaxAutomation = automation;
 }
 
 /**
