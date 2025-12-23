@@ -4,6 +4,10 @@
 
 import { ServiceContainer } from './core/ServiceContainer.js';
 import { EventTracker } from './utils/EventTracker.js';
+import { SceneDirector } from './scene/SceneDirector.js';
+import { ViewpointController } from './camera/ViewpointController.js';
+import { SlidePanelController } from './ui/SlidePanelController.js';
+import { ToolbarController } from './ui/ToolbarController.js';
 
 /**
  * Application - Main orchestrator for Vexy Stax
@@ -11,14 +15,21 @@ import { EventTracker } from './utils/EventTracker.js';
  * Coordinates initialization and lifecycle of all managers/controllers.
  * This is the entry point that main.js delegates to.
  *
- * Responsibilities:
- * - Create and wire all managers via ServiceContainer
- * - Handle application lifecycle (init, dispose)
- * - Expose debug API for development
+ * Phase 5 Integration:
+ * - Managers are created in main.js and registered here
+ * - Controllers are created here using registered managers
+ * - main.js delegates to controllers instead of inline code
  *
  * @example
  * const app = new Application(canvas);
  * await app.init();
+ *
+ * // Register managers from main.js
+ * app.registerService('sceneManager', sceneManager);
+ * app.registerService('params', params);
+ *
+ * // Wire controllers
+ * app.wireControllers();
  *
  * // On shutdown
  * app.dispose();
@@ -36,6 +47,12 @@ export class Application {
         this.container = new ServiceContainer();
         this.events = new EventTracker();
         this.initialized = false;
+
+        // Controllers (created during wiring)
+        this.sceneDirector = null;
+        this.viewpointController = null;
+        this.slidePanelController = null;
+        this.toolbarController = null;
     }
 
     /**
@@ -54,11 +71,90 @@ export class Application {
         // Register core services
         this.container.register('events', this.events);
 
-        // TODO: Phase 2+ will extract manager creation from main.js
-        // For now, this is a shell that main.js can use incrementally
-
         this.initialized = true;
         console.log('[Application] Initialization complete');
+    }
+
+    /**
+     * Wire controllers using registered managers
+     * Call after all managers are registered
+     *
+     * @param {Object} options - Controller options
+     * @param {Object} [options.callbacks] - Callbacks for controllers
+     */
+    wireControllers(options = {}) {
+        const callbacks = options.callbacks || {};
+
+        // Get required services
+        const scene = this.container.has('scene') ? this.container.get('scene') : null;
+        const params = this.container.has('params') ? this.container.get('params') : null;
+        const imageStack = this.container.has('imageStack') ? this.container.get('imageStack') : [];
+
+        // Wire SceneDirector if dependencies exist
+        if (scene && params) {
+            this.sceneDirector = new SceneDirector({
+                scene,
+                renderer: this.container.has('renderer') ? this.container.get('renderer') : null,
+                params,
+                imageStack,
+                ambienceManager: this.container.has('ambienceManager') ? this.container.get('ambienceManager') : null,
+                lightingManager: this.container.has('lightingManager') ? this.container.get('lightingManager') : null,
+                floorManager: this.container.has('floorManager') ? this.container.get('floorManager') : null,
+                sceneManager: this.container.has('sceneManager') ? this.container.get('sceneManager') : null,
+                sceneComposition: this.container.has('sceneComposition') ? this.container.get('sceneComposition') : null,
+                controls: this.container.has('controls') ? this.container.get('controls') : null,
+                onBackgroundChanged: callbacks.onBackgroundChanged
+            });
+            this.container.register('sceneDirector', this.sceneDirector);
+            console.log('[Application] SceneDirector wired');
+        }
+
+        // Wire ViewpointController if dependencies exist
+        const camera = this.container.has('camera') ? this.container.get('camera') : null;
+        const controls = this.container.has('controls') ? this.container.get('controls') : null;
+        const getEffectiveZSpacing = callbacks.getEffectiveZSpacing;
+
+        if (camera && controls && params && getEffectiveZSpacing) {
+            this.viewpointController = new ViewpointController({
+                camera,
+                controls,
+                params,
+                imageStack,
+                getEffectiveZSpacing,
+                cameraController: this.container.has('cameraController') ? this.container.get('cameraController') : null,
+                pane: this.container.has('pane') ? this.container.get('pane') : null,
+                onViewpointChanged: callbacks.onViewpointChanged
+            });
+            this.container.register('viewpointController', this.viewpointController);
+            console.log('[Application] ViewpointController wired');
+        }
+
+        // Wire SlidePanelController if callbacks exist
+        if (callbacks.onDeleteSlide && callbacks.onReorderSlides) {
+            this.slidePanelController = new SlidePanelController({
+                imageStack,
+                onDelete: callbacks.onDeleteSlide,
+                onReorder: callbacks.onReorderSlides,
+                onUpdateAriaLabel: callbacks.onUpdateAriaLabel,
+                showToast: callbacks.showToast
+            });
+            this.container.register('slidePanelController', this.slidePanelController);
+            console.log('[Application] SlidePanelController wired');
+        }
+
+        // Wire ToolbarController if callbacks exist
+        if (callbacks.onUndo && callbacks.onRedo) {
+            this.toolbarController = new ToolbarController({
+                onUndo: callbacks.onUndo,
+                onRedo: callbacks.onRedo,
+                onResetCamera: callbacks.onResetCamera,
+                onToggleHelp: callbacks.onToggleHelp,
+                showToast: callbacks.showToast,
+                addTrackedEventListener: (el, evt, fn) => this.events.add(el, evt, fn)
+            });
+            this.container.register('toolbarController', this.toolbarController);
+            console.log('[Application] ToolbarController wired');
+        }
     }
 
     /**
@@ -97,6 +193,11 @@ export class Application {
 
         this.events.removeAll();
         this.container.disposeAll();
+
+        this.sceneDirector = null;
+        this.viewpointController = null;
+        this.slidePanelController = null;
+        this.toolbarController = null;
 
         this.initialized = false;
         console.log('[Application] Disposed');

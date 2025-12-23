@@ -22,6 +22,7 @@ import { SceneManager } from './scene/SceneManager.js';
 import { LightingManager, getAdaptiveEmissiveIntensity, calculateLuminance } from './scene/LightingManager.js';
 import { FloorManager } from './scene/FloorManager.js';
 import { AmbienceManager } from './scene/AmbienceManager.js';
+import { Application } from './Application.js';
 import {
     MAX_HISTORY,
     FPS_WARNING_THRESHOLD,
@@ -68,6 +69,7 @@ let canvas;
 let cameraMode = 'perspective'; // 'perspective', 'orthographic', 'isometric'
 let cameraAnimator; // Camera animation system
 let cameraController; // Handles camera orchestration
+let app; // Application orchestrator (Phase 5 integration)
 let tweakpaneSetup; // Encapsulates Tweakpane wiring
 
 let renderLoop; // Render animation loop manager
@@ -694,6 +696,50 @@ function init() {
     // Auto-save settings every 30 seconds
     setupAutoSave();
 
+    // ═══════════════════════════════════════════════════════════════════════
+    // Phase 5: Application Orchestration
+    // Register all managers with Application for centralized lifecycle
+    // ═══════════════════════════════════════════════════════════════════════
+    app = new Application(canvas);
+    app.init();
+
+    // Register core services
+    app.registerService('scene', scene);
+    app.registerService('renderer', renderer);
+    app.registerService('params', params);
+    app.registerService('imageStack', imageStack);
+    app.registerService('camera', camera);
+    app.registerService('orthoCamera', orthoCamera);
+    app.registerService('controls', controls);
+
+    // Register managers
+    app.registerService('sceneManager', sceneManager);
+    app.registerService('lightingManager', lightingManager);
+    app.registerService('floorManager', floorManager);
+    app.registerService('ambienceManager', ambienceManager);
+    app.registerService('sceneComposition', sceneComposition);
+    app.registerService('cameraController', cameraController);
+    app.registerService('historyManager', historyManager);
+    app.registerService('pane', pane);
+
+    // Wire controllers with callbacks
+    app.wireControllers({
+        callbacks: {
+            getEffectiveZSpacing,
+            onBackgroundChanged: (reason) => emitBackgroundChanged(reason),
+            onViewpointChanged: (preset) => emitCameraUpdated(preset),
+            onDeleteSlide: (index) => sceneComposition?.deleteAt?.(index),
+            onReorderSlides: (from, to) => sceneComposition?.reorder?.(from, to),
+            onUpdateAriaLabel: updateCanvasAriaLabel,
+            showToast,
+            onUndo: () => historyManager?.undo?.(),
+            onRedo: () => historyManager?.redo?.(),
+            onResetCamera: () => setViewpointFitToFrame(),
+            onToggleHelp: () => keyboardShortcuts?.toggleHelp?.()
+        }
+    });
+
+    logInit.info('Application orchestrator wired');
     logInit.info('Vexy Stax initialized');
 }
 
@@ -2122,6 +2168,10 @@ function setupPlaywrightBridge() {
             const key = preset;
             if (key === 'beauty') {
                 setBeautyViewpoint();
+                return;
+            }
+            if (key === 'hero') {
+                setHeroViewpoint();
                 return;
             }
             if (key === 'front') {
