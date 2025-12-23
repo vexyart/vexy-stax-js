@@ -155,6 +155,11 @@ const settingsManager = createSettingsManager({
     updateBackground: () => updateBackground(),
     updateFloorColor: () => updateFloorColor(),
     updateZSpacing: (spacing) => updateZSpacing(spacing),
+    autoZSpacing: () => {
+        const autoValue = calculateAutoDistance();
+        updateZSpacing(autoValue);
+        return autoValue;
+    },
     updateReflectionSettings: () => floorManager?.updateReflectionSettings(),
     defaults: {
         cameraMode: 'perspective',

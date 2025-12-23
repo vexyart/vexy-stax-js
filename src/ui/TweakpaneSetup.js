@@ -55,6 +55,7 @@ export class TweakpaneSetup {
             setCameraFOV: callbacks.setCameraFOV ?? noop,
             applyMaterialPreset: callbacks.applyMaterialPreset ?? noop,
             updateZSpacing: callbacks.updateZSpacing ?? noop,
+            autoZSpacing: callbacks.autoZSpacing ?? noop,
             exportPNG: callbacks.exportPNG ?? noop,
             exportJSON: callbacks.exportJSON ?? noop,
             importJSON: callbacks.importJSON ?? noop,
@@ -311,7 +312,7 @@ export class TweakpaneSetup {
         }
         // Slide Space slider: 0 (minimum) to STUDIO_WIDTH * 2
         const studioWidth = this.params.canvasSize?.x ?? 960;
-        slidesFolder.addBinding(this.params, 'zSpacing', {
+        this.zSpacingBinding = slidesFolder.addBinding(this.params, 'zSpacing', {
             label: 'Slide Space',
             min: 0,
             max: studioWidth * 2,
@@ -319,6 +320,19 @@ export class TweakpaneSetup {
         }).on('change', (ev) => {
             this.callbacks.updateZSpacing(ev.value);
             this.callbacks.saveSettings();
+        });
+
+        // Auto button for Slide Space (calculates tallest_slide_height * 0.6)
+        slidesFolder.addButton({
+            title: 'Auto',
+            label: ''
+        }).on('click', () => {
+            const autoValue = this.callbacks.autoZSpacing();
+            if (typeof autoValue === 'number' && autoValue > 0) {
+                this.params.zSpacing = autoValue;
+                this.zSpacingBinding?.refresh();
+                this.callbacks.saveSettings();
+            }
         });
     }
 
@@ -491,6 +505,11 @@ export class TweakpaneSetup {
             'Easing': 'Animation timing curve'
         };
 
+        // Button tooltips (matched by button title text)
+        const buttonTooltips = {
+            'Auto': 'Calculate optimal spacing (tallest slide × 0.6)'
+        };
+
         const container = this.document?.getElementById?.('controls');
         if (!container) return;
 
@@ -504,6 +523,15 @@ export class TweakpaneSetup {
                 if (row) {
                     row.title = tooltips[text];
                 }
+            }
+        });
+
+        // Apply tooltips to buttons by their title text
+        const buttons = container.querySelectorAll('.tp-btnv_b');
+        buttons.forEach(btnEl => {
+            const text = btnEl.textContent?.trim();
+            if (text && buttonTooltips[text]) {
+                btnEl.title = buttonTooltips[text];
             }
         });
     }

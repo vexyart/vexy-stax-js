@@ -70,6 +70,7 @@ class FolderStub {
     constructor(config) {
         this.config = config;
         this.bindings = [];
+        this.buttons = [];
     }
 
     addBinding(target, key, options) {
@@ -83,8 +84,16 @@ class FolderStub {
         return {
             on: (event, handler) => {
                 binding.handlers[event] = handler;
-            }
+                return { refresh: () => {} };
+            },
+            refresh: () => {}
         };
+    }
+
+    addButton(config) {
+        const button = new ButtonStub(config);
+        this.buttons.push(button);
+        return button;
     }
 }
 
