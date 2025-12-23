@@ -397,10 +397,10 @@ test('Camera distance constants have valid values and hierarchy', async () => {
         CAMERA_MAX_DISTANCE
     } = await import('../src/core/constants.js');
 
-    // Verify exact values (updated for 5-slider camera system)
+    // Verify exact values (updated for extended Z range)
     assert.strictEqual(CAMERA_DEFAULT_DISTANCE, 800, 'Default camera distance should be 800');
-    assert.strictEqual(CAMERA_MIN_DISTANCE, 100, 'Min camera distance should be 100');
-    assert.strictEqual(CAMERA_MAX_DISTANCE, 3000, 'Max camera distance should be 3000');
+    assert.strictEqual(CAMERA_MIN_DISTANCE, 0, 'Min camera distance should be 0');
+    assert.strictEqual(CAMERA_MAX_DISTANCE, 6000, 'Max camera distance should be 6000');
 
     // Verify type
     assert.strictEqual(typeof CAMERA_DEFAULT_DISTANCE, 'number', 'Default distance should be number');

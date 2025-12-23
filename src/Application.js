@@ -123,7 +123,9 @@ export class Application {
                 getEffectiveZSpacing,
                 cameraController: this.container.has('cameraController') ? this.container.get('cameraController') : null,
                 pane: this.container.has('pane') ? this.container.get('pane') : null,
-                onViewpointChanged: callbacks.onViewpointChanged
+                onViewpointChanged: callbacks.onViewpointChanged,
+                onHeroModeEnter: callbacks.onHeroModeEnter,
+                onHeroModeExit: callbacks.onHeroModeExit
             });
             this.container.register('viewpointController', this.viewpointController);
             console.log('[Application] ViewpointController wired');

@@ -18,22 +18,23 @@ const log = createLogger('ViewpointController');
 /**
  * ViewpointController - Manages camera viewpoints and slide positioning
  *
- * Extracts viewpoint-related functions from main.js:
- * - setHeroViewpoint(): Collapse slides for hero shot
- * - restoreSlideZPositions(): Restore spacing after hero
- * - setBeautyViewpoint(): Three-quarter beauty angle
- * - setViewpointFitToFrame(): Fit front slide in frame
- * - centerViewOnContent(): Center camera on content
+ * Implements Hero View as a special mode that TEMPORARILY overrides parameters:
+ * - Slide spacing collapses to MIN_LAYER_GAP (without changing slider value)
+ * - Ambience set to 0 (flat materials, no lighting effects)
+ * - Camera positioned to fit front slide exactly
+ *
+ * When leaving Hero mode, all parameters snap back to user's manually set values.
  *
  * @example
  * const controller = new ViewpointController({
  *     camera, controls, params, imageStack,
- *     getEffectiveZSpacing: () => params.zSpacing || AUTO_SPACING
+ *     getEffectiveZSpacing: () => params.zSpacing || AUTO_SPACING,
+ *     onHeroModeEnter: (savedState) => { ... },
+ *     onHeroModeExit: (savedState) => { ... }
  * });
  *
- * controller.setHeroViewpoint();
- * // Later...
- * controller.setBeautyViewpoint(); // Restores z-positions automatically
+ * controller.setHeroViewpoint();  // Enter Hero mode
+ * controller.setBeautyViewpoint(); // Exit Hero mode, restores saved state
  */
 export class ViewpointController {
     /**
@@ -46,6 +47,8 @@ export class ViewpointController {
      * @param {Object} [options.cameraController] - Legacy CameraController for delegation
      * @param {Object} [options.pane] - Tweakpane for refresh
      * @param {Function} [options.onViewpointChanged] - Callback when viewpoint changes
+     * @param {Function} [options.onHeroModeEnter] - Callback when entering Hero mode (receives saved state)
+     * @param {Function} [options.onHeroModeExit] - Callback when exiting Hero mode (receives saved state to restore)
      */
     constructor(options) {
         if (!options.camera) {
@@ -71,9 +74,16 @@ export class ViewpointController {
         this.cameraController = options.cameraController || null;
         this.pane = options.pane || null;
         this.onViewpointChanged = options.onViewpointChanged || null;
+        this.onHeroModeEnter = options.onHeroModeEnter || null;
+        this.onHeroModeExit = options.onHeroModeExit || null;
 
-        /** @private */
-        this.savedHeroZSpacing = null;
+        /**
+         * Saved state when entering Hero mode.
+         * Contains all parameters that Hero mode temporarily overrides.
+         * @private
+         * @type {Object|null}
+         */
+        this.savedHeroState = null;
     }
 
     /**
@@ -88,21 +98,47 @@ export class ViewpointController {
     }
 
     /**
-     * Restore slide Z positions after Hero mode
-     * Only restores if we were previously in Hero mode
+     * Save current state before entering Hero mode.
+     * Called internally when entering Hero mode.
+     * @private
+     * @returns {Object} Saved state object
      */
-    restoreSlideZPositions() {
-        if (this.savedHeroZSpacing === null) {
-            return;
-        }
+    #saveHeroState() {
+        return {
+            zSpacing: this.getEffectiveZSpacing(),
+            ambience: this.params.ambience,
+            materialPreset: this.params.materialPreset,
+            cameraOffsetX: this.params.cameraOffsetX,
+            cameraOffsetY: this.params.cameraOffsetY,
+            cameraDistance: this.params.cameraDistance,
+            cameraPosition: this.camera.position.clone(),
+            controlsTarget: this.controls.target.clone()
+        };
+    }
 
+    /**
+     * Restore state after exiting Hero mode.
+     * Restores slide positions, ambience, materials, and camera.
+     * @private
+     */
+    #restoreHeroState() {
+        if (!this.savedHeroState) return;
+
+        const state = this.savedHeroState;
+
+        // Restore slide z-positions to user's setting
         const effectiveSpacing = this.getEffectiveZSpacing();
         this.imageStack.forEach((imageData, index) => {
             imageData.mesh.position.z = index * effectiveSpacing;
         });
 
-        log.info(`Z-positions restored to spacing ${effectiveSpacing}px`);
-        this.savedHeroZSpacing = null;
+        // Notify that Hero mode is exiting - callback can restore ambience/materials
+        if (typeof this.onHeroModeExit === 'function') {
+            this.onHeroModeExit(state);
+        }
+
+        log.info(`Hero state restored: z-spacing ${effectiveSpacing}px, ambience ${state.ambience}`);
+        this.savedHeroState = null;
     }
 
     /**
@@ -110,17 +146,42 @@ export class ViewpointController {
      * @returns {boolean}
      */
     isInHeroMode() {
-        return this.savedHeroZSpacing !== null;
+        return this.savedHeroState !== null;
     }
 
     /**
-     * Set viewpoint to Hero view - front view with slides collapsed
-     * Resets X/Y offsets and sets Z to fit-to-frame value
+     * Get the saved Hero state (for external use)
+     * @returns {Object|null}
+     */
+    getSavedHeroState() {
+        return this.savedHeroState;
+    }
+
+    /**
+     * Set viewpoint to Hero view - front view with slides collapsed.
+     *
+     * Hero View is a special mode that TEMPORARILY overrides:
+     * - Slide spacing → collapsed to MIN_LAYER_GAP (slider value unchanged)
+     * - Ambience → 0 (flat materials, no lighting effects)
+     * - Camera → positioned to fit front slide exactly
+     *
+     * When any other viewpoint is selected, state snaps back to user's settings.
      */
     setHeroViewpoint() {
         this.params.viewpointPreset = 'hero';
 
-        // Reset X/Y offsets
+        // Save current state before entering Hero mode (only if not already in Hero mode)
+        if (!this.savedHeroState) {
+            this.savedHeroState = this.#saveHeroState();
+            log.info('Hero state saved:', this.savedHeroState);
+
+            // Notify that Hero mode is entering - callback can set ambience to 0
+            if (typeof this.onHeroModeEnter === 'function') {
+                this.onHeroModeEnter(this.savedHeroState);
+            }
+        }
+
+        // Reset X/Y offsets for Hero view
         if (this.cameraController?.resetOffset) {
             this.cameraController.resetOffset();
         } else {
@@ -128,23 +189,18 @@ export class ViewpointController {
             this.params.cameraOffsetY = 0;
         }
 
-        // Reset controls target
+        // Reset controls target to origin (front slide)
         this.controls.target.set(0, 0, 0);
 
-        // Save current spacing (only if not already in Hero mode)
-        if (this.savedHeroZSpacing === null) {
-            this.savedHeroZSpacing = this.getEffectiveZSpacing();
-        }
-
         // Collapse slides with MIN_LAYER_GAP spacing
-        // Front slide at z=0, back slides at negative z
+        // Front slide (highest index) at z=0, back slides at negative z
         const slideCount = this.imageStack.length;
         this.imageStack.forEach((imageData, index) => {
             const offset = (slideCount - 1 - index) * MIN_LAYER_GAP;
             imageData.mesh.position.z = offset === 0 ? 0 : -offset;
         });
 
-        // Calculate camera distance to fit front slide
+        // Calculate camera distance to fit front slide exactly
         this.#calculateHeroDistance();
 
         // Set camera to fit (skip restore to keep collapsed, skip preset change to stay 'hero')
@@ -159,12 +215,13 @@ export class ViewpointController {
     /**
      * Set viewpoint to fit frontmost slide within studio frame
      * @param {Object} [options]
-     * @param {boolean} [options.skipRestore=false] - Skip restoring z-positions
+     * @param {boolean} [options.skipRestore=false] - Skip restoring Hero state
      * @param {boolean} [options.skipPresetChange=false] - Skip changing viewpointPreset (for Hero mode)
      */
     setViewpointFitToFrame(options = {}) {
+        // Restore Hero state when switching away from Hero mode
         if (!options.skipRestore) {
-            this.restoreSlideZPositions();
+            this.#restoreHeroState();
         }
 
         if (this.cameraController?.setViewpointFitToFrame) {
@@ -185,10 +242,12 @@ export class ViewpointController {
     }
 
     /**
-     * Set viewpoint to Beauty angle (three-quarter view)
+     * Set viewpoint to Beauty angle (three-quarter view).
+     * Exits Hero mode and restores saved state.
      */
     setBeautyViewpoint() {
-        this.restoreSlideZPositions();
+        // Exit Hero mode and restore saved state
+        this.#restoreHeroState();
 
         if (this.cameraController) {
             this.cameraController.setBeautyViewpoint();
@@ -207,13 +266,15 @@ export class ViewpointController {
     }
 
     /**
-     * Set custom viewpoint
+     * Set custom viewpoint.
+     * Exits Hero mode and restores saved state.
      * @param {number} x
      * @param {number} y
      * @param {number} z
      */
     setViewpoint(x, y, z) {
-        this.restoreSlideZPositions();
+        // Exit Hero mode and restore saved state
+        this.#restoreHeroState();
 
         this.params.viewpointPreset = 'custom';
         this.camera.position.set(x, y, z);
@@ -224,10 +285,12 @@ export class ViewpointController {
     }
 
     /**
-     * Center camera on content
+     * Center camera on content.
+     * Exits Hero mode and restores saved state.
      */
     centerViewOnContent() {
-        this.restoreSlideZPositions();
+        // Exit Hero mode and restore saved state
+        this.#restoreHeroState();
 
         if (this.imageStack.length === 0) return;
 
@@ -247,6 +310,14 @@ export class ViewpointController {
         }
 
         this.#emitChange('centered');
+    }
+
+    /**
+     * Restore slide Z positions after Hero mode (legacy method, use #restoreHeroState instead)
+     * @deprecated Use #restoreHeroState() instead
+     */
+    restoreSlideZPositions() {
+        this.#restoreHeroState();
     }
 
     /** @private */
@@ -307,7 +378,7 @@ export class ViewpointController {
      * Dispose resources
      */
     dispose() {
-        this.savedHeroZSpacing = null;
+        this.savedHeroState = null;
         this.cameraController = null;
         this.pane = null;
         log.info('Disposed');

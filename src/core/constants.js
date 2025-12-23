@@ -114,19 +114,19 @@ export const CAMERA_DEFAULT_DISTANCE = 800;
  * Minimum allowed camera distance (zoom limit)
  * @type {number}
  * @constant
- * @default 100
+ * @default 0
  * @unit world units
  */
-export const CAMERA_MIN_DISTANCE = 100;
+export const CAMERA_MIN_DISTANCE = 0;
 
 /**
  * Maximum allowed camera distance (zoom limit)
  * @type {number}
  * @constant
- * @default 3000
+ * @default 6000
  * @unit world units
  */
-export const CAMERA_MAX_DISTANCE = 3000;
+export const CAMERA_MAX_DISTANCE = 6000;
 
 /**
  * OrbitControls damping factor (smoothing)

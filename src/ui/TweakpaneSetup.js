@@ -263,13 +263,14 @@ export class TweakpaneSetup {
         });
 
         // X/Y offset controls - applied additively after viewpoint preset
+        // Range: ±2x canvas dimensions for full panning freedom
         const canvasWidth = this.params.canvasSize?.x ?? 960;
         const canvasHeight = this.params.canvasSize?.y ?? 540;
 
         this.cameraBindings.offsetX = cameraFolder.addBinding(this.params, 'cameraOffsetX', {
             label: 'X',
-            min: -canvasWidth / 2,
-            max: canvasWidth / 2,
+            min: -canvasWidth * 2,
+            max: canvasWidth * 2,
             step: 10
         }).on('change', (ev) => {
             // Don't set params here - CameraController.setOffset handles it
@@ -279,8 +280,8 @@ export class TweakpaneSetup {
 
         this.cameraBindings.offsetY = cameraFolder.addBinding(this.params, 'cameraOffsetY', {
             label: 'Y',
-            min: -canvasHeight / 2,
-            max: canvasHeight / 2,
+            min: -canvasHeight * 2,
+            max: canvasHeight * 2,
             step: 10
         }).on('change', (ev) => {
             // Don't set params here - CameraController.setOffset handles it

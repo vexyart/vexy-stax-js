@@ -735,7 +735,34 @@ function init() {
             onUndo: () => historyManager?.undo?.(),
             onRedo: () => historyManager?.redo?.(),
             onResetCamera: () => setViewpointFitToFrame(),
-            onToggleHelp: () => keyboardShortcuts?.toggleHelp?.()
+            onToggleHelp: () => keyboardShortcuts?.toggleHelp?.(),
+            // Hero mode callbacks: Set ambience to 0 (flat) on enter, restore on exit
+            onHeroModeEnter: (savedState) => {
+                // Set ambience to 0 for flat materials in Hero mode
+                params.ambience = 0;
+                if (ambienceManager) {
+                    ambienceManager.updateMaterials(false);
+                }
+                if (floorManager) {
+                    floorManager.updateMaterial(false);
+                }
+                pane?.refresh?.();
+            },
+            onHeroModeExit: (savedState) => {
+                // Restore ambience from saved state
+                params.ambience = savedState.ambience;
+                const enabled = savedState.ambience > 0;
+                if (ambienceManager) {
+                    ambienceManager.updateMaterials(enabled);
+                    if (enabled) {
+                        ambienceManager.applyEmissiveIntensity(savedState.ambience * 0.25);
+                    }
+                }
+                if (floorManager) {
+                    floorManager.updateMaterial(enabled);
+                }
+                pane?.refresh?.();
+            }
         }
     });
 
@@ -752,22 +779,26 @@ function init() {
 
 /**
  * Toggle ambience mode (floor + realistic lighting)
+ * Delegates to SceneDirector for coordinated scene updates.
  * @param {number} intensity - Ambience intensity (0 = off, 0.1-1.0 = on with gradual intensity)
  */
 function toggleAmbience(intensity) {
+    // Delegate to SceneDirector if available (Phase 6)
+    if (app?.sceneDirector) {
+        app.sceneDirector.setAmbience(intensity);
+        return;
+    }
+
+    // Fallback: inline implementation (will be removed once migration complete)
     params.ambience = intensity;
     const enabled = intensity > 0;
 
-    // SCENE.md: Slides are the core, floor is subordinate.
-    // Update slide materials FIRST, then floor material to match.
     if (enabled) {
         if (ambienceManager) {
             ambienceManager.updateMaterials(true);
-            // Apply emissive intensity based on ambience slider value
             ambienceManager.applyEmissiveIntensity(intensity * 0.25);
         }
         if (lightingManager) {
-            // Scale ambient light intensity with slider value
             lightingManager.setAmbientIntensity(0.3 + intensity * 0.5);
         }
         updateBackground();
@@ -778,20 +809,14 @@ function toggleAmbience(intensity) {
         updateBackground();
     }
 
-    // Update floor material to match slides (Standard when ambience on, Basic when off)
     if (floorManager) {
         floorManager.updateMaterial(enabled);
     }
 
-    // SCENE.md §1: After material changes, ALWAYS recalculate layout
-    // This ensures floor is positioned correctly regardless of ambience state
     if (sceneComposition) {
         sceneComposition.recalculateLayout();
     }
 
-    // After mesh rebuilding, just update the controls without changing the target
-    // The meshes are rebuilt at the same positions, so the existing target remains valid
-    // Changing the target would override user's current view angle
     if (controls) {
         controls.update();
     }
@@ -1739,7 +1764,18 @@ function switchCameraMode(mode) {
     emitCameraUpdated('mode-change');
 }
 
+/**
+ * Update background color and emissive intensity.
+ * Delegates to SceneDirector for coordinated scene updates.
+ */
 function updateBackground() {
+    // Delegate to SceneDirector if available (Phase 6)
+    if (app?.sceneDirector) {
+        app.sceneDirector.updateBackground();
+        return;
+    }
+
+    // Fallback: inline implementation (will be removed once migration complete)
     if (sceneManager) {
         sceneManager.updateBackground(params.bgColor, params.transparentBg);
     } else {
@@ -1868,15 +1904,20 @@ function setViewpoint(x, y, z) {
 }
 
 /**
- * Set viewpoint to fit frontmost slide within studio frame
- * Accounts for both FOV and camera zoom (Tele) in distance calculation
+ * Set viewpoint to fit frontmost slide within studio frame.
+ * Delegates to ViewpointController for coordinated camera updates.
  * @param {Object} [options] - Options for viewpoint setting
  * @param {boolean} [options.skipRestore=false] - Skip restoring z-positions (used by Hero mode)
  */
 function setViewpointFitToFrame(options = {}) {
-    // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    // restoreSlideZPositions() is self-guarding via savedHeroZSpacing check
-    // Skip when called from setHeroViewpoint() to preserve collapsed state
+    // Delegate to ViewpointController if available (Phase 6)
+    if (app?.viewpointController) {
+        app.viewpointController.setViewpointFitToFrame(options);
+        emitCameraUpdated('viewpoint');
+        return;
+    }
+
+    // Fallback: inline implementation (will be removed once migration complete)
     if (!options.skipRestore) {
         restoreSlideZPositions();
     }
@@ -1917,7 +1958,6 @@ function setViewpointFitToFrame(options = {}) {
     const zoom = params.cameraZoom ?? 1.0;
     const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
 
-    // Account for zoom: effective FOV = 2 * atan(tan(fov/2) / zoom)
     const halfVerticalTan = Math.max(Math.tan(fov / 2) / zoom, 1e-6);
     const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
     const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
@@ -1933,7 +1973,6 @@ function setViewpointFitToFrame(options = {}) {
     controls.target.copy(center);
     controls.update();
 
-    // Update the cameraDistance param so slider reflects the value
     params.cameraDistance = distance;
 
     logCamera.info(`Front view: centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
@@ -1987,15 +2026,20 @@ function restoreSlideZPositions() {
 }
 
 /**
- * Set viewpoint to Hero view - front view with slides collapsed
- * This is the "culmination" view for hero shots
- * Resets X/Y offsets to 0 and sets Z (distance) to fit-to-frame value
- * Accounts for both FOV and camera zoom (Tele) in distance calculation
+ * Set viewpoint to Hero view - front view with slides collapsed.
+ * Delegates to ViewpointController for coordinated camera updates.
  */
 function setHeroViewpoint() {
+    // Delegate to ViewpointController if available (Phase 6)
+    if (app?.viewpointController) {
+        app.viewpointController.setHeroViewpoint();
+        pane?.refresh?.();
+        return;
+    }
+
+    // Fallback: inline implementation (will be removed once migration complete)
     params.viewpointPreset = 'hero';
 
-    // Reset X/Y offsets to 0
     if (cameraController) {
         cameraController.resetOffset();
     } else {
@@ -2003,23 +2047,18 @@ function setHeroViewpoint() {
         params.cameraOffsetY = 0;
     }
 
-    // Reset controls target to origin
     controls.target.set(0, 0, 0);
 
-    // Save current spacing before collapsing (only if not already in Hero mode)
     if (savedHeroZSpacing === null) {
         savedHeroZSpacing = getEffectiveZSpacing();
     }
 
-    // Collapse slides with MIN_LAYER_GAP spacing to prevent z-fighting
-    // Front slide (highest index) at z=0, others spaced behind
     const slideCount = imageStack.length;
     imageStack.forEach((imageData, index) => {
         const offset = (slideCount - 1 - index) * MIN_LAYER_GAP;
         imageData.mesh.position.z = -offset;
     });
 
-    // Calculate and set camera distance to fit front slide
     if (imageStack.length > 0) {
         const frontSlide = imageStack[imageStack.length - 1];
         const mesh = frontSlide?.mesh;
@@ -2034,7 +2073,6 @@ function setHeroViewpoint() {
                 const zoom = params.cameraZoom ?? 1.0;
                 const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
 
-                // Account for zoom: effective FOV = 2 * atan(tan(fov/2) / zoom)
                 const halfVerticalTan = Math.max(Math.tan(fov / 2) / zoom, 1e-6);
                 const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
                 const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
@@ -2046,16 +2084,12 @@ function setHeroViewpoint() {
                     CAMERA_MIN_DISTANCE
                 );
 
-                // Update the cameraDistance param so slider reflects the value
                 params.cameraDistance = distance;
             }
         }
     }
 
-    // Set camera to fit front slide (skip z-restore to keep slides collapsed)
     setViewpointFitToFrame({ skipRestore: true });
-
-    // Refresh pane to update slider values
     pane?.refresh?.();
 
     logCamera.info('Hero view: slides collapsed with gaps, X/Y reset, distance set to fit');
@@ -2065,8 +2099,15 @@ function setHeroViewpoint() {
  * Set viewpoint to a dynamic three-quarter "beauty" angle.
  */
 function setBeautyViewpoint() {
+    // Delegate to ViewpointController if available (Phase 6)
+    if (app?.viewpointController) {
+        app.viewpointController.setBeautyViewpoint();
+        emitCameraUpdated('viewpoint');
+        return;
+    }
+
+    // Fallback: inline implementation
     // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    // restoreSlideZPositions() is self-guarding via savedHeroZSpacing check
     restoreSlideZPositions();
 
     if (cameraController) {
@@ -2347,6 +2388,13 @@ function loadImage(file) {
 }
 
 function updateImageList() {
+    // Delegate to SlidePanelController if available (Phase 6)
+    if (app?.slidePanelController) {
+        app.slidePanelController.updateImageList();
+        return;
+    }
+
+    // Fallback: inline implementation
     const listContainer = document.getElementById('image-list');
     const emptyMessage = document.getElementById('slides-empty-message');
     const slidesPanel = document.getElementById('slides-panel');

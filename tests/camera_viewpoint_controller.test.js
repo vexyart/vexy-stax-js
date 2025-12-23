@@ -232,10 +232,10 @@ describe('ViewpointController', () => {
             pane: {}
         });
 
-        controller.setHeroViewpoint(); // Set savedHeroZSpacing
+        controller.setHeroViewpoint(); // Set savedHeroState
         controller.dispose();
 
-        assert.strictEqual(controller.savedHeroZSpacing, null);
+        assert.strictEqual(controller.savedHeroState, null);
         assert.strictEqual(controller.cameraController, null);
         assert.strictEqual(controller.pane, null);
     });
