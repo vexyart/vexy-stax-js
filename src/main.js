@@ -156,7 +156,7 @@ const settingsManager = createSettingsManager({
     },
     switchCameraMode: (mode) => switchCameraMode(mode),
     updateZoom: (zoom) => updateZoom(zoom),
-    updateBackground: () => updateBackground(),
+    updateBackground: () => app?.sceneDirector?.updateBackground(),
     updateFloorColor: () => updateFloorColor(),
     updateZSpacing: (spacing) => updateZSpacing(spacing),
     autoZSpacing: () => {
@@ -484,7 +484,7 @@ function init() {
     floorManager.create();
 
     if (params.ambience) {
-        updateBackground();
+        app?.sceneDirector?.updateBackground();
     }
 
     memoryMonitor = new MemoryMonitor({
@@ -706,12 +706,12 @@ function init() {
         callbacks: {
             exportPNG,
             clearAll,
-            loadSettings,
-            saveSettings,
-            resetSettings,
-            undo,
-            redo,
-            toggleAmbience
+            loadSettings: () => settingsManager.loadSettings(),
+            saveSettings: () => settingsManager.saveSettings(),
+            resetSettings: () => settingsManager.resetSettings(),
+            undo: () => historyManager?.undo?.(),
+            redo: () => historyManager?.redo?.(),
+            toggleAmbience: (intensity) => app?.sceneDirector?.setAmbience(intensity)
         }
     });
     debugAPI.expose();
@@ -835,17 +835,6 @@ function init() {
  * @param {string} hexColor - Hex color string (e.g. '#ffffff')
  * @returns {number} Luminance value between 0 (black) and 1 (white)
  */
-
-/**
- * Toggle ambience mode (floor + realistic lighting)
- * Delegates to SceneDirector for coordinated scene updates.
- * @param {number} intensity - Ambience intensity (0 = off, 0.1-1.0 = on with gradual intensity)
- */
-function toggleAmbience(intensity) {
-    if (app?.sceneDirector) {
-        app.sceneDirector.setAmbience(intensity);
-    }
-}
 
 /**
  * Helper function to add event listener and track it for cleanup
@@ -1128,9 +1117,9 @@ function setupTweakpane() {
         viewpointPresets: VIEWPOINT_PRESETS,
         callbacks: {
             updateCanvasSize,
-            updateBackground,
+            updateBackground: () => app?.sceneDirector?.updateBackground(),
             updateFloorColor,
-            toggleAmbience,
+            toggleAmbience: (intensity) => app?.sceneDirector?.setAmbience(intensity),
             centerViewOnContent,
             setViewpoint: (...args) => { setViewpoint(...args); updateCanvasAriaLabel(); },
             setBeautyViewpoint: () => { setBeautyViewpoint(); updateCanvasAriaLabel(); },
@@ -1412,16 +1401,6 @@ function switchCameraMode(mode) {
 
     controls.update();
     emitCameraUpdated('mode-change');
-}
-
-/**
- * Update background color and emissive intensity.
- * Delegates to SceneDirector for coordinated scene updates.
- */
-function updateBackground() {
-    if (app?.sceneDirector) {
-        app.sceneDirector.updateBackground();
-    }
 }
 
 /**
