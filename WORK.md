@@ -4,11 +4,23 @@
 ## Status (2025-12-23)
 - **Tests**: 504 unit + 7 E2E pass
 - **Build**: 1,212 kB
-- **main.js**: 2,049 → 1,683 lines (−366 lines)
+- **main.js**: 2,433 → 1,631 lines (−802 lines, −33%)
 
-## Session Update (2025-12-23) - Refactoring Phase C Continued
+## Session Update (2025-12-23) - Additional Wrapper Elimination
 
-### Viewpoint Wrapper Elimination
+Inlined additional thin wrappers:
+- `updateFloorColor()` → `floorManager?.updateColor()`
+- `updateCameraDistance()` → `cameraController?.setDistance()`
+- `updateCameraOffset()` → `cameraController?.setOffset()`
+- `updateImageList()` → `app?.slidePanelController?.updateImageList()`
+- Fixed `updateBackground` shorthand reference error in ExportManager config
+
+**Result**: −52 lines (removed 4 wrapper functions)
+
+---
+
+## Previous Session (2025-12-23) - Viewpoint Wrapper Elimination
+
 Inlined viewpoint wrapper functions in callbacks:
 - `setBeautyViewpoint()` → `app?.viewpointController?.setBeautyViewpoint()`
 - `setHeroViewpoint()` → `app?.viewpointController?.setHeroViewpoint()`
