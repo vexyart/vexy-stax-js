@@ -77,10 +77,6 @@ let sceneComposition; // Manages image stack meshes
 let fileHandler = null; // Handles file intake (browse + drag/drop)
 let exportManager = null; // Manages PNG/JSON exports and imports
 let keyboardShortcuts = null; // Handles keyboard shortcut wiring
-// Strict fit: 1.0 = slide fills canvas exactly (matches animation.js)
-const FRONT_VIEW_PADDING = 1.0;
-const BEAUTY_VIEW_PADDING = 1.35;
-const BEAUTY_CAMERA_DIRECTION = new THREE.Vector3(-0.82, -0.18, 1).normalize();
 // Lighting and environment
 let sceneManager = null;
 let lightingManager = null;
@@ -783,42 +779,8 @@ function init() {
  * @param {number} intensity - Ambience intensity (0 = off, 0.1-1.0 = on with gradual intensity)
  */
 function toggleAmbience(intensity) {
-    // Delegate to SceneDirector if available (Phase 6)
     if (app?.sceneDirector) {
         app.sceneDirector.setAmbience(intensity);
-        return;
-    }
-
-    // Fallback: inline implementation (will be removed once migration complete)
-    params.ambience = intensity;
-    const enabled = intensity > 0;
-
-    if (enabled) {
-        if (ambienceManager) {
-            ambienceManager.updateMaterials(true);
-            ambienceManager.applyEmissiveIntensity(intensity * 0.25);
-        }
-        if (lightingManager) {
-            lightingManager.setAmbientIntensity(0.3 + intensity * 0.5);
-        }
-        updateBackground();
-    } else {
-        if (ambienceManager) {
-            ambienceManager.updateMaterials(false);
-        }
-        updateBackground();
-    }
-
-    if (floorManager) {
-        floorManager.updateMaterial(enabled);
-    }
-
-    if (sceneComposition) {
-        sceneComposition.recalculateLayout();
-    }
-
-    if (controls) {
-        controls.update();
     }
 }
 
@@ -1769,43 +1731,9 @@ function switchCameraMode(mode) {
  * Delegates to SceneDirector for coordinated scene updates.
  */
 function updateBackground() {
-    // Delegate to SceneDirector if available (Phase 6)
     if (app?.sceneDirector) {
         app.sceneDirector.updateBackground();
-        return;
     }
-
-    // Fallback: inline implementation (will be removed once migration complete)
-    if (sceneManager) {
-        sceneManager.updateBackground(params.bgColor, params.transparentBg);
-    } else {
-        if (params.transparentBg) {
-            scene.background = null;
-            renderer.setClearColor(0x000000, 0);
-        } else {
-            scene.background = new THREE.Color(params.bgColor);
-            renderer.setClearColor(params.bgColor, 1);
-        }
-    }
-
-    lightingManager?.update();
-
-    if (params.ambience) {
-        const bgLuminance = calculateLuminance(params.bgColor);
-        const emissiveIntensity = getAdaptiveEmissiveIntensity(bgLuminance);
-
-        imageStack.forEach((imageData) => {
-            const material = imageData.mesh?.material;
-            if (material && 'emissiveIntensity' in material) {
-                material.emissiveIntensity = emissiveIntensity;
-                material.needsUpdate = true;
-            }
-        });
-
-        logImages.info(`Slides emissive updated (luminance: ${bgLuminance.toFixed(2)}, emissive: ${emissiveIntensity.toFixed(2)})`);
-    }
-
-    emitBackgroundChanged('update');
 }
 
 /**
@@ -1910,74 +1838,10 @@ function setViewpoint(x, y, z) {
  * @param {boolean} [options.skipRestore=false] - Skip restoring z-positions (used by Hero mode)
  */
 function setViewpointFitToFrame(options = {}) {
-    // Delegate to ViewpointController if available (Phase 6)
     if (app?.viewpointController) {
         app.viewpointController.setViewpointFitToFrame(options);
         emitCameraUpdated('viewpoint');
-        return;
     }
-
-    // Fallback: inline implementation (will be removed once migration complete)
-    if (!options.skipRestore) {
-        restoreSlideZPositions();
-    }
-
-    if (cameraController) {
-        cameraController.setViewpointFitToFrame();
-        return;
-    }
-
-    params.viewpointPreset = 'front';
-
-    if (imageStack.length === 0) {
-        setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
-        return;
-    }
-
-    const frontSlide = imageStack[imageStack.length - 1];
-    const mesh = frontSlide?.mesh;
-    if (!mesh) {
-        logCamera.error('No front slide found despite non-empty imageStack');
-        setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
-        return;
-    }
-
-    const box = new THREE.Box3().setFromObject(mesh);
-    if (box.isEmpty()) {
-        logCamera.warn('Front slide bounding box empty, falling back to default viewpoint');
-        setViewpoint(0, 0, CAMERA_DEFAULT_DISTANCE);
-        return;
-    }
-
-    const center = box.getCenter(new THREE.Vector3());
-    const size = box.getSize(new THREE.Vector3());
-    const width = size.x || 1;
-    const height = size.y || 1;
-
-    const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
-    const zoom = params.cameraZoom ?? 1.0;
-    const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
-
-    const halfVerticalTan = Math.max(Math.tan(fov / 2) / zoom, 1e-6);
-    const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
-    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
-
-    const distanceForHeight = (height / 2) / halfVerticalTan;
-    const distanceForWidth = (width / 2) / halfHorizontalTan;
-    const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
-    const distance = Math.max(desiredDistance * FRONT_VIEW_PADDING, CAMERA_MIN_DISTANCE);
-    const position = new THREE.Vector3(center.x, center.y, center.z + distance);
-
-    camera.position.copy(position);
-    camera.lookAt(center);
-    controls.target.copy(center);
-    controls.update();
-
-    params.cameraDistance = distance;
-
-    logCamera.info(`Front view: centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
-        + `with width ${width.toFixed(1)}, height ${height.toFixed(1)}, distance ${distance.toFixed(1)}, zoom ${zoom.toFixed(2)}`);
-    emitCameraUpdated('viewpoint');
 }
 
 /**
@@ -2030,137 +1894,20 @@ function restoreSlideZPositions() {
  * Delegates to ViewpointController for coordinated camera updates.
  */
 function setHeroViewpoint() {
-    // Delegate to ViewpointController if available (Phase 6)
     if (app?.viewpointController) {
         app.viewpointController.setHeroViewpoint();
         pane?.refresh?.();
-        return;
     }
-
-    // Fallback: inline implementation (will be removed once migration complete)
-    params.viewpointPreset = 'hero';
-
-    if (cameraController) {
-        cameraController.resetOffset();
-    } else {
-        params.cameraOffsetX = 0;
-        params.cameraOffsetY = 0;
-    }
-
-    controls.target.set(0, 0, 0);
-
-    if (savedHeroZSpacing === null) {
-        savedHeroZSpacing = getEffectiveZSpacing();
-    }
-
-    const slideCount = imageStack.length;
-    imageStack.forEach((imageData, index) => {
-        const offset = (slideCount - 1 - index) * MIN_LAYER_GAP;
-        imageData.mesh.position.z = -offset;
-    });
-
-    if (imageStack.length > 0) {
-        const frontSlide = imageStack[imageStack.length - 1];
-        const mesh = frontSlide?.mesh;
-        if (mesh) {
-            const box = new THREE.Box3().setFromObject(mesh);
-            if (!box.isEmpty()) {
-                const size = box.getSize(new THREE.Vector3());
-                const width = size.x || 1;
-                const height = size.y || 1;
-
-                const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
-                const zoom = params.cameraZoom ?? 1.0;
-                const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
-
-                const halfVerticalTan = Math.max(Math.tan(fov / 2) / zoom, 1e-6);
-                const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
-                const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
-
-                const distanceForHeight = (height / 2) / halfVerticalTan;
-                const distanceForWidth = (width / 2) / halfHorizontalTan;
-                const distance = Math.max(
-                    Math.max(distanceForHeight, distanceForWidth) * FRONT_VIEW_PADDING,
-                    CAMERA_MIN_DISTANCE
-                );
-
-                params.cameraDistance = distance;
-            }
-        }
-    }
-
-    setViewpointFitToFrame({ skipRestore: true });
-    pane?.refresh?.();
-
-    logCamera.info('Hero view: slides collapsed with gaps, X/Y reset, distance set to fit');
 }
 
 /**
  * Set viewpoint to a dynamic three-quarter "beauty" angle.
  */
 function setBeautyViewpoint() {
-    // Delegate to ViewpointController if available (Phase 6)
     if (app?.viewpointController) {
         app.viewpointController.setBeautyViewpoint();
         emitCameraUpdated('viewpoint');
-        return;
     }
-
-    // Fallback: inline implementation
-    // Restore z-positions if coming from Hero viewpoint (SCENE.md §5)
-    restoreSlideZPositions();
-
-    if (cameraController) {
-        cameraController.setBeautyViewpoint();
-        return;
-    }
-
-    params.viewpointPreset = 'beauty';
-
-    if (imageStack.length === 0) {
-        setViewpoint(-1280, -40, 1400);
-        return;
-    }
-
-    const box = new THREE.Box3();
-    imageStack.forEach((entry) => {
-        if (entry?.mesh) {
-            box.expandByObject(entry.mesh);
-        }
-    });
-
-    if (box.isEmpty()) {
-        setViewpoint(-1280, -40, 1400);
-        return;
-    }
-
-    const center = box.getCenter(new THREE.Vector3());
-    const sphere = new THREE.Sphere();
-    box.getBoundingSphere(sphere);
-
-    const radius = Math.max(sphere.radius, 1);
-    const fov = (params.cameraFOV ?? DEFAULT_CAMERA_FOV) * (Math.PI / 180);
-    const aspect = camera.aspect || (params.canvasSize.x / params.canvasSize.y);
-    const halfVerticalTan = Math.max(Math.tan(fov / 2), 1e-6);
-    const horizontalFov = 2 * Math.atan(halfVerticalTan * aspect);
-    const halfHorizontalTan = Math.max(Math.tan(horizontalFov / 2), 1e-6);
-
-    const distanceForHeight = radius / halfVerticalTan;
-    const distanceForWidth = radius / halfHorizontalTan;
-    const desiredDistance = Math.max(distanceForHeight, distanceForWidth);
-    const distance = Math.max(desiredDistance * BEAUTY_VIEW_PADDING, CAMERA_MIN_DISTANCE * 2);
-
-    const offset = BEAUTY_CAMERA_DIRECTION.clone().multiplyScalar(distance);
-    const position = center.clone().add(offset);
-
-    camera.position.copy(position);
-    camera.lookAt(center);
-    controls.target.copy(center);
-    controls.update();
-
-    logCamera.info(`Beauty view: centred at (${center.x.toFixed(1)}, ${center.y.toFixed(1)}, ${center.z.toFixed(1)}) `
-        + `radius ${radius.toFixed(1)}, distance ${distance.toFixed(1)}`);
-    emitCameraUpdated('viewpoint');
 }
 
 function setupPlaywrightBridge() {
@@ -2388,94 +2135,9 @@ function loadImage(file) {
 }
 
 function updateImageList() {
-    // Delegate to SlidePanelController if available (Phase 6)
     if (app?.slidePanelController) {
         app.slidePanelController.updateImageList();
-        return;
     }
-
-    // Fallback: inline implementation
-    const listContainer = document.getElementById('image-list');
-    const emptyMessage = document.getElementById('slides-empty-message');
-    const slidesPanel = document.getElementById('slides-panel');
-
-    if (!listContainer) {
-        return;
-    }
-
-    listContainer.setAttribute('role', 'list');
-    listContainer.innerHTML = '';
-
-    const hasImages = imageStack.length > 0;
-    slidesPanel?.classList.toggle('is-empty', !hasImages);
-    if (emptyMessage) {
-        emptyMessage.classList.toggle('hidden', hasImages);
-    }
-
-    // Update canvas aria-label when image count changes
-    updateCanvasAriaLabel();
-
-    imageStack.forEach((imageData, index) => {
-        const item = document.createElement('div');
-        item.className = 'slide-thumb';
-        item.draggable = true;
-        item.dataset.index = index;
-        item.dataset.id = imageData.id;
-        item.tabIndex = 0;
-        item.setAttribute('role', 'listitem');
-        item.setAttribute(
-            'aria-label',
-            `Slide ${index + 1}: ${imageData.filename}, ${imageData.originalWidth} by ${imageData.originalHeight} pixels`
-        );
-        item.title = `${imageData.filename} — ${imageData.originalWidth}×${imageData.originalHeight}px`;
-
-        const image = document.createElement('img');
-        image.src =
-            imageData.thumbnailSrc ||
-            imageData.texture?.image?.currentSrc ||
-            imageData.texture?.image?.src ||
-            '';
-        image.alt = '';
-        image.draggable = false;
-        item.appendChild(image);
-
-        const indexBadge = document.createElement('span');
-        indexBadge.className = 'slide-thumb-index';
-        indexBadge.textContent = index + 1;
-        item.appendChild(indexBadge);
-
-        const deleteButton = document.createElement('button');
-        deleteButton.type = 'button';
-        deleteButton.className = 'slide-thumb-delete';
-        deleteButton.setAttribute('aria-label', `Delete ${imageData.filename}`);
-        deleteButton.textContent = '✕';
-        deleteButton.addEventListener('click', (event) => {
-            event.stopPropagation();
-            deleteImage(index);
-        });
-        item.appendChild(deleteButton);
-
-        item.addEventListener('click', () => {
-            item.focus();
-        });
-
-        // Drag events for reordering
-        item.addEventListener('dragstart', handleDragStart);
-        item.addEventListener('dragover', handleDragOver);
-        item.addEventListener('drop', handleDrop);
-        item.addEventListener('dragend', handleDragEnd);
-
-        // Keyboard navigation events
-        item.addEventListener('keydown', handleImageListKeydown);
-        item.addEventListener('focus', () => {
-            item.classList.add('focused');
-        });
-        item.addEventListener('blur', () => {
-            item.classList.remove('focused');
-        });
-
-        listContainer.appendChild(item);
-    });
 }
 
 /**
