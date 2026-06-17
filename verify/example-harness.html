@@ -1,0 +1,144 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/verify/example-harness.html
+     Example/demo harness used by example.sh + verify/example.mjs. Mounts the airbl
+     example scene (this repo's in-repo testdata) through the built <vexy-stax> Web
+     Component (dist/vexy-stax.element.js, which bundles three.js), and exposes window
+     hooks so the headless Playwright driver can exercise ALL implemented JS render
+     ops: toImage (compact + expanded), toVideo (transition), and a REAL scrollspy
+     attached to a tall scroll region (the page scrolls to drive compact↔expanded).
+     Served over HTTP from the package root so the scene's relative slide paths
+     resolve without file:// texture CORS errors. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vexy-stax example harness</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      /* Sticky stage pinned at the top of a tall scroll region so scrollspy maps
+         the page scroll to the compact↔expanded morph. */
+      #scroller { height: 300vh; }
+      #pin { position: sticky; top: 0; height: 100vh; display: flex; align-items: center; justify-content: center; }
+      vexy-stax { display: block; width: 640px; height: 414px; }
+    </style>
+  </head>
+  <body>
+    <div id="scroller">
+      <div id="pin">
+        <vexy-stax id="stax"
+                   scene="/testdata/airbl.scene.json"
+                   view="compact"></vexy-stax>
+      </div>
+    </div>
+    <script type="module" src="/dist/vexy-stax.element.js"></script>
+    <script type="module">
+      const STATUS = { phase: "init", error: null, ready: false };
+      window.__vexyStatus = () => STATUS;
+
+      const el = document.getElementById("stax");
+      const scroller = document.getElementById("scroller");
+      el.addEventListener("error", (e) => {
+        STATUS.phase = "error";
+        STATUS.error = String(e.detail?.error?.stack ?? e.detail?.error ?? e);
+      });
+      el.addEventListener("ready", () => {
+        const stax = el.instance;
+        window.__stax = stax;
+
+        // Supersample x2 (SSAA), matching the Python pygfx engine's _SUPERSAMPLE=2:
+        // render at 2x nominal so the Lanczos downscale in the gate is crisp. Aspect
+        // is unchanged (1280/828 == 640/414), so framing is identical.
+        const SS = 2;
+        stax.stage.renderer.setPixelRatio(1);
+        stax.stage.resize(640 * SS, 414 * SS);
+        window.__ssaa = SS;
+
+        // --- static view + image export ------------------------------------
+        window.__setView = async (view) => {
+          await stax.setView(view);
+          stax.stage.render();
+          return true;
+        };
+        window.__canvasSize = () => {
+          const c = stax.stage.renderer.domElement;
+          return { w: c.width, h: c.height };
+        };
+        window.__canvasDataUrl = () => stax.stage.renderer.domElement.toDataURL("image/png");
+
+        // toImage() → base64 PNG (the real public exporter). Returns the data URL
+        // payload so the node driver can write the bytes to a file.
+        window.__toImageB64 = async (view) => {
+          await stax.setView(view);
+          const blob = await stax.toImage({ scale: 1 });
+          const buf = new Uint8Array(await blob.arrayBuffer());
+          let s = "";
+          for (let i = 0; i < buf.length; i++) s += String.fromCharCode(buf[i]);
+          return { b64: btoa(s), type: blob.type, size: blob.size };
+        };
+
+        // A single combined image: toImage() compact + expanded composited
+        // side-by-side onto one canvas, exported as one PNG.
+        window.__combineImagesB64 = async () => {
+          await stax.setView("compact");
+          const compact = await stax.toImage({ scale: 1 });
+          await stax.setView("expanded");
+          const expanded = await stax.toImage({ scale: 1 });
+          const [ic, ie] = await Promise.all([
+            createImageBitmap(compact),
+            createImageBitmap(expanded),
+          ]);
+          const gap = 16;
+          const w = ic.width + ie.width + gap;
+          const h = Math.max(ic.height, ie.height);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext("2d");
+          ctx.fillStyle = "#ffffff";
+          ctx.fillRect(0, 0, w, h);
+          ctx.drawImage(ic, 0, 0);
+          ctx.drawImage(ie, ic.width + gap, 0);
+          const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+          const buf = new Uint8Array(await blob.arrayBuffer());
+          let s = "";
+          const CH = 0x8000;
+          for (let i = 0; i < buf.length; i += CH) {
+            s += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+          }
+          return { b64: btoa(s), type: blob.type, size: blob.size };
+        };
+
+        // --- playable transition -------------------------------------------
+        window.__playTransition = async (kind) => {
+          await stax.transition(kind);
+          return true;
+        };
+
+        // toVideo() → base64 video (WebM via MediaRecorder in chromium). The real
+        // public video exporter; plays the full transition while capturing.
+        window.__toVideoB64 = async (kind) => {
+          const blob = await stax.toVideo(kind ? { kind } : {});
+          const buf = new Uint8Array(await blob.arrayBuffer());
+          let s = "";
+          const CH = 0x8000;
+          for (let i = 0; i < buf.length; i += CH) {
+            s += String.fromCharCode.apply(null, buf.subarray(i, i + CH));
+          }
+          return { b64: btoa(s), type: blob.type, size: blob.size };
+        };
+
+        // --- real scrollspy ------------------------------------------------
+        // Attach the production scrollspy to the tall scroll region. Page scroll
+        // (driven by the node driver) maps to the compact↔expanded morph.
+        window.__attachScrollspy = (kind) => {
+          stax.scrollspy({ trigger: scroller, kind: kind ?? "expand", reducedMotion: false });
+          return true;
+        };
+        window.__scrollMaxY = () =>
+          Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+
+        STATUS.phase = "ready";
+        STATUS.ready = true;
+      });
+    </script>
+  </body>
+</html>

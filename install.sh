@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# install.sh - Install vexy-stax-js dependencies
-# Vexy Stax JS: Browser-based tool for arranging PNG images along Z-axis in 3D (Three.js).
+# this_file: vexy-stax-js/install.sh
+# install.sh - Install vexy-stax-js dependencies + the E2E/example browser.
+# Vexy Stax JS: Browser renderer for the shared vexy-stax scene format (Three.js).
 # Part of Vexy Stax, a creative 3D image stacking tool.
 set -euo pipefail
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
+cd "$(dirname "$0")"
 
 echo "==> Installing npm dependencies..."
 npm install
+
+echo "==> Ensuring Playwright chromium is available (E2E + example.sh)..."
+# Chromium is normally already cached; this verifies/installs it as a no-op.
+npx playwright install chromium
 
 echo "==> Install complete."

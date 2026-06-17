@@ -1,144 +1,77 @@
-# Vexy Stax JS
+# vexy-stax-js
 
-Browser-based 3D image stacking visualizer built with Three.js. Load images, position them in 3D space, apply materials, and export high-resolution renders.
+Browser renderer for the [vexy-stax](../SPEC.md) shared scene format: a deck of
+layered PNG slides drawn as 3D glass plates in two views (`expanded` / `compact`)
+with morphable per-slide opacity. Built on three.js. Ships three ways — an ESM
+module, a `<vexy-stax>` Web Component, and a classic-script global.
 
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-462%20passing-success)](tests/)
-[![Demo](https://img.shields.io/badge/demo-live-success)](https://vexyart.github.io/vexy-stax-js/)
+Scene parser, view geometry (mirrors the Python package exactly), a working
+three.js stage (plates + floor + reflections + captions), and the three entry
+points. Render ops: a static view, image export (`toImage`), a playable
+`transition`, video export (`toVideo`, WebCodecs with a MediaRecorder fallback),
+and a scroll-driven `scrollspy` (IntersectionObserver + scroll, honouring
+`prefers-reduced-motion`).
 
----
+## Quick start
 
-## Quick Start
-
-**Online**: https://vexyart.github.io/vexy-stax-js/
-
-**Local**:
 ```bash
 npm install
-npm run dev          # http://localhost:5173
-npm run build        # outputs to docs/
-npm test             # run all tests
+npm run dev          # vite dev server
+npm run build        # -> dist/vexy-stax.element.js + dist/vexy-stax.global.js
+npm run test:unit    # node --test (scene.js + geometry.js + transition/scrollspy math)
+npm test             # unit + playwright E2E (mount, views, image/video, transition, scrollspy)
+
+# HARD render gate: render compact + expanded stills of the airbl example in
+# headless chromium and assert real pixel variance (not a blank canvas):
+node verify/run.mjs && python3 verify/gate.py
 ```
 
----
+## Usage
 
-## Features
+ESM:
 
-- **3D Image Stacking**: Position images along Z-axis with adjustable spacing
-- **Camera Modes**: Perspective, Orthographic, Isometric, Telephoto
-- **Viewpoints**: Beauty (3/4 angle), Hero (front), Top, Side, custom
-- **Materials**: Matte, Glossy, Neutral presets
-- **Export**: PNG (1x/2x/4x), JSON with embedded images
-- **Hero Shot**: Animated camera fly-through with slide collapse
-
-### Camera System
-
-- **Beauty View**: Fits entire floor in viewport from 3/4 angle
-- **Hero View**: Front-on view with slides collapsed to minimum spacing
-- **Dynamic near plane**: Prevents z-fighting at large camera distances
-- **5-slider control**: FOV, Tele, Z (distance), X/Y (pan)
-
-### Scene Composition
-
-- Final slide anchored at Z=0, others at negative Z
-- Tallest slide centered at Y=0, all slides bottom-aligned
-- Floor positioned 3px below tallest slide
-- Auto slide spacing: `tallest_height × 0.6`
-
----
-
-## Commands
-
-```bash
-npm run dev                   # Start dev server
-npm run build                 # Build for production
-npm test                      # Run all tests (462 unit + 7 E2E)
-npm run test:unit             # Unit tests only
-npm run test:coverage         # Generate coverage reports
+```js
+import { VexyStax, loadScene } from "vexy-stax-js";
+const scene = await loadScene("scene.json");
+const stax = new VexyStax(container, scene);
+await stax.setView("compact");
+const blob = await stax.toImage({ scale: 2 });
 ```
 
----
+Web Component:
 
-## Project Structure
+```html
+<script type="module" src="./dist/vexy-stax.element.js"></script>
+<vexy-stax scene="scene.json" view="expanded"></vexy-stax>
+```
+
+Global:
+
+```html
+<script src="./dist/vexy-stax.global.js"></script>
+<script>const stax = new VexyStax.VexyStax(el, scene);</script>
+```
+
+## Layout
 
 ```
 src/
-├── main.js              # Entry point (refactoring in progress)
-├── Application.js       # Lifecycle orchestration
-├── core/                # AppState, EventBus, RenderLoop, constants
-├── camera/              # CameraController, ViewpointController, animation
-├── scene/               # SceneManager, FloorManager, AmbienceManager
-├── ui/                  # TweakpaneSetup, SlidePanelController
-├── export/              # ExportManager (PNG/JSON)
-├── files/               # FileHandler, TextureLoader
-└── utils/               # helpers, logger
-
-tests/                   # 462 unit tests + 7 E2E tests
-docs/                    # Production build output
+├── index.js       # ESM public API (VexyStax: setView/toImage/transition/toVideo/scrollspy)
+├── element.js     # <vexy-stax> custom element (auto-registers; mode=static|playable|scrollspy)
+├── global.js      # window.VexyStax IIFE entry
+├── scene.js       # strict scene parser (mirrors vexy_stax/scene.py)
+├── geometry.js    # view math (mirrors vexy_stax/geometry.py exactly) + frameStateAt
+├── stage.js       # three.js plates + floor + reflections + captions + camera (two views)
+├── transition.js  # rAF morph driver + timeline/progress math (pure, testable)
+├── scrollspy.js   # scroll→progress mapping (IntersectionObserver; reduced-motion)
+└── export.js      # canvas→PNG; WebCodecs/MediaRecorder video capture
+tests/             # node --test (scene/geometry/transition/scrollspy) + playwright E2E
+verify/            # HARD render gate: harness.html + run.mjs (chromium) + gate.py (PIL)
 ```
 
----
-
-## API Reference
-
-```javascript
-// Export
-vexyStax.exportPNG(scale)        // 1x, 2x, or 4x
-vexyStax.clearAll()              // Remove all images
-
-// Camera
-vexyStax.setViewpoint(preset)    // 'beauty', 'hero', 'front', etc.
-
-// Settings
-vexyStax.loadSettings()
-vexyStax.saveSettings()
-vexyStax.resetSettings()
-
-// History
-vexyStax.undo()
-vexyStax.redo()
-```
-
----
-
-## JSON Scene Format
-
-```json
-{
-  "version": "1.0",
-  "params": {
-    "zSpacing": 648,
-    "bgColor": "#ffffff"
-  },
-  "settings": {
-    "floorColor": "#ececec",
-    "floorOpacity": 0.05,
-    "material": "neutral",
-    "viewpoint": "beauty"
-  },
-  "camera": {
-    "position": { "x": -2299, "y": 1916, "z": 1327 }
-  },
-  "images": [
-    { "filename": "slide1.png", "dataURL": "data:image/png;base64,...", "width": 1920, "height": 1080 }
-  ]
-}
-```
-
----
-
-## Technical Notes
-
-- **Three.js r181**: WebGL rendering with PBR materials
-- **GSAP**: Camera animations
-- **Tweakpane 4.0.5**: Parameter controls
-- **Build**: ES modules, ~1.2MB bundle
-- **Browser**: Chrome 90+, Edge 90+, Firefox 88+, Safari 14+
-
----
+The numeric outputs of `geometry.js` match `vexy-stax-py/src/vexy_stax/geometry.py`
+for the same scene; both are tested against the same fixture vectors.
 
 ## License
 
-Apache License 2.0
-
-Copyright 2025 Adam Twardoch / VexyArt
+Apache-2.0 — Copyright 2026 Adam Twardoch / VexyArt

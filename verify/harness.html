@@ -1,0 +1,89 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/verify/harness.html
+     Verification harness for the HARD GATE: mounts the airbl example scene via the
+     built <vexy-stax> Web Component (dist/vexy-stax.element.js, which bundles
+     three.js — no bare-specifier resolution needed in the browser) so Playwright
+     can render compact + expanded stills and screenshot the canvas. Served over
+     HTTP from the package root so the in-repo scene (testdata/airbl.scene.json) and
+     its relative slide paths (testdata/airbl-lores/*.png) resolve without file://
+     texture CORS errors. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>vexy-stax verify harness</title>
+    <style>
+      html, body { margin: 0; background: #fff; }
+      vexy-stax { display: block; width: 640px; height: 414px; }
+    </style>
+  </head>
+  <body>
+    <vexy-stax id="stax" scene="/testdata/airbl.scene.json" view="compact"></vexy-stax>
+    <script type="module" src="/dist/vexy-stax.element.js"></script>
+    <script type="module">
+      const STATUS = { phase: "init", error: null, ready: false };
+      window.__vexyStatus = () => STATUS;
+
+      const el = document.getElementById("stax");
+      el.addEventListener("error", (e) => {
+        STATUS.phase = "error";
+        STATUS.error = String(e.detail?.error?.stack ?? e.detail?.error ?? e);
+      });
+      el.addEventListener("ready", () => {
+        const stax = el.instance;
+        window.__stax = stax;
+        // Supersample x2 (SSAA), matching the Python pygfx engine's _SUPERSAMPLE=2:
+        // render the canvas at 2x the nominal size (pixelRatio stays 1 so the
+        // WebGL context is stable); the gate Lanczos-downscales to 640x414. The
+        // camera aspect is unchanged (1280/828 == 640/414), so framing is identical.
+        const SS = 2;
+        stax.stage.renderer.setPixelRatio(1);
+        stax.stage.resize(640 * SS, 414 * SS);
+        STATUS.phase = "ready";
+        STATUS.ready = true;
+        window.__ssaa = SS;
+
+        window.__setView = async (view) => {
+          await stax.setView(view);
+          stax.stage.render();
+          return true;
+        };
+        window.__canvasDataUrl = () => stax.stage.renderer.domElement.toDataURL("image/png");
+        window.__canvasSize = () => {
+          const c = stax.stage.renderer.domElement;
+          return { w: c.width, h: c.height };
+        };
+        window.__playTransition = async (kind) => {
+          await stax.transition(kind);
+          return true;
+        };
+
+        // Orientation probe: render a SINGLE plate head-on, filling the frame,
+        // with no reflection/background tint, so it can be compared pixel-wise to
+        // its own source PNG (un-flipped vs flipped) to prove text is not mirrored.
+        window.__renderPlateProbe = (index) => {
+          const st = stax.stage;
+          const plate = st.plates[index];
+          // Hide everything except this plate.
+          st.plates.forEach((p) => {
+            p.mesh.visible = p === plate;
+            if (p.reflection) p.reflection.visible = false;
+          });
+          st.captions.forEach((c) => (c.sprite.visible = false));
+          st.floor.visible = false;
+          plate.mesh.material.opacity = 1;
+          plate.mesh.position.set(0, 0, 0);
+          // Frame the plate head-on so it fills the view.
+          const dist = plate.height / (2 * Math.tan(((st.camera.fov * Math.PI) / 180) / 2));
+          st.camera.position.set(0, 0, dist);
+          st.camera.up.set(0, 1, 0);
+          st.camera.lookAt(0, 0, 0);
+          st.camera.near = Math.max(1, dist * 0.005);
+          st.camera.updateProjectionMatrix();
+          st.render();
+          return st.renderer.domElement.toDataURL("image/png");
+        };
+        window.__plateSrc = (index) => stax.scene.slides[index].src;
+      });
+    </script>
+  </body>
+</html>

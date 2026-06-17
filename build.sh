@@ -1,77 +1,16 @@
-#!/bin/bash
+#!/usr/bin/env bash
 # this_file: vexy-stax-js/build.sh
-# Build script for vexy-stax-js
-
+# build.sh - Test + build vexy-stax-js (emits the dist bundles).
+# Vexy Stax JS: Browser renderer for the shared vexy-stax scene format (Three.js).
+# Runs the unit tests, then builds dist/vexy-stax.element.js + dist/vexy-stax.global.js.
+set -euo pipefail
 cd "$(dirname "$0")"
 
-set -e  # Exit on error
+echo "==> Running unit tests..."
+npm run test:unit
 
-# Parse flags
-NO_SERVE=false
-for arg in "$@"; do
-    case $arg in
-        --no-serve) NO_SERVE=true ;;
-    esac
-done
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Building vexy-stax-js"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo
-
-# Check if node is installed
-if ! command -v node &> /dev/null; then
-    echo "❌ Error: Node.js is not installed"
-    echo "   Install from: https://nodejs.org/"
-    exit 1
-fi
-
-echo "✓ Node.js $(node --version)"
-echo "✓ npm $(npm --version)"
-echo
-
-# Check if npm is installed
-if ! command -v npm &> /dev/null; then
-    echo "❌ Error: npm is not installed"
-    exit 1
-fi
-
-# Install dependencies
-echo "📦 Installing dependencies..."
-npm ci
-
-echo
-
-# Run build
-echo "🔨 Building for production..."
+echo "==> Building dist bundles..."
 npm run build
 
-echo
-
-# Verify output
-if [ ! -d "docs" ]; then
-    echo "❌ Error: docs/ directory not created"
-    exit 1
-fi
-
-if [ ! -f "docs/index.html" ]; then
-    echo "❌ Error: docs/index.html not found"
-    exit 1
-fi
-
-# Show build stats
-BUILD_SIZE=$(du -sh docs/ | cut -f1)
-FILE_COUNT=$(find docs -type f | wc -l | tr -d ' ')
-
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  ✅ Build complete!"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo "  Output:  docs/"
-echo "  Size:    $BUILD_SIZE"
-echo "  Files:   $FILE_COUNT"
-echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-echo
-echo "To deploy:"
-echo "  git add docs/ && git commit -m 'Build for production'"
-echo "  git push"
-echo
+echo "==> Build complete:"
+ls -lh dist/vexy-stax.element.js dist/vexy-stax.global.js

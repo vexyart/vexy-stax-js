@@ -173,3 +173,10 @@ playwright-report/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# vexy-stax-js generated artifacts
+# dist/ is built in CI (and by `npm run build`) — never commit the bundles.
+dist/
+# example.sh / verify drivers write rendered demo artifacts here.
+outputs/
+verify/out/
