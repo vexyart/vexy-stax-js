@@ -14,7 +14,7 @@ import { extname, normalize, join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-export const REPO_ROOT = resolve(HERE, ".."); // vexy-stax-js (package root)
+export const REPO_ROOT = resolve(HERE, "../.."); // vexy-stax-dev root (serves both vexy-stax-js and vexy-stax-py/testdata — issue 320)
 
 const MIME = {
   ".html": "text/html",

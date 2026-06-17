@@ -1,0 +1,166 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1781719163604,
+  "projectRoot": "/Users/adam/Developer/vcs3/github.vexyart/vexy-stax-dev/vexy-stax-js",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">=18.0.0",
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "@playwright/test",
+        "version": "1.56.1",
+        "category": "testing"
+      },
+      {
+        "name": "vite",
+        "version": "7.1.12",
+        "category": "build"
+      }
+    ],
+    "packageManager": "pnpm",
+    "runtime": "Node.js 18.0.0"
+  },
+  "build": {
+    "buildCommand": "pnpm build",
+    "testCommand": "pnpm test",
+    "lintCommand": null,
+    "devCommand": "pnpm dev",
+    "scripts": {
+      "dev": "vite",
+      "build": "VEXY_BUILD=element vite build && VEXY_BUILD=global vite build",
+      "preview": "vite preview",
+      "test:unit": "node --test",
+      "test": "npm run test:unit && playwright test"
+    }
+  },
+  "conventions": {
+    "namingStyle": "camelCase/PascalCase",
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "src",
+      "tests"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 4,
+      "lastAccessed": 1781719163592,
+      "keyFiles": [
+        "vexy-stax.element.js",
+        "vexy-stax.element.js.map",
+        "vexy-stax.global.js",
+        "vexy-stax.global.js.map"
+      ]
+    },
+    "outputs": {
+      "path": "outputs",
+      "purpose": null,
+      "fileCount": 11,
+      "lastAccessed": 1781719163592,
+      "keyFiles": [
+        "airbl-combined.png",
+        "airbl-compact.png",
+        "airbl-expanded.png",
+        "airbl-transition.webm",
+        "airbl.scene.json"
+      ]
+    },
+    "schema": {
+      "path": "schema",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1781719163600,
+      "keyFiles": [
+        "vexy-stax-scene.schema.json"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 9,
+      "lastAccessed": 1781719163600,
+      "keyFiles": [
+        "element.js",
+        "export.js",
+        "geometry.js",
+        "global.js",
+        "index.js"
+      ]
+    },
+    "test-results": {
+      "path": "test-results",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1781719163601,
+      "keyFiles": []
+    },
+    "testdata": {
+      "path": "testdata",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1781719163601,
+      "keyFiles": [
+        "airbl.scene.json"
+      ]
+    },
+    "tests": {
+      "path": "tests",
+      "purpose": "Test files",
+      "fileCount": 4,
+      "lastAccessed": 1781719163601,
+      "keyFiles": [
+        "geometry.test.js",
+        "scene.test.js",
+        "stage.test.js",
+        "transition.test.js"
+      ]
+    },
+    "verify": {
+      "path": "verify",
+      "purpose": null,
+      "fileCount": 7,
+      "lastAccessed": 1781719163601,
+      "keyFiles": [
+        "example-harness.html",
+        "example.mjs",
+        "example_gate.py",
+        "gate.py",
+        "harness.html"
+      ]
+    },
+    "verify/out": {
+      "path": "verify/out",
+      "purpose": "Build output",
+      "fileCount": 4,
+      "lastAccessed": 1781719163601,
+      "keyFiles": [
+        "airbl-compact.png",
+        "airbl-expanded.png",
+        "plate-probe.png"
+      ]
+    }
+  },
+  "hotPaths": [],
+  "userDirectives": []
+}

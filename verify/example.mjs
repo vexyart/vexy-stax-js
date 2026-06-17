@@ -26,6 +26,7 @@ import { startServer, REPO_ROOT } from "./server.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const JS_ROOT = resolve(HERE, ".."); // vexy-stax-js
+const PY_TESTDATA = resolve(HERE, "../../vexy-stax-py/testdata"); // shared testdata (issue 320)
 const OUT_DIR = resolve(JS_ROOT, "outputs");
 const SLIDES = [
   "airbl-020-source.png",
@@ -56,60 +57,103 @@ function buildPlayableArtifact() {
     join(OUT_DIR, "vexy-stax.element.js")
   );
 
-  // Scene JSON (slide src already relative: airbl-lores/...).
+  // Scene JSON — use the shared py testdata lores scene (issue 320).
   copyFileSync(
-    join(JS_ROOT, "testdata", "airbl.scene.json"),
+    join(PY_TESTDATA, "airbl-lores.scene.json"),
     join(OUT_DIR, "airbl.scene.json")
   );
 
   // Slides (copy the in-repo PNG bytes into the playable bundle).
   for (const name of SLIDES) {
-    const src = join(JS_ROOT, "testdata", "airbl-lores", name);
+    const src = join(PY_TESTDATA, "airbl-lores", name);
     writeFileSync(join(slidesDir, name), readFileSync(src));
   }
 
   const html = `<!doctype html>
 <!-- this_file: vexy-stax-js/outputs/playable.html
      Self-contained playable demo: loads the built <vexy-stax> element + the airbl
-     scene (slides copied alongside) and plays the deck transition on a button.
+     scene (slides copied alongside) and plays the deck transition. Responsive — the
+     stage is locked to the scene's aspect ratio so the 3D framing never distorts.
      Serve this folder over HTTP (e.g. \`python3 -m http.server\`) to avoid file://
-     texture CORS, then open playable.html and press Play. -->
+     texture CORS, then open playable.html. -->
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <title>vexy-stax playable demo</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vexy-stax — playable demo</title>
     <style>
-      body { margin: 0; font: 15px/1.4 system-ui, sans-serif; background: #fafafa; color: #222; }
-      header { padding: 16px 20px; }
-      h1 { margin: 0 0 4px; font-size: 18px; }
-      p { margin: 0; color: #666; }
-      #stage { display: flex; justify-content: center; padding: 16px; }
-      vexy-stax { width: 720px; height: 466px; box-shadow: 0 2px 18px rgba(0,0,0,.12); }
-      .controls { display: flex; gap: 8px; justify-content: center; padding: 8px 0 24px; }
-      button { font: inherit; padding: 8px 16px; border: 1px solid #ccc; border-radius: 8px;
-               background: #fff; cursor: pointer; }
-      button:hover { background: #f0f0f0; }
+      :root { color-scheme: light dark; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; }
+      body {
+        margin: 0; min-height: 100%; display: flex; flex-direction: column;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1c1e;
+        background: radial-gradient(120% 120% at 50% 0%, #ffffff 0%, #e9ecf2 100%);
+      }
+      header { padding: 22px 24px 6px; text-align: center; }
+      h1 { margin: 0 0 4px; font-size: 19px; letter-spacing: -0.01em; }
+      header p { margin: 0; color: #6b7280; font-size: 13px; }
+      main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; }
+      /* aspect-ratio (and the height-fit cap) are refined from the scene size on load;
+         these 1246:806 (~1.546) fallbacks fit the box within BOTH the available width
+         and height while preserving the scene aspect, so the canvas never distorts. */
+      #stax {
+        width: min(92vw, 880px, calc((100vh - 200px) * 1.546)); aspect-ratio: 1246 / 806; height: auto;
+        border-radius: 12px; background: #fff; overflow: hidden;
+        box-shadow: 0 8px 36px rgba(17, 24, 39, 0.16);
+      }
+      .controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 14px 16px 26px; }
+      button {
+        font: inherit; padding: 9px 18px; border: 1px solid #d1d5db; border-radius: 9px;
+        background: #fff; color: #111; cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+      }
+      button:hover { background: #f3f4f6; }
+      button[aria-pressed="true"] { background: #111; color: #fff; border-color: #111; }
     </style>
   </head>
   <body>
     <header>
       <h1>vexy-stax — playable demo</h1>
-      <p>Press <strong>Play transition</strong> to morph the deck between compact and expanded.</p>
+      <p>Morph the layered deck between its <strong>compact</strong> and <strong>expanded</strong> views.</p>
     </header>
-    <div id="stage">
+    <main>
       <vexy-stax id="stax" scene="airbl.scene.json" view="compact" mode="playable"></vexy-stax>
-    </div>
+    </main>
     <div class="controls">
-      <button id="play">Play transition</button>
-      <button id="compact">Compact</button>
+      <button id="play">▶ Play transition</button>
+      <button id="compact" aria-pressed="true">Compact</button>
       <button id="expanded">Expanded</button>
     </div>
     <script type="module" src="vexy-stax.element.js"></script>
     <script type="module">
       const el = document.getElementById("stax");
-      document.getElementById("play").addEventListener("click", () => el.transition("expand_collapse"));
-      document.getElementById("compact").addEventListener("click", () => el.setView("compact"));
-      document.getElementById("expanded").addEventListener("click", () => el.setView("expanded"));
+      const play = document.getElementById("play");
+      const compact = document.getElementById("compact");
+      const expanded = document.getElementById("expanded");
+      const mark = (view) => {
+        compact.setAttribute("aria-pressed", String(view === "compact"));
+        expanded.setAttribute("aria-pressed", String(view === "expanded"));
+      };
+      // Lock the stage box to the scene's aspect ratio so the canvas (and thus the
+      // camera framing) is never letterboxed/stretched, whatever the viewport size.
+      fetch("airbl.scene.json")
+        .then((r) => r.json())
+        .then((s) => {
+          if (!s?.size?.width || !s?.size?.height) return;
+          const ar = s.size.width / s.size.height;
+          el.style.aspectRatio = s.size.width + " / " + s.size.height;
+          el.style.width = "min(92vw, 880px, calc((100vh - 200px) * " + ar + "))";
+        })
+        .catch(() => {});
+      play.addEventListener("click", () => { mark(null); el.transition("expand_collapse"); });
+      compact.addEventListener("click", () => { el.setView("compact"); mark("compact"); });
+      expanded.addEventListener("click", () => { el.setView("expanded"); mark("expanded"); });
+      // Lively first impression: expand once when the deck is ready.
+      el.addEventListener("ready", () => {
+        mark(null);
+        setTimeout(() => el.transition("expand"), 450);
+        el.addEventListener("transitionend", () => mark("expanded"), { once: true });
+      });
     </script>
   </body>
 </html>
@@ -117,11 +161,96 @@ function buildPlayableArtifact() {
   writeFileSync(join(OUT_DIR, "playable.html"), html);
 }
 
+/** Write outputs/scrollable.html — a scroll-driven story (issues 304.2 + 314). Reuses the
+ *  bundle/scene/slides already copied by buildPlayableArtifact. */
+function buildScrollableArtifact() {
+  // The scrollable uses a scene variant with a clean floor: NO reflections (the soft blurry
+  // reflections under the plates read as "little shadows") and a faint floor pane. (The
+  // playable + engine renders keep their own floor / the 303 §1 reflections.)
+  const scrollScene = JSON.parse(readFileSync(join(OUT_DIR, "airbl.scene.json"), "utf8"));
+  scrollScene.floor = { color: "#f2f2f2", opacity: 0.2, reflectivity: 0 };
+  writeFileSync(join(OUT_DIR, "airbl-scrollable.scene.json"), JSON.stringify(scrollScene, null, 2));
+
+  const html = `<!doctype html>
+<!-- this_file: vexy-stax-js/outputs/scrollable.html
+     Scroll-driven demo (issues 304.2 + 314): a full-viewport intro, then the deck as a
+     FULL-WIDTH 2:1 white scene, then a full-viewport outro. The deck starts COMPACT
+     (frontmost plate centered with side padding). The transition STARTS when 75% of the
+     scene height is in view (scrolling in from the bottom) and reaches fully EXPANDED when
+     the scene's CENTER is at the TOP of the viewport — a long, eased ramp so it is not
+     abrupt. Once expanded it LATCHES (further scrolling does not collapse it). The scene
+     uses no floor reflections (clean floor). Serve over HTTP for textures. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vexy-stax — scrollable demo</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #ffffff; } /* white page bg (issue 314 §1) */
+      body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1c1e; }
+      .copy { min-height: 100vh; display: flex; flex-direction: column; justify-content: center;
+              align-items: center; text-align: center; gap: 12px; padding: 0 24px; }
+      .copy h1 { font-size: clamp(28px, 6vw, 64px); margin: 0; letter-spacing: -0.02em; }
+      .copy p { max-width: 46ch; margin: 0; color: #555; }
+      .hint { font-size: 13px; color: #8a8a8a; }
+      /* Full-width 2:1 white scene — no rounded corners, no box shadow (issue 314 §1/§2). */
+      #stax { display: block; width: 100vw; aspect-ratio: 2 / 1; height: auto; background: #ffffff; }
+    </style>
+  </head>
+  <body>
+    <section class="copy">
+      <h1>Scroll down</h1>
+      <p>A layered deck of glass plates. Keep scrolling — it will rise into view and unfold.</p>
+      <p class="hint">↓</p>
+    </section>
+
+    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static"></vexy-stax>
+
+    <section class="copy">
+      <h1>Layer by layer</h1>
+      <p>Once unfolded the deck stays expanded — keep scrolling to read on.</p>
+    </section>
+
+    <script type="module" src="vexy-stax.element.js"></script>
+    <script type="module">
+      const el = document.getElementById("stax");
+      const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+      let ready = false; // seek is unsafe until the deck has mounted
+      let tMax = 0; // latch: the morph only ever advances toward expanded
+      const update = () => {
+        if (!ready) return;
+        const r = el.getBoundingClientRect();
+        const h = r.height;
+        const vh = window.innerHeight;
+        if (h <= 0) return;
+        // Transition STARTS when 75% of the scene height is in view (scrolling in from the
+        // bottom: r.top = vh - 0.75h) and reaches fully EXPANDED when the scene's CENTER is
+        // at the TOP of the viewport (r.top = -h/2). The long, eased ramp keeps it smooth.
+        const startTop = vh - 0.75 * h;
+        const endTop = -h / 2;
+        const p = (startTop - r.top) / (startTop - endTop);
+        const t = ease(Math.max(0, Math.min(1, p)));
+        if (t > tMax) { tMax = t; el.seek(tMax); } // never reverse once expanded
+      };
+      // Listeners attach immediately and no-op until ready (no ready/attach race).
+      window.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update, { passive: true });
+      const go = () => { ready = true; update(); };
+      el.addEventListener("ready", go, { once: true });
+      setTimeout(go, 1500); // fallback if "ready" fired before this handler attached
+    </script>
+  </body>
+</html>
+`;
+  writeFileSync(join(OUT_DIR, "scrollable.html"), html);
+}
+
 async function main() {
   mkdirSync(OUT_DIR, { recursive: true });
 
   const { server, base } = await startServer(REPO_ROOT);
-  const harnessUrl = `${base}/verify/example-harness.html`;
+  const harnessUrl = `${base}/vexy-stax-js/verify/example-harness.html`;
   const browser = await chromium.launch({ headless: true });
   const summary = {};
 
@@ -189,6 +318,11 @@ async function main() {
       slides: SLIDES.length,
     };
     console.log(`[playable] ${summary.playable.html} (+ element + scene + ${SLIDES.length} slides)`);
+
+    // --- 3b. SCROLLABLE: scroll-driven story (issue 304.2) ----------------
+    buildScrollableArtifact();
+    summary.scrollable = join(OUT_DIR, "scrollable.html");
+    console.log(`[scrollable] ${summary.scrollable} (reuses the playable assets)`);
 
     // --- 4. SCROLLSPY: top (compact) + bottom (expanded) frames ----------
     // Attach the REAL production scrollspy to the tall scroll region, then drive

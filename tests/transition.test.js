@@ -17,7 +17,7 @@ import { buildTimeline, morphAtProgress, transitionEndpoints, playTransition } f
 import { computeScrollProgress } from "../src/scrollspy.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const EXAMPLE = resolve(HERE, "../testdata/airbl.scene.json");
+const EXAMPLE = resolve(HERE, "../../vexy-stax-py/testdata/airbl-lores.scene.json");
 const close = (a, b, eps = 1e-9) => Math.abs(a - b) <= eps;
 
 function loadExample() {

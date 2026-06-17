@@ -49,8 +49,30 @@ export class VexyStax {
     this.container = container;
     this.scene = scene;
     this.stage = new Stage(container, scene);
+    this._ro = null; // ResizeObserver for post-layout resize
     this._ready = this.stage.init().then(() => {
       this.stage.render();
+      // After mount, observe the container for its first actual layout dimensions.
+      // When the container uses height:auto + aspect-ratio, clientHeight is 0 at
+      // init time; the ResizeObserver fires once the CSS engine resolves the size,
+      // ensuring the canvas fits the container rather than the raw scene pixel size.
+      if (typeof ResizeObserver !== "undefined") {
+        let observed = false;
+        this._ro = new ResizeObserver((entries) => {
+          for (const entry of entries) {
+            const w = entry.contentRect?.width;
+            const h = entry.contentRect?.height;
+            if (w > 0 && h > 0) {
+              this.stage.resize(w, h);
+              this.stage.render();
+              // After the first real resize we can stop if the element has a
+              // fixed CSS size; keep observing for responsive containers.
+              observed = true;
+            }
+          }
+        });
+        this._ro.observe(container);
+      }
       return this;
     });
   }
@@ -64,6 +86,18 @@ export class VexyStax {
   async setView(view) {
     await this._ready;
     this.stage.setView(view);
+    this.stage.render();
+    return this;
+  }
+
+  /**
+   * Apply an arbitrary morph factor `t` (0 = compact, 1 = expanded) and render. The
+   * low-level scrub primitive behind scroll-driven stories (e.g. the scrollable demo
+   * computes its own tent mapping and calls seek each scroll frame). Clamped to [0,1].
+   */
+  seek(t) {
+    const tt = Math.max(0, Math.min(1, Number(t) || 0));
+    this.stage.applyFrameState(frameStateAt(this.scene, tt, this.stage.camera.aspect), tt);
     this.stage.render();
     return this;
   }
@@ -127,7 +161,7 @@ export class VexyStax {
     }
     // Snap to the starting endpoint so the first frame is correct.
     const { startMorph } = transitionEndpoints(resolvedKind);
-    this.stage.applyFrameState(frameStateAt(this.scene, startMorph), startMorph);
+    this.stage.applyFrameState(frameStateAt(this.scene, startMorph, this.stage.camera.aspect), startMorph);
     this.stage.render();
 
     this._cancelTransition?.();
@@ -213,9 +247,14 @@ export class VexyStax {
     const wait = this.scene.transition?.wait ?? 0.0;
 
     const apply = (p) => {
-      // Map global scroll progress through the transition timeline → morph t.
-      const t = this._scrollMorph(kind, p, easing, duration, wait);
-      this.stage.applyFrameState(frameStateAt(this.scene, t), t);
+      // Map scroll progress [0,1] -> morph t. By default through the transition
+      // timeline; a custom `opts.map` (p -> t) enables non-linear scroll stories such
+      // as the scrollable demo's tent (compact at the edges, expanded when centered).
+      const t =
+        typeof opts.map === "function"
+          ? Math.max(0, Math.min(1, opts.map(p)))
+          : this._scrollMorph(kind, p, easing, duration, wait);
+      this.stage.applyFrameState(frameStateAt(this.scene, t, this.stage.camera.aspect), t);
       this.stage.render();
     };
 
@@ -241,6 +280,8 @@ export class VexyStax {
   destroy() {
     this._cancelTransition?.();
     this._scrollspy?.disconnect?.();
+    this._ro?.disconnect?.();
+    this._ro = null;
     this.stage?.dispose();
   }
 }

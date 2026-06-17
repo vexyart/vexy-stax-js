@@ -27,7 +27,7 @@ function dataUrlToBuffer(dataUrl) {
 
 async function main() {
   const { server, base } = await startServer(REPO_ROOT);
-  const harnessUrl = `${base}/verify/harness.html`;
+  const harnessUrl = `${base}/vexy-stax-js/verify/harness.html`;
 
   const browser = await chromium.launch({ headless: true });
   const results = {};

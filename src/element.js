@@ -124,6 +124,9 @@ export class VexyStaxElement extends HTMLElement {
   scrollspy(opts) {
     return this._stax?.scrollspy(opts);
   }
+  seek(t) {
+    return this._stax?.seek(t);
+  }
 }
 
 if (typeof customElements !== "undefined" && !customElements.get("vexy-stax")) {

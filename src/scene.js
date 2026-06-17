@@ -73,7 +73,7 @@ function parseSize(raw) {
 }
 
 function parseDistance(raw) {
-  if (raw === undefined) return "90%";
+  if (raw === undefined) return "100%";
   if (typeof raw === "number") return num(raw, "camera.distance");
   if (typeof raw === "string") {
     if (!DISTANCE_RE.test(raw.trim())) {
@@ -86,7 +86,7 @@ function parseDistance(raw) {
 
 function parseCamera(raw) {
   if (raw === undefined) {
-    return { gap: 1920, distance: "90%", angle: 60, elevation: 0, fov: 39.6 };
+    return { gap: 1920, distance: "100%", angle: 60, elevation: 0, fov: 39.6 };
   }
   const o = asObject(raw, "camera");
   rejectExtraKeys(o, new Set(["gap", "distance", "angle", "elevation", "fov"]), "camera");
@@ -114,26 +114,57 @@ function parseTransition(raw) {
 }
 
 function parseFloor(raw) {
-  if (raw === undefined) return { color: "#f2f2f2", opacity: 1.0, reflectivity: 0.5 };
+  // Smoked glass: ~4% opacity, dark tint, reflective (issue 303 §1).
+  if (raw === undefined) return { color: "#1a1a1a", opacity: 0.04, reflectivity: 0.5 };
   const o = asObject(raw, "floor");
   rejectExtraKeys(o, new Set(["color", "opacity", "reflectivity"]), "floor");
   return {
-    color: o.color === undefined ? "#f2f2f2" : str(o.color, "floor.color"),
-    opacity: o.opacity === undefined ? 1.0 : num(o.opacity, "floor.opacity", { min: 0, max: 1 }),
+    color: o.color === undefined ? "#1a1a1a" : str(o.color, "floor.color"),
+    opacity: o.opacity === undefined ? 0.04 : num(o.opacity, "floor.opacity", { min: 0, max: 1 }),
     reflectivity:
       o.reflectivity === undefined ? 0.5 : num(o.reflectivity, "floor.reflectivity", { min: 0, max: 1 }),
+  };
+}
+
+function parseEdge(raw) {
+  // Optional plate border (issue 305): thin frame, OFF by default (issue 326: width 0 ⇒ no
+  // slide-plate border and no caption-plate border). Default color #f2f2f2 when enabled (issue 324).
+  if (raw === undefined) return { width: 0.0, color: "#f2f2f2" };
+  const o = asObject(raw, "edge");
+  rejectExtraKeys(o, new Set(["width", "color"]), "edge");
+  return {
+    width: o.width === undefined ? 0.0 : num(o.width, "edge.width", { min: 0 }),
+    color: o.color === undefined ? "#f2f2f2" : str(o.color, "edge.color"),
   };
 }
 
 function parseCaptionStyle(raw, where) {
   if (raw === undefined) return null;
   const o = asObject(raw, where);
-  rejectExtraKeys(o, new Set(["size", "color", "font"]), where);
+  // color = caption TEXT color; fill_color/border_color = caption plate fill/border (issue 324).
+  rejectExtraKeys(o, new Set(["size", "color", "font", "fill_color", "border_color"]), where);
   const out = {};
   if (o.size !== undefined) out.size = num(o.size, `${where}.size`, { gt: 0 });
   if (o.color !== undefined) out.color = str(o.color, `${where}.color`);
   if (o.font !== undefined) out.font = str(o.font, `${where}.font`);
+  if (o.fill_color !== undefined) out.fill_color = str(o.fill_color, `${where}.fill_color`);
+  if (o.border_color !== undefined) out.border_color = str(o.border_color, `${where}.border_color`);
   return out;
+}
+
+function parseCaptionFade(raw) {
+  if (raw === undefined) return null;
+  const o = asObject(raw, "caption_fade");
+  rejectExtraKeys(o, new Set(["window", "stagger", "stagger_frames"]), "caption_fade");
+  return {
+    window: o.window === undefined ? 0.9 : num(o.window, "caption_fade.window", { gt: 0, max: 1 }),
+    stagger: o.stagger === undefined ? 0.3 : num(o.stagger, "caption_fade.stagger", { min: 0, lt: 1 }),
+    // Issue 309: per-caption back->front step in transition FRAMES; overrides `stagger`.
+    stagger_frames:
+      o.stagger_frames === undefined || o.stagger_frames === null
+        ? null
+        : int(o.stagger_frames, "caption_fade.stagger_frames", { min: 0 }),
+  };
 }
 
 function parseCaption(raw, where) {
@@ -198,9 +229,11 @@ export function parseScene(raw) {
     "camera",
     "transition",
     "floor",
+    "edge",
     "background",
     "juicy",
     "caption_defaults",
+    "caption_fade",
     "slides",
   ]);
   rejectExtraKeys(o, allowed, "scene");
@@ -220,9 +253,11 @@ export function parseScene(raw) {
     camera: parseCamera(o.camera),
     transition: parseTransition(o.transition),
     floor: parseFloor(o.floor),
+    edge: parseEdge(o.edge),
     background: o.background === undefined ? "#ffffff" : str(o.background, "background"),
     juicy: o.juicy === undefined ? false : bool(o.juicy, "juicy"),
     caption_defaults: parseCaptionStyle(o.caption_defaults, "caption_defaults"),
+    caption_fade: parseCaptionFade(o.caption_fade),
     slides: o.slides.map((s, i) => parseSlide(s, i)),
   };
 }

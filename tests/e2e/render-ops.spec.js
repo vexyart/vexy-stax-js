@@ -28,7 +28,7 @@ async function openHarness(page) {
   const { base } = await getServer();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));
-  await page.goto(`${base}/verify/harness.html`, { waitUntil: "load" });
+  await page.goto(`${base}/vexy-stax-js/verify/harness.html`, { waitUntil: "load" });
   await page.waitForFunction(() => window.__vexyStatus?.().ready || window.__vexyStatus?.().phase === "error", null, {
     timeout: 30_000,
   });

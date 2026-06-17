@@ -18,6 +18,96 @@ import { resolvedOpacity } from "./scene.js";
 
 export const MIN_GAP = 3.0;
 export const FILL = 0.85;
+export const V_FILL = 0.98; // expanded: max fraction of frame height the deck may occupy (no crop)
+
+// Caption fade defaults (issue 302 §B.4): captions fade in over the final
+// CAPTION_FADE_WINDOW fraction of the morph, staggered back->front by CAPTION_STAGGER.
+export const CAPTION_FADE_WINDOW = 0.9;
+export const CAPTION_STAGGER = 0.3;
+// Caption layout (issue 302 §B, em-based): captions sit to the LEFT of the plates with
+// their RIGHT edges aligned CAPTION_GAP_EM em (em == caption size) from the plate left
+// edge (0 = touching, issues 321/323), and the text BASELINE CAPTION_BASELINE_EM em above
+// the virtual ground (the floor at the bottom of the plates). The nominal "em" is the
+// caption size in scene points.
+export const CAPTION_GAP_EM = 0.0; // issues 321/323: caption plate right edge touches slide plate left edge
+export const CAPTION_BASELINE_EM = 1.0;
+// Caption plate (issues 311, 315): each caption sits on a small white opaque bordered plate.
+// Plate height = CAPTION_PLATE_HEIGHT_FRAC of the plate height; text 1em =
+// CAPTION_FONT_FRAC_OF_PLATE of the caption-plate height; plate padded CAPTION_PLATE_PAD_EM
+// em on each side of the text. Default caption size = 0.10*0.75 = 0.075 of scene height
+// (issue 315 revised plate height 20%->10% and pad 1.5em->0.75em). Mirrors geometry.py.
+export const CAPTION_PLATE_HEIGHT_FRAC = (0.1 * 4) / 3; // ≈0.1333 (issue 324: font 1/3 larger; was 0.10)
+export const CAPTION_FONT_FRAC_OF_PLATE = 0.75;
+export const CAPTION_PLATE_PAD_EM = 0.75;
+export const CAPTION_DEFAULT_SIZE_FRAC = CAPTION_PLATE_HEIGHT_FRAC * CAPTION_FONT_FRAC_OF_PLATE; // ≈0.10 (issue 324; was 0.075)
+
+// Floor reflection (issue 303 §1) — shared so the blurry reflection is consistent across
+// engines. Fraction of the plate-image height (px). (Floor shadows removed per issue 312.)
+export const REFLECTION_BLUR_FRAC = 0.02; // Gaussian blur radius of the mirror reflection
+
+/**
+ * Plate border thickness in scene points (issue 305): edge.width × plate height. Mirrors
+ * plate_edge_width in geometry.py. Caption plates (issue 311) reuse this same border.
+ */
+export function plateEdgeWidth(scene) {
+  return scene.size.height * scene.edge.width;
+}
+
+/**
+ * Nominal caption text size in scene points (1em). Resolves caption_defaults.size when set,
+ * else CAPTION_DEFAULT_SIZE_FRAC of scene height (issue 311). Mirrors caption_size.
+ */
+export function captionSize(scene) {
+  const cd = scene.caption_defaults;
+  if (cd && cd.size !== null && cd.size !== undefined) return Number(cd.size);
+  return Math.max(8.0, scene.size.height * CAPTION_DEFAULT_SIZE_FRAC);
+}
+
+/** Caption plate FILL color (issue 324): caption_defaults.fill_color else scene.edge.color. */
+export function captionFillColor(scene) {
+  const cd = scene.caption_defaults;
+  return cd && cd.fill_color ? cd.fill_color : scene.edge.color;
+}
+
+/** Caption plate BORDER color (issue 324): caption_defaults.border_color else scene.edge.color. */
+export function captionBorderColor(scene) {
+  const cd = scene.caption_defaults;
+  return cd && cd.border_color ? cd.border_color : scene.edge.color;
+}
+
+/**
+ * Height of a caption plate in scene points (issue 311): caption_size / 0.75 so the text
+ * 1em stays 75% of the plate height. Mirrors caption_plate_height in geometry.py.
+ */
+export function captionPlateHeight(scene) {
+  return captionSize(scene) / CAPTION_FONT_FRAC_OF_PLATE;
+}
+
+/**
+ * World Y of a caption plate's vertical center (issue 311): the plate sits on the virtual
+ * ground (Y = -height/2), so its center is half its height above it. Mirrors geometry.py.
+ */
+export function captionPlateCenterY(scene) {
+  return -(scene.size.height / 2.0) + captionPlateHeight(scene) / 2.0;
+}
+
+/**
+ * World X where every caption's RIGHT edge aligns — CAPTION_GAP_EM em left of the plate
+ * left edge (-width/2). All plates share scene.size width centered at X=0. Mirrors
+ * caption_anchor_x in geometry.py.
+ */
+export function captionAnchorX(scene) {
+  return -(scene.size.width / 2.0 + CAPTION_GAP_EM * captionSize(scene));
+}
+
+/**
+ * World Y of the caption text BASELINE — CAPTION_BASELINE_EM em above the virtual ground
+ * (the floor at the bottom of the plates, Y = -height/2). Mirrors caption_baseline_y in
+ * geometry.py.
+ */
+export function captionBaselineY(scene) {
+  return -(scene.size.height / 2.0) + CAPTION_BASELINE_EM * captionSize(scene);
+}
 
 /** Per-slide gap (points), falling back to camera.gap when unset (null). */
 export function plateGaps(scene) {
@@ -70,15 +160,19 @@ function parseDistance(distance, viewportWidth) {
 }
 
 /**
- * Angled hero camera framing the expanded *deck* (SPEC.md §3). Fits the plate
- * bounding box (not the floor diagonal) so the deck fills FILL of the frame on
- * its tighter axis. Plate size = scene.size so JS and Python agree exactly.
+ * Angled hero camera framing the expanded *deck* (SPEC.md §3, issue 302 §2). The
+ * distance is chosen — and the camera horizontally re-centered (panned) — by a
+ * deterministic bisection so that, in the projected image, the left margin (frame
+ * edge → leftmost plate) and the right margin (rightmost plate → frame edge) each
+ * equal the projected inter-plate gap (mean adjacent plate-center horizontal stagger).
+ * A vertical-fit floor keeps the deck from cropping top/bottom. Plate size = scene.size
+ * so JS and Python agree exactly (same iterations/brackets → identical numbers).
  * Returns { position:[x,y,z], target:[x,y,z], fov, near }.
  */
-export function expandedCamera(scene) {
+export function expandedCamera(scene, viewportAspect) {
   const cam = scene.camera;
   const depth = stackDepth(scene, "expanded");
-  const target = [0.0, 0.0, -depth / 2.0];
+  const baseTarget = [0.0, 0.0, -depth / 2.0];
 
   // Direction target -> camera (azimuth swings toward -X, elevation lifts +Y).
   const az = (cam.angle * Math.PI) / 180.0;
@@ -95,28 +189,107 @@ export function expandedCamera(scene) {
   right = Math.abs(dot(look, upWorld)) < 0.999 ? normalize(right) : [1.0, 0.0, 0.0];
   const up = normalize(cross(right, look));
 
+  const hfov = (cam.fov * Math.PI) / 180.0;
+  const aspect = viewportAspect || scene.size.width / scene.size.height;
+  const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
+  const th = Math.tan(hfov / 2.0);
+  const tv = Math.tan(vfov / 2.0);
+
   const halfWPlate = scene.size.width / 2.0;
   const halfHPlate = scene.size.height / 2.0;
   const zPositions = stackPositions(plateGaps(scene));
-  let halfW = 0.0;
-  let halfH = 0.0;
+
+  // Precompute each corner's (right, up, look) offsets relative to baseTarget so
+  // projecting at a candidate (distance D, horizontal pan) is cheap and exact.
+  // ndc_x = (cr - pan)/((cl + D)*th). Mirrors geometry.py expanded_camera.
+  const corners = []; // [cr, cu, cl]
+  const centers = []; // [cr, cl] of each plate center
   for (const z of zPositions) {
+    const relC = sub([0.0, 0.0, z], baseTarget);
+    centers.push([dot(relC, right), dot(relC, look)]);
     for (const sx of [-halfWPlate, halfWPlate]) {
       for (const sy of [-halfHPlate, halfHPlate]) {
-        const rel = sub([sx, sy, z], target);
-        halfW = Math.max(halfW, Math.abs(dot(rel, right)));
-        halfH = Math.max(halfH, Math.abs(dot(rel, up)));
+        const rel = sub([sx, sy, z], baseTarget);
+        corners.push([dot(rel, right), dot(rel, up), dot(rel, look)]);
       }
     }
   }
 
-  const hfov = (cam.fov * Math.PI) / 180.0;
-  const aspect = scene.size.width / scene.size.height;
-  const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
-  const dW = halfW / (FILL * Math.tan(hfov / 2.0));
-  const dH = halfH / (FILL * Math.tan(vfov / 2.0));
-  const distance = Math.max(dW, dH);
+  const span = (D, pan) => {
+    let a = Infinity;
+    let b = -Infinity;
+    let ymax = 0.0;
+    for (const [cr, cu, cl] of corners) {
+      const zv = cl + D;
+      const nx = (cr - pan) / (zv * th);
+      a = Math.min(a, nx);
+      b = Math.max(b, nx);
+      ymax = Math.max(ymax, Math.abs(cu / (zv * tv)));
+    }
+    return [a, b, ymax];
+  };
+
+  const gapOf = (D, pan) => {
+    const xs = centers.map(([cr, cl]) => (cr - pan) / ((cl + D) * th));
+    if (xs.length < 2) return 0.0;
+    let s = 0.0;
+    for (let i = 0; i < xs.length - 1; i++) s += Math.abs(xs[i + 1] - xs[i]);
+    return s / (xs.length - 1);
+  };
+
+  const recenter = (D) => {
+    let lo = -halfWPlate * 8.0;
+    let hi = halfWPlate * 8.0;
+    for (let i = 0; i < 64; i++) {
+      const pan = 0.5 * (lo + hi);
+      const [a, b] = span(D, pan);
+      if (a + b > 0.0) lo = pan;
+      else hi = pan;
+    }
+    return 0.5 * (lo + hi);
+  };
+
+  // Bracket scale: the legacy bounding-box fit distance.
+  let halfW = 0.0;
+  let halfH = 0.0;
+  for (const [cr, cu] of corners) {
+    halfW = Math.max(halfW, Math.abs(cr));
+    halfH = Math.max(halfH, Math.abs(cu));
+  }
+  const d0 = Math.max(halfW / (FILL * th), halfH / (FILL * tv));
+
+  // margin grows with distance, gap shrinks => (margin - gap) increasing; bisect.
+  let lo = d0 * 0.1;
+  let hi = d0 * 20.0;
+  let distance = d0;
+  for (let i = 0; i < 80; i++) {
+    distance = 0.5 * (lo + hi);
+    const pan = recenter(distance);
+    const [a, b] = span(distance, pan);
+    const margin = 0.5 * (a + 1.0 + (1.0 - b));
+    if (margin - gapOf(distance, pan) > 0.0) hi = distance;
+    else lo = distance;
+  }
+  distance = 0.5 * (lo + hi);
+
+  // Vertical-fit floor: never let the gap pull the camera so close the deck crops.
+  let vlo = d0 * 0.05;
+  let vhi = d0 * 40.0;
+  for (let i = 0; i < 80; i++) {
+    const dv = 0.5 * (vlo + vhi);
+    const [, , ymax] = span(dv, 0.0); // vertical extent is independent of pan
+    if (ymax > V_FILL) vlo = dv;
+    else vhi = dv;
+  }
+  distance = Math.max(distance, 0.5 * (vlo + vhi));
+
+  const pan = recenter(distance);
   const near = Math.max(1.0, distance * 0.005);
+  const target = [
+    baseTarget[0] + right[0] * pan,
+    baseTarget[1] + right[1] * pan,
+    baseTarget[2] + right[2] * pan,
+  ];
   const position = [
     target[0] + toCam[0] * distance,
     target[1] + toCam[1] * distance,
@@ -130,11 +303,39 @@ export function expandedCamera(scene) {
  * width or absolute points; near plane scales with distance.
  * Returns { position:[x,y,z], target:[x,y,z], fov, near }.
  */
-export function compactCamera(scene) {
+export function compactCamera(scene, viewportAspect) {
   const cam = scene.camera;
   const depth = stackDepth(scene, "compact");
   const target = [0.0, 0.0, -depth / 2.0];
-  const distance = parseDistance(cam.distance, scene.size.width);
+  
+  let isPercent = false;
+  let pctVal = 90.0;
+  if (typeof cam.distance === "string") {
+    const text = cam.distance.trim();
+    if (text.endsWith("%")) {
+      isPercent = true;
+      const parsed = parseFloat(text.slice(0, -1));
+      if (!isNaN(parsed)) pctVal = parsed;
+    }
+  }
+  
+  let distance;
+  if (isPercent) {
+    // Dual-axis crop-free fit (SPEC.md §3, issue 302 §1): fit the frontmost plate
+    // (scene.size) so the limiting axis touches P% and the other axis only ever has
+    // extra padding (never a crop). distance = max(d_w, d_h). Mirrors geometry.py.
+    const hfov = (cam.fov * Math.PI) / 180.0;
+    const aspect = viewportAspect || scene.size.width / scene.size.height;
+    const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
+    const frac = pctVal / 100.0;
+    const dW = scene.size.width / (2.0 * Math.tan(hfov / 2.0) * frac);
+    const dH = scene.size.height / (2.0 * Math.tan(vfov / 2.0) * frac);
+    const distToZ0 = Math.max(dW, dH);
+    distance = distToZ0 + depth / 2.0;
+  } else {
+    distance = parseDistance(cam.distance, scene.size.width);
+  }
+  
   const near = Math.max(1.0, distance * 0.005);
   const position = [target[0], target[1], target[2] + distance];
   return { position, target, fov: cam.fov, near };
@@ -169,6 +370,47 @@ export function interpolateOpacity(slide, tExpanded) {
   return Math.max(0.0, Math.min(1.0, value));
 }
 
+/**
+ * Per-slide caption opacity at morph factor tExpanded (0=compact, 1=expanded).
+ * Honors caption.show_in and the staggered fade (issue 302 §B.4): an `expanded`
+ * caption stays invisible until the final `window` fraction of the morph, then fades
+ * in — staggered back (index 0) → front so the frontmost reaches full opacity exactly
+ * at t=1 (full opacity ONLY in expanded). `both`→1, `none`→0, `compact`→fades out.
+ * Slides without a caption → 0. Mirrors caption_opacities in geometry.py.
+ */
+export function captionOpacities(scene, tExpanded) {
+  const t = Math.max(0.0, Math.min(1.0, tExpanded));
+  const cf = scene.caption_fade;
+  const window = cf ? cf.window : CAPTION_FADE_WINDOW;
+  const stagger = cf ? cf.stagger : CAPTION_STAGGER;
+  const n = scene.slides.length;
+  const denom = n > 1 ? n - 1 : 1;
+
+  // Total back->front spread (fraction of the morph). Default: `stagger` of the window.
+  // Issue 309: if stagger_frames is set + a transition exists, the per-caption step is
+  // that many frames of one leg; spread = (n-1) steps, capped so the frontmost finishes
+  // fading at t=1 (ramp stays positive).
+  let spread = stagger * window;
+  if (cf && cf.stagger_frames !== null && cf.stagger_frames !== undefined && scene.transition) {
+    const legFrames = Math.round(scene.transition.duration * scene.transition.fps);
+    if (legFrames > 0) {
+      const stepT = cf.stagger_frames / legFrames;
+      spread = Math.min((n - 1) * stepT, window * 0.95);
+    }
+  }
+  const ramp = Math.max(1e-6, window - spread);
+
+  return scene.slides.map((slide, i) => {
+    const cap = slide.caption;
+    if (!cap || cap.show_in === "none") return 0.0;
+    if (cap.show_in === "both") return 1.0;
+    if (cap.show_in === "compact") return 1.0 - t;
+    // expanded: staggered window fade-in, backmost (i=0) first, frontmost last.
+    const startI = 1.0 - window + (i / denom) * spread;
+    return Math.max(0.0, Math.min(1.0, (t - startI) / ramp));
+  });
+}
+
 function lerp3(a, b, t) {
   return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
 }
@@ -187,7 +429,12 @@ function frameState(scene, compact, expanded, t) {
   const expandedGaps = plateGaps(scene);
   const gaps = expandedGaps.map((g) => MIN_GAP + (g - MIN_GAP) * t);
   const opacities = scene.slides.map((s) => interpolateOpacity(s, t));
-  return { camera: poseAt(compact, expanded, t), gaps, opacities };
+  return {
+    camera: poseAt(compact, expanded, t),
+    gaps,
+    opacities,
+    captionOpacities: captionOpacities(scene, t),
+  };
 }
 
 /**
@@ -198,9 +445,12 @@ function frameState(scene, compact, expanded, t) {
  * @param {object} scene parsed scene
  * @param {number} t eased morph factor
  */
-export function frameStateAt(scene, t) {
-  const compact = compactCamera(scene);
-  const expanded = expandedCamera(scene);
+export function frameStateAt(scene, t, viewportAspect) {
+  // viewportAspect (the live element's container aspect) defaults to the scene aspect, so
+  // the rendered/aspect-locked paths are unchanged; the scrollable passes its 2:1 container
+  // aspect so compact fits with side padding and expanded fills vertically (issue 314).
+  const compact = compactCamera(scene, viewportAspect);
+  const expanded = expandedCamera(scene, viewportAspect);
   return frameState(scene, compact, expanded, Math.max(0, Math.min(1, t)));
 }
 

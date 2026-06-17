@@ -14,7 +14,7 @@ import { dirname, resolve } from "node:path";
 import { parseScene, loadScene, resolvedOpacity } from "../src/scene.js";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
-const EXAMPLE = resolve(HERE, "../testdata/airbl.scene.json");
+const EXAMPLE = resolve(HERE, "../../vexy-stax-py/testdata/airbl-lores.scene.json");
 
 function rawExample() {
   return JSON.parse(readFileSync(EXAMPLE, "utf-8"));
@@ -34,13 +34,53 @@ test("parseScene fills defaults from the schema", () => {
   assert.equal(scene.size.width, 1920);
   assert.equal(scene.size.height, 1080);
   assert.equal(scene.camera.gap, 1920);
-  assert.equal(scene.camera.distance, "90%");
+  assert.equal(scene.camera.distance, "100%");
   assert.equal(scene.camera.fov, 39.6);
   assert.equal(scene.background, "#ffffff");
   assert.equal(scene.juicy, false);
   assert.equal(scene.transition, null);
   assert.equal(scene.slides[0].gap, null);
   assert.equal(scene.slides[0].opacity, 1.0);
+  // Issue 303 §1: smoked-glass floor defaults (~4%, dark, just so visible).
+  assert.equal(scene.floor.opacity, 0.04);
+  assert.equal(scene.floor.color, "#1a1a1a");
+  assert.equal(scene.floor.reflectivity, 0.5);
+  // Issue 326: plate + caption borders OFF by default (width 0); color stays #f2f2f2 (issue 324).
+  assert.equal(scene.edge.width, 0.0);
+  assert.equal(scene.edge.color, "#f2f2f2");
+});
+
+test("edge is customizable and strict (issue 305)", () => {
+  const scene = parseScene({ version: 1, edge: { width: 0.01, color: "#ff0000" }, slides: [{ src: "a.png" }] });
+  assert.equal(scene.edge.width, 0.01);
+  assert.equal(scene.edge.color, "#ff0000");
+  assert.throws(() => parseScene({ version: 1, edge: { thickness: 1 }, slides: [{ src: "a.png" }] }));
+});
+
+test("caption fill/border colors parse and are separately overridable (issue 324)", () => {
+  const scene = parseScene({
+    version: 1,
+    edge: { color: "#111111" },
+    caption_defaults: { color: "#abcdef", fill_color: "#ff0000", border_color: "#00ff00" },
+    slides: [{ src: "a.png" }],
+  });
+  assert.equal(scene.caption_defaults.color, "#abcdef");
+  assert.equal(scene.caption_defaults.fill_color, "#ff0000");
+  assert.equal(scene.caption_defaults.border_color, "#00ff00");
+  // Unknown caption-style keys are still rejected (strict).
+  assert.throws(() => parseScene({ version: 1, caption_defaults: { glow: true }, slides: [{ src: "a.png" }] }));
+});
+
+test("caption_fade.stagger_frames parses (issue 309)", () => {
+  const scene = parseScene({
+    version: 1,
+    caption_fade: { window: 0.9, stagger_frames: 6 },
+    slides: [{ src: "a.png" }],
+  });
+  assert.equal(scene.caption_fade.stagger_frames, 6);
+  // omitted -> null (falls back to the `stagger` fraction)
+  const d = parseScene({ version: 1, caption_fade: {}, slides: [{ src: "a.png" }] });
+  assert.equal(d.caption_fade.stagger_frames, null);
 });
 
 test("resolvedOpacity handles scalar and per-view", () => {
