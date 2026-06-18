@@ -84,17 +84,30 @@ export function captionPlateHeight(scene) {
 }
 
 /**
- * World Y of a caption plate's vertical center (issue 311): the plate sits on the virtual
- * ground (Y = -height/2), so its center is half its height above it. Mirrors geometry.py.
+ * World Y of a caption plate's vertical center (issue 311; relayout issue 332): the plate
+ * sits RIGHT ON the floor (its bottom edge on the floor line Y = -height/2), so its center
+ * is half its plate height above it. The slide plate then sits on TOP (see slideLift).
+ * Mirrors caption_plate_center_y in geometry.py.
  */
 export function captionPlateCenterY(scene) {
   return -(scene.size.height / 2.0) + captionPlateHeight(scene) / 2.0;
 }
 
 /**
- * World X where every caption's RIGHT edge aligns — CAPTION_GAP_EM em left of the plate
- * left edge (-width/2). All plates share scene.size width centered at X=0. Mirrors
- * caption_anchor_x in geometry.py.
+ * World Y offset added to EVERY slide plate's vertical center (issue 332). Captions ON: each
+ * slide sits on TOP of its on-floor caption plate, so it is lifted by exactly one
+ * caption-plate height relative to the centered (Y=0) convention. Captions OFF: no caption
+ * plates, slides sit directly on the floor → lift 0. Mirrors slide_lift in geometry.py.
+ */
+export function slideLift(scene) {
+  return scene.captions ? captionPlateHeight(scene) : 0.0;
+}
+
+/**
+ * World X where every caption plate's LEFT edge aligns (issue 332 relayout): the caption
+ * plate is LEFT-aligned with its slide plate, so its left edge sits at the slide left edge
+ * (-width/2). CAPTION_GAP_EM is 0, so the numeric value is unchanged from the prior
+ * right-edge anchor; only the meaning (now a LEFT edge) changed. Mirrors caption_anchor_x.
  */
 export function captionAnchorX(scene) {
   return -(scene.size.width / 2.0 + CAPTION_GAP_EM * captionSize(scene));
@@ -199,16 +212,27 @@ export function expandedCamera(scene, viewportAspect) {
   const halfHPlate = scene.size.height / 2.0;
   const zPositions = stackPositions(plateGaps(scene));
 
+  // Issue 332: slides are LIFTED by one caption-plate height (captions on) so they sit on
+  // top of their on-floor caption plates. The full composite the camera frames (NO crop)
+  // spans vertically from the floor line (caption-plate bottom == -H/2) up to the lifted
+  // slide top (lift + H/2). Include the lifted slide corners AND the caption-plate bottom
+  // corners so the bounding fit never crops the caption row. Mirrors geometry.py.
+  const lift = slideLift(scene);
+  const floorY = -halfHPlate; // caption plate bottom (and floor line)
+  const slideYLo = lift - halfHPlate;
+  const slideYHi = lift + halfHPlate;
+  const capYs = scene.captions ? [floorY] : []; // extra bottom row (caption plate bottom)
+
   // Precompute each corner's (right, up, look) offsets relative to baseTarget so
   // projecting at a candidate (distance D, horizontal pan) is cheap and exact.
   // ndc_x = (cr - pan)/((cl + D)*th). Mirrors geometry.py expanded_camera.
   const corners = []; // [cr, cu, cl]
   const centers = []; // [cr, cl] of each plate center
   for (const z of zPositions) {
-    const relC = sub([0.0, 0.0, z], baseTarget);
+    const relC = sub([0.0, lift, z], baseTarget);
     centers.push([dot(relC, right), dot(relC, look)]);
     for (const sx of [-halfWPlate, halfWPlate]) {
-      for (const sy of [-halfHPlate, halfHPlate]) {
+      for (const sy of [slideYLo, slideYHi, ...capYs]) {
         const rel = sub([sx, sy, z], baseTarget);
         corners.push([dot(rel, right), dot(rel, up), dot(rel, look)]);
       }
@@ -306,8 +330,14 @@ export function expandedCamera(scene, viewportAspect) {
 export function compactCamera(scene, viewportAspect) {
   const cam = scene.camera;
   const depth = stackDepth(scene, "compact");
-  const target = [0.0, 0.0, -depth / 2.0];
-  
+  // Issue 332: the frontmost COMPOSITE the head-on camera frames is the slide plate plus
+  // (captions on) its on-floor caption plate stacked below it: full width W, height H + lift
+  // (lift == one caption-plate height), vertically centered at Y = lift/2. Aim at that
+  // composite center so neither the slide nor the caption row crops. Mirrors geometry.py.
+  const lift = slideLift(scene);
+  const compositeH = scene.size.height + lift;
+  const target = [0.0, lift / 2.0, -depth / 2.0];
+
   let isPercent = false;
   let pctVal = 90.0;
   if (typeof cam.distance === "string") {
@@ -318,24 +348,24 @@ export function compactCamera(scene, viewportAspect) {
       if (!isNaN(parsed)) pctVal = parsed;
     }
   }
-  
+
   let distance;
   if (isPercent) {
-    // Dual-axis crop-free fit (SPEC.md §3, issue 302 §1): fit the frontmost plate
-    // (scene.size) so the limiting axis touches P% and the other axis only ever has
-    // extra padding (never a crop). distance = max(d_w, d_h). Mirrors geometry.py.
+    // Dual-axis crop-free fit (SPEC.md §3, issue 302 §1): fit the frontmost COMPOSITE
+    // (width W, height H + lift) so the limiting axis touches P% and the other axis only
+    // ever has extra padding (never a crop). distance = max(d_w, d_h). Mirrors geometry.py.
     const hfov = (cam.fov * Math.PI) / 180.0;
     const aspect = viewportAspect || scene.size.width / scene.size.height;
     const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
     const frac = pctVal / 100.0;
     const dW = scene.size.width / (2.0 * Math.tan(hfov / 2.0) * frac);
-    const dH = scene.size.height / (2.0 * Math.tan(vfov / 2.0) * frac);
+    const dH = compositeH / (2.0 * Math.tan(vfov / 2.0) * frac);
     const distToZ0 = Math.max(dW, dH);
     distance = distToZ0 + depth / 2.0;
   } else {
     distance = parseDistance(cam.distance, scene.size.width);
   }
-  
+
   const near = Math.max(1.0, distance * 0.005);
   const position = [target[0], target[1], target[2] + distance];
   return { position, target, fov: cam.fov, near };
@@ -380,6 +410,8 @@ export function interpolateOpacity(slide, tExpanded) {
  */
 export function captionOpacities(scene, tExpanded) {
   const t = Math.max(0.0, Math.min(1.0, tExpanded));
+  // Issue 332: a global captions=false toggle suppresses ALL caption plates everywhere.
+  if (!scene.captions) return scene.slides.map(() => 0.0);
   const cf = scene.caption_fade;
   const window = cf ? cf.window : CAPTION_FADE_WINDOW;
   const stagger = cf ? cf.stagger : CAPTION_STAGGER;

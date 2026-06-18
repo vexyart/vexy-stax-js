@@ -75,25 +75,30 @@ test("plateGaps fall back to camera.gap", () => {
   assert.ok(gaps.every((x) => close(x, scene.camera.gap)));
 });
 
-test("compactCamera head-on +Z with dual-axis crop-free fit", () => {
+test("compactCamera head-on +Z with dual-axis crop-free fit (composite incl. captions, issue 332)", () => {
   const scene = loadExample();
   const cam = g.compactCamera(scene);
   assert.ok(close(cam.position[0], 0.0, 1e-6));
-  assert.ok(close(cam.position[1], 0.0, 1e-6));
-  // distance = max(d_w, d_h) (issue 302 §1, 303 §2); position[2]==distToZ0 (target z absorbs +depth/2).
+  // Issue 332: the head-on target is the COMPOSITE (slide + on-floor caption) center, lifted
+  // to Y = lift/2; X stays centered at 0.
+  const lift = g.slideLift(scene);
+  assert.ok(close(cam.position[1], lift / 2.0, 1e-6));
+  assert.ok(close(cam.target[1], lift / 2.0, 1e-6));
+  // distance = max(d_w, d_h) (issue 302 §1, 303 §2, 332: d_h fits H + lift), target z absorbs +depth/2.
   const frac = parseFloat(String(scene.camera.distance)) / 100.0; // "100%" -> 1.0 (fit tight)
   const hfov = (scene.camera.fov * Math.PI) / 180.0;
   const aspect = scene.size.width / scene.size.height;
   const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
+  const compositeH = scene.size.height + lift;
   const dW = scene.size.width / (2.0 * Math.tan(hfov / 2.0) * frac);
-  const dH = scene.size.height / (2.0 * Math.tan(vfov / 2.0) * frac);
+  const dH = compositeH / (2.0 * Math.tan(vfov / 2.0) * frac);
   assert.ok(close(cam.position[2], Math.max(dW, dH), 1e-6));
   assert.ok(close(cam.target[2], -10.5, 1e-6)); // -(21/2)
   assert.ok(cam.position[2] > cam.target[2]); // on +Z toward viewer
-  // no crop: front plate (Z=0) fills <=100% on both axes; limiting axis touches exactly P%.
+  // no crop: composite (Z=0) fills <=100% on both axes; limiting axis touches exactly P%.
   const d = cam.position[2];
   const fillW = scene.size.width / 2.0 / (d * Math.tan(hfov / 2.0));
-  const fillH = scene.size.height / 2.0 / (d * Math.tan(vfov / 2.0));
+  const fillH = compositeH / 2.0 / (d * Math.tan(vfov / 2.0));
   assert.ok(fillW <= 1.0 + 1e-9 && fillH <= 1.0 + 1e-9);
   assert.ok(close(Math.max(fillW, fillH), frac, 1e-9));
 });
@@ -288,6 +293,35 @@ test("caption fill/border colors default to edge.color, overridable separately (
   const p = parseScene({ version: 1, edge: { color: "#222222" }, caption_defaults: { fill_color: "#abcabc" }, slides: [{ src: "a.png" }] });
   assert.equal(g.captionFillColor(p), "#abcabc");
   assert.equal(g.captionBorderColor(p), "#222222");
+});
+
+test("slideLift on/off and captions-off suppresses caption opacities (issue 332)", () => {
+  const scene = loadExample();
+  // Default (captions on): each slide lifts by one caption-plate height.
+  assert.equal(scene.captions, true);
+  assert.ok(close(g.slideLift(scene), g.captionPlateHeight(scene)));
+  assert.ok(g.slideLift(scene) > 0.0);
+  // Caption plate still on the floor regardless of the lift.
+  assert.ok(close(g.captionPlateCenterY(scene), -(scene.size.height / 2.0) + g.captionPlateHeight(scene) / 2.0));
+  // Captions off: no lift, and every caption opacity is zeroed.
+  scene.captions = false;
+  assert.ok(close(g.slideLift(scene), 0.0));
+  assert.ok(g.captionOpacities(scene, 0.0).every((o) => close(o, 0.0)));
+  assert.ok(g.captionOpacities(scene, 1.0).every((o) => close(o, 0.0)));
+});
+
+test("captions-off compact camera drops slides to the floor (issue 332)", () => {
+  const scene = loadExample();
+  scene.captions = false;
+  const cam = g.compactCamera(scene);
+  assert.ok(close(cam.target[1], 0.0, 1e-6)); // no lift → composite center back at Y=0
+  const frac = parseFloat(String(scene.camera.distance)) / 100.0;
+  const hfov = (scene.camera.fov * Math.PI) / 180.0;
+  const aspect = scene.size.width / scene.size.height;
+  const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
+  const dW = scene.size.width / (2.0 * Math.tan(hfov / 2.0) * frac);
+  const dH = scene.size.height / (2.0 * Math.tan(vfov / 2.0) * frac); // compositeH == H (lift 0)
+  assert.ok(close(cam.position[2], Math.max(dW, dH), 1e-6));
 });
 
 test("captionOpacities stagger_frames steps back->front (issue 309)", () => {

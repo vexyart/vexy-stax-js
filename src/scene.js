@@ -232,6 +232,7 @@ export function parseScene(raw) {
     "edge",
     "background",
     "juicy",
+    "captions",
     "caption_defaults",
     "caption_fade",
     "slides",
@@ -256,6 +257,9 @@ export function parseScene(raw) {
     edge: parseEdge(o.edge),
     background: o.background === undefined ? "#ffffff" : str(o.background, "background"),
     juicy: o.juicy === undefined ? false : bool(o.juicy, "juicy"),
+    // Issue 332: global captions toggle (default true → preserves prior stacked-with-captions
+    // behavior). false skips all caption plates and drops slides onto the floor.
+    captions: o.captions === undefined ? true : bool(o.captions, "captions"),
     caption_defaults: parseCaptionStyle(o.caption_defaults, "caption_defaults"),
     caption_fade: parseCaptionFade(o.caption_fade),
     slides: o.slides.map((s, i) => parseSlide(s, i)),

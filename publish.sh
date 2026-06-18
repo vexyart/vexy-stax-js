@@ -28,6 +28,9 @@ find_npm() {
   echo "npm"
 }
 NPM="$(find_npm)"
+
+uvx gitnextver
+
 VERSION="$(node -p "require('./package.json').version")"
 
 echo "==> Building dist bundles..."

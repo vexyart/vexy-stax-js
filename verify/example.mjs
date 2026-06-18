@@ -8,7 +8,8 @@
 // this repo's testdata scene, writing artifacts into vexy-stax-js/outputs/:
 //
 //   1. IMAGE     toImage() PNG of compact AND expanded (+ a single side-by-side PNG)
-//   2. VIDEO     toVideo() of the transition, saved to a .webm file
+//   2. VIDEO     toVideo() of the transition, saved to a seekable .mp4 file
+//                (WebCodecs + mp4-muxer; .webm only as a no-WebCodecs fallback)
 //   3. PLAYABLE  self-contained playable.html (built element + scene + slides copied
 //                in) that plays the transition on a button when served
 //   4. SCROLLSPY top (compact) + bottom (expanded) frames captured by driving the
@@ -81,6 +82,15 @@ function buildPlayableArtifact() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>vexy-stax — playable demo</title>
+    <!-- Caption default font (issue 328): Zalando Sans Expanded (wdth 125 / wght 500),
+         matched by stage.js's "500 expanded" canvas font. Without this the canvas text
+         falls back to system-ui. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root { color-scheme: light dark; }
       * { box-sizing: border-box; }
@@ -185,6 +195,15 @@ function buildScrollableArtifact() {
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>vexy-stax — scrollable demo</title>
+    <!-- Caption default font (issue 328): Zalando Sans Expanded (wdth 125 / wght 500),
+         matched by stage.js's "500 expanded" canvas font. Without this the canvas text
+         falls back to system-ui. -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
     <style>
       * { box-sizing: border-box; }
       html, body { margin: 0; background: #ffffff; } /* white page bg (issue 314 §1) */
@@ -302,7 +321,8 @@ async function main() {
     // --- 2. VIDEO: toVideo() of the transition ---------------------------
     const vid = await page.evaluate(() => window.__toVideoB64("expand_collapse"));
     const vidBuf = b64ToBuffer(vid.b64);
-    // Container is WebM (MediaRecorder VP8/VP9 in chromium). Save with that extension.
+    // Primary path (issue 331): WebCodecs + mp4-muxer → mp4. MediaRecorder fallback
+    // may still produce webm in environments without VideoEncoder.
     const ext = vid.type.includes("mp4") ? "mp4" : "webm";
     const vidPath = join(OUT_DIR, `airbl-transition.${ext}`);
     writeFileSync(vidPath, vidBuf);

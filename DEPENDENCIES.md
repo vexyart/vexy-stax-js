@@ -8,6 +8,7 @@
 |---------|---------|---------|
 | `three` | ^0.181.0 | WebGL 3D rendering stage for plates, floor, reflections, and captions |
 | `gsap` | ^3.13.0 | Timeline-based transition tweening and animation curves |
+| `mp4-muxer` | ^5.2.2 | Mux VideoEncoder chunks into a seekable mp4 (or webm) container; chosen for its pure-JS zero-dependency design, `ArrayBufferTarget` in-memory mode, and `fastStart` moov-at-front support (issue 331) |
 
 ## Development
 

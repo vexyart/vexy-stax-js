@@ -14,3 +14,9 @@ npm run build
 
 echo "==> Build complete:"
 ls -lh dist/vexy-stax.element.js dist/vexy-stax.global.js
+
+echo "==> Building docs/ for GitHub Pages..."
+npm run build:docs
+
+echo "==> docs/ contents:"
+ls -lh docs/

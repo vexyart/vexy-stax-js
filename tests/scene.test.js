@@ -71,6 +71,14 @@ test("caption fill/border colors parse and are separately overridable (issue 324
   assert.throws(() => parseScene({ version: 1, caption_defaults: { glow: true }, slides: [{ src: "a.png" }] }));
 });
 
+test("captions toggle defaults true and parses (issue 332)", () => {
+  assert.equal(parseScene({ version: 1, slides: [{ src: "a.png" }] }).captions, true);
+  assert.equal(parseScene({ version: 1, captions: false, slides: [{ src: "a.png" }] }).captions, false);
+  assert.equal(parseScene({ version: 1, captions: true, slides: [{ src: "a.png" }] }).captions, true);
+  // Strict: a non-bool captions value throws at the boundary.
+  assert.throws(() => parseScene({ version: 1, captions: "yes", slides: [{ src: "a.png" }] }), /must be a boolean/);
+});
+
 test("caption_fade.stagger_frames parses (issue 309)", () => {
   const scene = parseScene({
     version: 1,

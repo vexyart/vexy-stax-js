@@ -2,10 +2,15 @@
 // this_file: src/export.js
 //
 // Image + video export (SPEC.md §6.1). Image: read the renderer's WebGL canvas
-// to a PNG Blob. Video: capture the deck transition to an encoded clip — WebCodecs
-// (VideoEncoder + muxed via captureStream/MediaRecorder when available) with a
-// MediaRecorder fallback for browsers without WebCodecs. Both paths produce a
-// Blob the caller can download.
+// to a PNG Blob. Video: capture the deck transition to an encoded, seekable clip.
+//
+// PRIMARY path (issue 331): WebCodecs (VideoEncoder) + mp4-muxer → H.264/mp4.
+// Produces a fully seekable mp4 with correct duration + per-stream frame metadata.
+// Falls back to webm-muxer+VP9 if H.264 is unsupported, then finally to
+// MediaRecorder (live captureStream) as the last-resort path for environments
+// that lack VideoEncoder entirely.
+
+import { Muxer, ArrayBufferTarget } from "mp4-muxer";
 
 /**
  * Read a canvas to a PNG Blob.
@@ -44,35 +49,65 @@ function pickMimeType() {
 }
 
 /**
+ * Check whether a given VideoEncoder codec string is supported.
+ * @param {string} codec
+ * @param {number} width
+ * @param {number} height
+ * @param {number} fps
+ * @returns {Promise<boolean>}
+ */
+async function isCodecSupported(codec, width, height, fps) {
+  if (typeof VideoEncoder === "undefined") return false;
+  try {
+    const { supported } = await VideoEncoder.isConfigSupported({
+      codec,
+      width,
+      height,
+      framerate: fps,
+    });
+    return !!supported;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Record a transition to a video Blob.
  *
- * Drives `playFrames(applyOneFrame)`: the caller renders each frame onto the
- * canvas synchronously inside the per-frame callback, and we capture the canvas
- * stream while it plays. WebCodecs is preferred when present (lower latency, mp4
- * where supported); otherwise MediaRecorder captures the live canvas stream.
+ * Drives `run(onFrame)`: the caller renders each frame onto the canvas
+ * synchronously inside the per-frame callback. The PRIMARY path uses WebCodecs
+ * (VideoEncoder) + mp4-muxer to produce a seekable mp4 with correct duration
+ * and per-stream frame count metadata. Falls back to MediaRecorder only when
+ * VideoEncoder is unavailable.
  *
  * @param {object} opts
- * @param {HTMLCanvasElement} opts.canvas the renderer canvas to capture
- * @param {(onFrame:(state:object)=>void)=>Promise<void>} opts.run plays the
+ * @param {HTMLCanvasElement} opts.canvas  the renderer canvas to capture
+ * @param {(onFrame:(state:object)=>void)=>Promise<void>} opts.run  plays the
  *   transition, calling onFrame for each frame (which must render to the canvas)
- * @param {number} [opts.fps] frame rate for the captured stream
+ * @param {number} [opts.fps]  frame rate for the encoded clip (default 30)
  * @returns {Promise<Blob>}
  */
 export async function recordVideo({ canvas, run, fps = 30 }) {
   if (!canvas) throw new Error("recordVideo: canvas is required");
   if (typeof run !== "function") throw new Error("recordVideo: run() callback is required");
 
-  if (typeof VideoEncoder !== "undefined" && typeof canvas.captureStream === "function") {
-    // WebCodecs path: still capture via MediaRecorder on the encoded stream when
-    // available, since muxing raw VideoEncoder chunks into a container is heavy.
-    // We treat presence of MediaRecorder as the muxer; if it's missing we fall
-    // through to the explicit WebCodecs-only encoder below.
-    if (hasMediaRecorder()) {
-      return recordViaMediaRecorder({ canvas, run, fps });
+  // PRIMARY: WebCodecs + mp4-muxer (issue 331) — prefer H.264/mp4; fall back to
+  // VP9/webm inside the same muxed path if H.264 is unsupported.
+  if (typeof VideoEncoder !== "undefined") {
+    const w = canvas.width;
+    const h = canvas.height;
+    const avcCodec = "avc1.640028"; // H.264 High Profile Level 4.0
+    const vp9Codec = "vp09.00.10.08";
+
+    const useAvc = await isCodecSupported(avcCodec, w, h, fps);
+    const useVp9 = !useAvc && (await isCodecSupported(vp9Codec, w, h, fps));
+
+    if (useAvc || useVp9) {
+      return recordViaMuxer({ canvas, run, fps, useAvc });
     }
-    return recordViaWebCodecs({ canvas, run, fps });
   }
 
+  // FALLBACK: MediaRecorder (captureStream) — no mux metadata, non-seekable.
   if (hasMediaRecorder()) {
     return recordViaMediaRecorder({ canvas, run, fps });
   }
@@ -80,6 +115,72 @@ export async function recordVideo({ canvas, run, fps = 30 }) {
   throw new Error(
     "recordVideo: neither WebCodecs (VideoEncoder) nor MediaRecorder/captureStream is available in this environment"
   );
+}
+
+/**
+ * PRIMARY recording path: VideoEncoder frames piped into mp4-muxer (H.264) or
+ * webm-muxer (VP9). Produces a properly seekable container with real duration +
+ * per-stream nb_frames metadata.
+ *
+ * @param {object} opts
+ * @param {HTMLCanvasElement} opts.canvas
+ * @param {(onFrame:()=>void)=>Promise<void>} opts.run
+ * @param {number} opts.fps
+ * @param {boolean} opts.useAvc  true→H.264+mp4, false→VP9+webm via mp4-muxer
+ */
+async function recordViaMuxer({ canvas, run, fps, useAvc }) {
+  const w = canvas.width;
+  const h = canvas.height;
+  const codec = useAvc ? "avc1.640028" : "vp09.00.10.08";
+
+  const target = new ArrayBufferTarget();
+  const muxer = new Muxer({
+    target,
+    video: {
+      codec: useAvc ? "avc" : "vp9",
+      width: w,
+      height: h,
+    },
+    // fastStart embeds the moov atom at the front for immediate seeking in players.
+    fastStart: "in-memory",
+  });
+
+  const chunks = [];
+  const encoder = new VideoEncoder({
+    output: (chunk, meta) => {
+      muxer.addVideoChunk(chunk, meta);
+    },
+    error: (e) => {
+      throw e;
+    },
+  });
+
+  encoder.configure({
+    codec,
+    width: w,
+    height: h,
+    framerate: fps,
+    // H.264: signal avc1 bitstream (Annex-B not needed for mp4-muxer).
+    ...(useAvc ? { avc: { format: "avc" } } : {}),
+  });
+
+  let frameIndex = 0;
+  const frameDuration = Math.round(1e6 / fps); // microseconds per frame
+
+  await run(() => {
+    const timestamp = frameIndex * frameDuration;
+    const frame = new VideoFrame(canvas, { timestamp, duration: frameDuration });
+    encoder.encode(frame, { keyFrame: frameIndex % fps === 0 });
+    frame.close();
+    frameIndex += 1;
+  });
+
+  await encoder.flush();
+  encoder.close();
+  muxer.finalize();
+
+  const mimeType = useAvc ? "video/mp4" : "video/webm";
+  return new Blob([target.buffer], { type: mimeType });
 }
 
 async function recordViaMediaRecorder({ canvas, run, fps }) {
@@ -107,37 +208,4 @@ async function recordViaMediaRecorder({ canvas, run, fps }) {
   await stopped;
   stream.getTracks?.().forEach((t) => t.stop());
   return new Blob(chunks, { type: recorder.mimeType || mimeType || "video/webm" });
-}
-
-async function recordViaWebCodecs({ canvas, run, fps }) {
-  // Minimal WebCodecs path: encode each frame; emit raw chunks wrapped as a Blob.
-  // (Full container muxing is out of scope; MediaRecorder is the primary path and
-  // this branch only runs where MediaRecorder is unavailable but VideoEncoder is.)
-  const chunks = [];
-  const encoder = new VideoEncoder({
-    output: (chunk) => {
-      const buf = new ArrayBuffer(chunk.byteLength);
-      chunk.copyTo(buf);
-      chunks.push(new Uint8Array(buf));
-    },
-    error: (e) => {
-      throw e;
-    },
-  });
-  encoder.configure({
-    codec: "vp09.00.10.08",
-    width: canvas.width,
-    height: canvas.height,
-    framerate: fps,
-  });
-  let frameIndex = 0;
-  await run(() => {
-    const frame = new VideoFrame(canvas, { timestamp: (frameIndex * 1e6) / fps });
-    encoder.encode(frame, { keyFrame: frameIndex % fps === 0 });
-    frame.close();
-    frameIndex += 1;
-  });
-  await encoder.flush();
-  encoder.close();
-  return new Blob(chunks, { type: "video/webm" });
 }

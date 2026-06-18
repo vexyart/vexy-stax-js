@@ -23,6 +23,7 @@ import {
   captionFillColor,
   captionBorderColor,
   captionOpacities,
+  slideLift,
   plateEdgeWidth,
   CAPTION_PLATE_PAD_EM,
   REFLECTION_BLUR_FRAC,
@@ -413,6 +414,7 @@ export class Stage {
   /** Build a caption sprite under each plate that declares one (best-effort). */
   _buildCaptions() {
     if (typeof document === "undefined") return; // no canvas → skip captions
+    if (!this.scene.captions) return; // issue 332: global captions toggle off
     const defaults = this.scene.caption_defaults ?? null;
     // Caption-plate layout (issue 311): the caption is a small white opaque bordered PLATE.
     // 1em == captionSize, plate height == captionPlateHeight, border == the slide-plate edge
@@ -521,6 +523,9 @@ export class Stage {
     const bottomY = -tallest / 2;
     const floorY = bottomY;
     const reflectivity = this.scene.floor.reflectivity;
+    // Issue 332: lift every slide plate (+ border/reflection) by one caption-plate height so
+    // it sits ON TOP of its on-floor caption plate (0 when captions are off → on the floor).
+    const lift = slideLift(this.scene);
 
     // Cumulative Z: index 0 farthest (most negative), last at 0.
     // stack_depth = sum(gaps[1:]); place slide i at z = -(stack_depth - cumGapTo(i)).
@@ -531,7 +536,7 @@ export class Stage {
     this.plates.forEach((plate, i) => {
       if (i > 0) cum += gaps[i];
       const z = -(totalDepth - cum);
-      const y = bottomY + plate.height / 2;
+      const y = bottomY + lift + plate.height / 2;
       const op = opacities[i];
       plate.mesh.position.set(0, y, z);
       plate.mesh.material.opacity = op;
@@ -555,12 +560,13 @@ export class Stage {
   }
 
   /**
-   * Position each caption PLATE (issue 311) so its RIGHT edge is at captionAnchorX (2em left
-   * of the plates) and its VERTICAL CENTER is at captionPlateCenterY (the plate sits on the
-   * virtual ground), at the slide plate's current Z (captions recede with their plate). The
-   * caption mesh is centered geometry of width `worldWidth`, so the mesh CENTER X is
-   * anchorX − worldWidth/2. The whole plate (fill + border + text) fades with the per-frame
-   * opacity. opacities[plateIndex] == 0 → fully invisible.
+   * Position each caption PLATE (issue 311; relayout issue 332) so its LEFT edge is at
+   * captionAnchorX (the slide LEFT edge) and its VERTICAL CENTER is at captionPlateCenterY
+   * (the plate sits on the floor, the slide stacked on top of it), at the slide plate's
+   * current Z (captions recede with their plate). The caption mesh is centered geometry of
+   * width `worldWidth`, so the mesh CENTER X is anchorX + worldWidth/2. The whole plate
+   * (fill + border + text) fades with the per-frame opacity. opacities[plateIndex] == 0 →
+   * fully invisible.
    * @param {number[]} opacities  per-slide opacity list (1:1 with this.plates)
    */
   _placeCaptions(opacities) {
@@ -569,10 +575,10 @@ export class Stage {
     const centerY = captionPlateCenterY(this.scene);
     this.captions.forEach(({ sprite, material, plateIndex, worldWidth }) => {
       const plate = this.plates[plateIndex];
-      // Right edge at anchorX → mesh center at anchorX − width/2; vertical center at centerY;
-      // plate Z (captions recede with their plate in expanded view).
+      // Issue 332: LEFT edge at anchorX (the slide left edge) → mesh center at anchorX + w/2;
+      // vertical center at centerY (on the floor); plate Z (captions recede with their plate).
       const w = worldWidth ?? sprite.scale?.x ?? 0;
-      sprite.position.set(anchorX - w / 2, centerY, plate.mesh.position.z);
+      sprite.position.set(anchorX + w / 2, centerY, plate.mesh.position.z);
       const op = opacities[plateIndex] ?? 0;
       material.opacity = op;
       sprite.visible = op > 0.001;

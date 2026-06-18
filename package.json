@@ -1,6 +1,6 @@
 {
   "name": "vexy-stax-js",
-  "version": "3.0.1",
+  "version": "3.0.10",
   "description": "Browser renderer for the vexy-stax shared scene format: 3D glass plates in two views, with morphable opacity. Ships as ESM, Web Component, and a classic-script global.",
   "type": "module",
   "exports": {
@@ -19,7 +19,8 @@
     "build": "VEXY_BUILD=element vite build && VEXY_BUILD=global vite build",
     "preview": "vite preview",
     "test:unit": "node --test",
-    "test": "npm run test:unit && playwright test"
+    "test": "npm run test:unit && playwright test",
+    "build:docs": "node scripts/build-docs.mjs"
   },
   "keywords": [
     "threejs",
@@ -48,6 +49,7 @@
   },
   "dependencies": {
     "gsap": "^3.13.0",
+    "mp4-muxer": "^5.2.2",
     "three": "^0.181.0"
   },
   "devDependencies": {

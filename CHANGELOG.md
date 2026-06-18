@@ -4,6 +4,86 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.10] — issues 331
+
+### Fixed
+
+- **Seekable mp4 video export** (331): `src/export.js` `recordVideo()` now uses a
+  deterministic WebCodecs + `mp4-muxer` primary path instead of the broken
+  `captureStream`/MediaRecorder approach. The new `recordViaMuxer()` function:
+  - Checks H.264 (`avc1.640028`) support via `VideoEncoder.isConfigSupported()`; falls
+    back to VP9 (`vp09.00.10.08`) if H.264 is unavailable.
+  - Feeds each `VideoFrame(canvas, {timestamp, duration})` into a `VideoEncoder` whose
+    output chunks are piped directly to a `mp4-muxer` `Muxer` with
+    `fastStart: "in-memory"` and an `ArrayBufferTarget`.
+  - Calls `muxer.finalize()` after `encoder.flush()`, producing a `Blob([target.buffer],
+    {type:"video/mp4"})` with correct per-stream `duration` and `nb_frames` metadata —
+    verified seekable by ffprobe.
+  - `MediaRecorder` (live `captureStream`) is retained as a last-resort fallback for
+    environments entirely without `VideoEncoder`.
+- **`verify/example.mjs` extension logic** (331): the `ext` variable already derived the
+  extension from `blob.type` (`mp4` vs `webm`), so the primary path now writes
+  `airbl-transition.mp4` automatically.
+
+### Added
+
+- **Deployable `docs/` site for GitHub Pages** (331 part 2):
+  - `scripts/build-docs.mjs` copies the built `dist/` bundles (element + global + source
+    maps), the `airbl-lores` scene JSON + slide PNGs, writes a self-contained
+    `docs/index.html` landing page with a playable `<vexy-stax>` demo and usage snippets
+    for all three entry points (Web Component, ESM import, global script), and a short
+    `docs/README.md`.
+  - `package.json` gains a `build:docs` script (`node scripts/build-docs.mjs`).
+  - `build.sh` calls `npm run build:docs` after `npm run build`, so the docs site is
+    regenerated on every full build.
+  - Base path is `/vexy-stax-js/` (GitHub Pages subdirectory), set via a `<base>` tag
+    in `index.html`.
+
+## [3.0.9] — issue 332
+
+### Added
+
+- **Global `captions` on/off toggle** (332): a new top-level boolean scene field (default `true`,
+  preserving prior behavior) parsed + validated in `src/scene.js` and
+  `schema/vexy-stax-scene.schema.json` (strict — a non-bool throws). When `false`, no caption plates
+  are built (`stage.js`) and `captionOpacities` returns all-zero, and the slide plates drop directly
+  onto the floor.
+
+### Changed
+
+- **New stacked caption layout** (332): when captions are ON, each caption plate sits RIGHT ON the
+  floor (bottom edge on the floor line) and its slide plate sits directly ON TOP of it, LEFT-aligned
+  with the slide (caption left edge == slide left edge at `X = -width/2`). This replaces the previous
+  "caption to the LEFT of the plate" layout. Mirrors `vexy-stax-py` exactly.
+  - `geometry.js`: added `slideLift(scene)` (one caption-plate height when captions on, else 0); every
+    slide plate is lifted by it in `stage.js`. `captionAnchorX` now means the caption plate's LEFT edge
+    (numerically unchanged since `CAPTION_GAP_EM == 0`). `captionOpacities` returns all-zero when
+    `captions` is off.
+  - **Crop-free camera framing for the full composite**: `compactCamera` fits the frontmost COMPOSITE
+    (width `W`, height `H + lift`) and aims at its center (`Y = lift/2`); `expandedCamera` includes the
+    lifted slide corners AND the on-floor caption-plate bottom row in its bounding fit, so the
+    caption+slide stack is framed with no crop.
+  - `stage.js`: lifts plates/borders/reflections by `slideLift`, anchors each caption plate by its LEFT
+    edge on the floor, and skips caption plates entirely when the toggle is off.
+
+## [3.0.8] — issues 328, 329, 330
+
+### Changed
+
+- **Static Zalando Sans `<link>` in the generated demos** (328): `verify/example.mjs` now emits the
+  Google Fonts preconnect + `Zalando+Sans:wdth,wght@125,500` stylesheet directly in the `<head>` of
+  both `playable.html` and `scrollable.html`, so the caption face is available before first paint.
+  (The element's runtime `_ensureCaptionFonts` injection from 3.0.7 still awaits `document.fonts`,
+  so this just removes the first-frame fallback flash.)
+
+### Verified (no code change needed)
+
+- **`scrollable.html` reflects current src** (329): the demo HTML is regenerated from the live
+  `src/` on every `example.sh` / `example.mjs` run (and now also when the Python `example.py`
+  rebuilds the JS demos — issue 330), so there is no stale checked-in copy to "port" changes into.
+- **`outputs/` cleanup** (330): `example.sh` already `rm -rf outputs` before regenerating, so stale
+  artifacts are removed on every rebuild.
+
 ## [3.0.7] — issue 328
 
 ### Changed

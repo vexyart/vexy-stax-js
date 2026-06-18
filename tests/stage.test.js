@@ -265,7 +265,7 @@ test("makeCaptionSprite font stack falls back to system-ui/sans-serif, never ser
   assert.equal(ctx2.letterSpacing, `${0.02 * 24 * 2}px`, "default font must carry 0.02em tracking");
 });
 
-test("_placeCaptions positions plate right edge at anchorX, center at plateCenterY, plateZ (issue 311)", { skip: SKIP }, () => {
+test("_placeCaptions positions plate LEFT edge at anchorX, center at plateCenterY, plateZ (issues 311/332)", { skip: SKIP }, () => {
   const scene = makeScene(2);
   const anchorX = captionAnchorX(scene);
   const centerY = captionPlateCenterY(scene);
@@ -275,7 +275,7 @@ test("_placeCaptions positions plate right edge at anchorX, center at plateCente
   const plateZ0 = -200; // back plate
   const plateZ1 = -50;  // front plate (non-zero avoids false-pass on initial z=0)
 
-  // Distinct widths so the right-edge anchoring (center = anchorX - width/2) is verified.
+  // Distinct widths so the LEFT-edge anchoring (center = anchorX + width/2) is verified.
   const w0 = 134;
   const w1 = 200;
 
@@ -308,13 +308,13 @@ test("_placeCaptions positions plate right edge at anchorX, center at plateCente
   assert.equal(fakeSprite0.position._calls.length, 1, "plate0 position.set must be called exactly once");
   assert.equal(fakeSprite1.position._calls.length, 1, "plate1 position.set must be called exactly once");
 
-  // Plate 0: mesh center X = anchorX - w0/2 (right edge at anchorX), Y = centerY, Z = plateZ0.
-  assert.ok(close(fakeSprite0.position.x, anchorX - w0 / 2), `plate0 center X must be anchorX - w0/2 (${anchorX - w0 / 2}), got ${fakeSprite0.position.x}`);
+  // Plate 0: mesh center X = anchorX + w0/2 (LEFT edge at anchorX), Y = centerY, Z = plateZ0.
+  assert.ok(close(fakeSprite0.position.x, anchorX + w0 / 2), `plate0 center X must be anchorX + w0/2 (${anchorX + w0 / 2}), got ${fakeSprite0.position.x}`);
   assert.ok(close(fakeSprite0.position.y, centerY), `plate0 Y must equal captionPlateCenterY (${centerY}), got ${fakeSprite0.position.y}`);
   assert.equal(fakeSprite0.position.z, plateZ0, `plate0 Z must equal plate Z (${plateZ0})`);
 
-  // Plate 1: mesh center X = anchorX - w1/2, Y = centerY, Z = plateZ1.
-  assert.ok(close(fakeSprite1.position.x, anchorX - w1 / 2), `plate1 center X must be anchorX - w1/2 (${anchorX - w1 / 2}), got ${fakeSprite1.position.x}`);
+  // Plate 1: mesh center X = anchorX + w1/2, Y = centerY, Z = plateZ1.
+  assert.ok(close(fakeSprite1.position.x, anchorX + w1 / 2), `plate1 center X must be anchorX + w1/2 (${anchorX + w1 / 2}), got ${fakeSprite1.position.x}`);
   assert.ok(close(fakeSprite1.position.y, centerY), `plate1 Y must equal captionPlateCenterY (${centerY}), got ${fakeSprite1.position.y}`);
   assert.equal(fakeSprite1.position.z, plateZ1, `plate1 Z must equal plate Z (${plateZ1})`);
 });

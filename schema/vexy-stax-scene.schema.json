@@ -69,6 +69,7 @@
     },
     "background": { "type": "string", "default": "#ffffff" },
     "juicy": { "type": "boolean", "default": false, "description": "Python-only per-channel color match." },
+    "captions": { "type": "boolean", "default": true, "description": "Global captions toggle (issue 332). ON: each slide plate sits on top of its on-floor caption plate (stacked layout). OFF: no caption plates; slide plates sit directly on the floor." },
     "caption_defaults": { "$ref": "#/$defs/captionStyle" },
     "caption_fade": {
       "type": "object",
