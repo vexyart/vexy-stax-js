@@ -113,6 +113,28 @@ function parseTransition(raw) {
   };
 }
 
+// Issue 335 §3 / 336: the `video` section centralizes the VIDEO render params. Mirrors
+// vexy_stax.scene.Video exactly so PY and JS agree. Always present (default below): width/
+// height fall back to scene.size when null; fps falls back to transition.fps (else 30);
+// frames (transition frames PER LEG) falls back to round(transition.duration * fps);
+// first_hold/last_hold (default 10) prepend/append held still frames in the video.
+function parseVideo(raw) {
+  if (raw === undefined) {
+    return { width: null, height: null, fps: null, frames: null, first_hold: 10, last_hold: 10 };
+  }
+  const o = asObject(raw, "video");
+  rejectExtraKeys(o, new Set(["width", "height", "fps", "frames", "first_hold", "last_hold"]), "video");
+  const orNull = (v, where, opts) => (v === undefined || v === null ? null : int(v, where, opts));
+  return {
+    width: orNull(o.width, "video.width", { min: 1 }),
+    height: orNull(o.height, "video.height", { min: 1 }),
+    fps: orNull(o.fps, "video.fps", { min: 1 }),
+    frames: orNull(o.frames, "video.frames", { min: 1 }),
+    first_hold: o.first_hold === undefined ? 10 : int(o.first_hold, "video.first_hold", { min: 0 }),
+    last_hold: o.last_hold === undefined ? 10 : int(o.last_hold, "video.last_hold", { min: 0 }),
+  };
+}
+
 function parseFloor(raw) {
   // Smoked glass: ~4% opacity, dark tint, reflective (issue 303 §1).
   if (raw === undefined) return { color: "#1a1a1a", opacity: 0.04, reflectivity: 0.5 };
@@ -233,6 +255,7 @@ export function parseScene(raw) {
     "background",
     "juicy",
     "captions",
+    "video",
     "caption_defaults",
     "caption_fade",
     "slides",
@@ -260,6 +283,7 @@ export function parseScene(raw) {
     // Issue 332: global captions toggle (default true → preserves prior stacked-with-captions
     // behavior). false skips all caption plates and drops slides onto the floor.
     captions: o.captions === undefined ? true : bool(o.captions, "captions"),
+    video: parseVideo(o.video),
     caption_defaults: parseCaptionStyle(o.caption_defaults, "caption_defaults"),
     caption_fade: parseCaptionFade(o.caption_fade),
     slides: o.slides.map((s, i) => parseSlide(s, i)),

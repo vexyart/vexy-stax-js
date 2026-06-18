@@ -4,6 +4,28 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.11] — issues 335, 336, 337
+
+### Added
+
+- **`video` scene section** (335 / 336): `scene.js` `parseVideo()` + the JSON schema now accept and
+  validate the `video` section (`width`/`height`/`fps`/`frames`/`first_hold`/`last_hold`), mirroring
+  `vexy_stax.scene.Video`. Previously the strict parser rejected the key with "Unknown key 'video' in
+  scene", which broke the Python `playwright` engine (it mounts the scene in `<vexy-stax>`) — issue
+  336. The element now accepts a scene carrying `video`.
+- **Held first/last still frames in `toVideo()`** (335 §2): the video export now bookends the clip
+  with held stills — it renders the start endpoint and captures it `video.first_hold` times (default
+  10), plays the transition, then captures the end endpoint `video.last_hold` times (still →
+  transition → still). Mirrors `geometry.py`'s `frame_plan` holds. Verified: the exported
+  `airbl-transition.mp4` first/last frames are static.
+
+### Fixed
+
+- **Compact view reserved empty caption space** (337): `compactCamera` now fits ONLY the frontmost
+  slide plate (height `H`, aimed at the slide center `Y = lift`) instead of the slide+caption
+  composite, so the compact view fills the frame with no caption padding. Mirrors `geometry.py`
+  (issue 337). Verified: the playwright-rendered compact still fills the frame; geometry test updated.
+
 ## [3.0.10] — issues 331
 
 ### Fixed

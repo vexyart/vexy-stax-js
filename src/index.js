@@ -205,13 +205,28 @@ export class VexyStax {
     await this._ready;
     const kind = opts.kind ?? this.scene.transition?.kind;
     if (!kind) throw new Error("VexyStax.toVideo: no kind given and scene.transition is null");
-    const fps = this.scene.transition?.fps ?? 30;
+    const fps = this.scene.video?.fps ?? this.scene.transition?.fps ?? 30;
     const canvas = this.stage.renderer.domElement;
+    // Issue 335 §2: bookend the clip with HELD STILLS — render the start frame and capture it
+    // `first_hold` times, then the transition, then capture the end frame `last_hold` times
+    // (still → transition → still). Defaults 10/10 from scene.video. Mirrors geometry.py's
+    // frame_plan holds (the Python engines get holds via frame_plan; here toVideo drives a
+    // real-time capture, so we hold by capturing the boundary frames repeatedly).
+    const firstHold = this.scene.video?.first_hold ?? 10;
+    const lastHold = this.scene.video?.last_hold ?? 10;
+    const { startMorph, endMorph } = transitionEndpoints(kind);
+    const aspect = this.stage.camera.aspect;
 
     return recordVideo({
       canvas,
       fps,
       run: async (onFrame) => {
+        // Held still intro: snap to the start endpoint and capture it `firstHold` times.
+        const startState = frameStateAt(this.scene, startMorph, aspect);
+        this.stage.applyFrameState(startState, startMorph);
+        this.stage.render();
+        for (let i = 0; i < firstHold; i++) onFrame(startState);
+
         const controller = playTransition(this.scene, (state) => {
           const t = this._morphFromGaps(state.gaps);
           this.stage.applyFrameState(state, t);
@@ -219,6 +234,12 @@ export class VexyStax {
           onFrame(state);
         }, { kind });
         await controller.promise;
+
+        // Held still outro: snap to the end endpoint and capture it `lastHold` times.
+        const endState = frameStateAt(this.scene, endMorph, aspect);
+        this.stage.applyFrameState(endState, endMorph);
+        this.stage.render();
+        for (let i = 0; i < lastHold; i++) onFrame(endState);
       },
     });
   }

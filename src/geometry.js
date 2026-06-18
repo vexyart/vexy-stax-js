@@ -330,13 +330,14 @@ export function expandedCamera(scene, viewportAspect) {
 export function compactCamera(scene, viewportAspect) {
   const cam = scene.camera;
   const depth = stackDepth(scene, "compact");
-  // Issue 332: the frontmost COMPOSITE the head-on camera frames is the slide plate plus
-  // (captions on) its on-floor caption plate stacked below it: full width W, height H + lift
-  // (lift == one caption-plate height), vertically centered at Y = lift/2. Aim at that
-  // composite center so neither the slide nor the caption row crops. Mirrors geometry.py.
+  // Issue 337: the compact view frames ONLY the frontmost SLIDE plate — not the composite with
+  // its caption row. Captions are invisible in compact (they fade in only as the deck expands),
+  // so reserving the caption-plate height just padded the frame. The slide is lifted by `lift`
+  // (issue 332: it sits on top of the on-floor caption plate), so its center is at Y = lift and
+  // it spans height H. Aim at the slide center and fit H so the slide fills the frame tight.
+  // Mirrors geometry.py.
   const lift = slideLift(scene);
-  const compositeH = scene.size.height + lift;
-  const target = [0.0, lift / 2.0, -depth / 2.0];
+  const target = [0.0, lift, -depth / 2.0];
 
   let isPercent = false;
   let pctVal = 90.0;
@@ -351,15 +352,16 @@ export function compactCamera(scene, viewportAspect) {
 
   let distance;
   if (isPercent) {
-    // Dual-axis crop-free fit (SPEC.md §3, issue 302 §1): fit the frontmost COMPOSITE
-    // (width W, height H + lift) so the limiting axis touches P% and the other axis only
-    // ever has extra padding (never a crop). distance = max(d_w, d_h). Mirrors geometry.py.
+    // Dual-axis crop-free fit (SPEC.md §3, issue 302 §1, issue 337): fit the frontmost SLIDE
+    // plate (width W, height H — NOT the caption composite) so the limiting axis touches P% and
+    // the other axis only ever has extra padding (never a crop). distance = max(d_w, d_h).
+    // Mirrors geometry.py.
     const hfov = (cam.fov * Math.PI) / 180.0;
     const aspect = viewportAspect || scene.size.width / scene.size.height;
     const vfov = 2.0 * Math.atan(Math.tan(hfov / 2.0) / aspect);
     const frac = pctVal / 100.0;
     const dW = scene.size.width / (2.0 * Math.tan(hfov / 2.0) * frac);
-    const dH = compositeH / (2.0 * Math.tan(vfov / 2.0) * frac);
+    const dH = scene.size.height / (2.0 * Math.tan(vfov / 2.0) * frac);
     const distToZ0 = Math.max(dW, dH);
     distance = distToZ0 + depth / 2.0;
   } else {
