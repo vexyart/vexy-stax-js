@@ -29,7 +29,16 @@ find_npm() {
 }
 NPM="$(find_npm)"
 
-uvx gitnextver
+# Issue 338: bump this repo's version tag with `uvx gitnextver`, then SYNC package.json to it
+# (npm has no hatch-vcs equivalent, so the version must be written into package.json before
+# publish — otherwise npm rejects the re-publish of the already-published version). Never bump
+# on a dry run — dry runs pack the CURRENT package.json version.
+if [ "$DRYRUN" -eq 0 ]; then
+  uvx gitnextver
+  RELEASE_VERSION="$(git describe --tags --abbrev=0 | sed 's/^v//')"
+  echo "==> Setting package.json version to ${RELEASE_VERSION}..."
+  node -e "const fs=require('fs');const p=require('./package.json');p.version=process.argv[1];fs.writeFileSync('package.json',JSON.stringify(p,null,2)+'\n');" "$RELEASE_VERSION"
+fi
 
 VERSION="$(node -p "require('./package.json').version")"
 
