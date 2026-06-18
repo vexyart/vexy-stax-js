@@ -44,13 +44,33 @@ Three ways to drop a deck on a page, easiest first (issues 341 / 342).
 
 <!-- …or point at a full scene JSON (with captions, camera, transition, …): -->
 <vexy-stax scene="scene.json" view="expanded"></vexy-stax>
+
+<!-- …or drop the WHOLE scene inline, right where you load the component (issue 701) —
+     a `<script type="application/json">` child, no external URL: -->
+<vexy-stax view="compact" mode="playable" aspect="3">
+  <script type="application/json">
+  { "version": 1, "transition": { "kind": "expand_collapse" },
+    "slides": [ { "src": "https://example.com/layer-0.png" },
+                { "src": "https://example.com/layer-1.png" } ] }
+  </script>
+</vexy-stax>
 ```
 
 **Click-to-toggle is on by default** (issue 342): clicking anywhere inside a `<vexy-stax>` fluently
 toggles compact↔expanded. Opt out with `click-toggle="false"`.
 
-**Scene-in-init** (issue 342): assign an inline scene **object** without a URL —
-`el.scene = { version: 1, slides: [{ src: "a.png" }, …] }` (or the `config` property).
+**Scene-in-init** (issue 342/701): supply an inline scene **without a URL** three ways — assign a
+JS object (`el.scene = { version: 1, slides: [{ src: "a.png" }, …] }` or the `config` property), a
+JSON-string `config` attribute, or a child **`<script type="application/json">`** holding the whole
+scene (shown above; the no-escaping way to "specify the full scene right where you load the
+component"). Inline slide `src` paths resolve against the host page, so use absolute URLs when the
+images live elsewhere.
+
+**Aspect / size** (issue 701): the `aspect` attribute shapes the box via CSS `aspect-ratio` so a
+deck is easy to make short and wide — `aspect="3"` (or `"3/1"`, `"3:1"`, `"16:9"`) gives a 3:1 box;
+the camera reframes the deck to fit. `width`/`height` still set an explicit CSS size, and the
+scene's own `size` controls the internal plate aspect. `createStax(el, { aspect: "3" })` is the ESM
+equivalent.
 
 ### ES Module — `createStax`
 
@@ -75,7 +95,7 @@ const low  = new VexyStax(container, scene); // the low-level path is still avai
 ```
 
 `createStax(elOrSelector, opts)` — `opts` accepts `{ slides | scene, view, mode, trigger, width,
-height, clickToggle, baseUrl, …sceneOverrides }`. Any remaining key (`size`, `camera`, `gap`,
+height, aspect, clickToggle, baseUrl, …sceneOverrides }`. Any remaining key (`size`, `camera`, `gap`,
 `transition`, `background`, `captions`, `floor`, `edge`, …) is forwarded to `makeScene`.
 
 ### Global script — `window.VexyStax`

@@ -4,6 +4,22 @@
 
 All notable changes to this project are documented here.
 
+## [3.1.4] — issue 701: inline scene + aspect
+
+### Added
+
+- **Inline scene via a `<script type="application/json">` child** (701): drop the entire scene JSON
+  *inside* the `<vexy-stax>` element — no external `scene` URL and no giant `config` attribute to
+  escape. Precedence: `config` object → inline `<script>` scene → `scene` URL → `slides`. Inline
+  slide `src` paths resolve against the host page, so use absolute URLs for off-page images. This is
+  the clean way to "specify the full scene right where you load the component" (also keeps working
+  with the existing `el.scene = {…}` / `config` object/JSON-string paths).
+- **`aspect` attribute / `createStax({ aspect })` option** (701): shapes the embed box via CSS
+  `aspect-ratio` so a deck is easy to make short and wide. `aspect="3"` (or `"3/1"`, `"3:1"`,
+  `"16:9"`) → a 3:1 box; `:` and `x` are normalized to `/`. The camera reframes the deck to the
+  resolved box (the existing ResizeObserver path). `width`/`height` still set explicit CSS sizes;
+  the scene's own `size` controls the internal plate aspect.
+
 ## [3.0.17] — control-button + docs-scene follow-ups
 
 ### Fixed

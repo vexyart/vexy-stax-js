@@ -23986,6 +23986,7 @@ const Fm = /* @__PURE__ */ new Set([
   "trigger",
   "width",
   "height",
+  "aspect",
   "baseUrl",
   "clickToggle"
 ]);
@@ -23993,7 +23994,7 @@ async function Om(n, e = {}) {
   const t = typeof n == "string" ? document.querySelector(n) : n;
   if (!t) throw new Error(`createStax: element not found (${String(n)})`);
   if (e === null || typeof e != "object") throw new Error("createStax: opts must be an object");
-  e.width && (t.style.width = /^\d+$/.test(String(e.width)) ? `${e.width}px` : e.width), e.height && (t.style.height = /^\d+$/.test(String(e.height)) ? `${e.height}px` : e.height), typeof t.style == "object" && (t.style.position = t.style.position || "relative", t.style.display = t.style.display || "block");
+  e.width && (t.style.width = /^\d+$/.test(String(e.width)) ? `${e.width}px` : e.width), e.height && (t.style.height = /^\d+$/.test(String(e.height)) ? `${e.height}px` : e.height), e.aspect && (t.style.aspectRatio = String(e.aspect).trim().replace(/[:x]/i, " / ")), typeof t.style == "object" && (t.style.position = t.style.position || "relative", t.style.display = t.style.display || "block");
   const i = e.baseUrl ?? (typeof document < "u" ? document.baseURI : void 0);
   let r;
   if (e.slides) {
@@ -24037,6 +24038,7 @@ class Nm extends HTMLElement {
       "trigger",
       "width",
       "height",
+      "aspect",
       "click-toggle",
       "buttons",
       "explain-label",
@@ -24083,7 +24085,7 @@ class Nm extends HTMLElement {
   }
   attributeChangedCallback(e) {
     if (this.isConnected) {
-      if (e === "width" || e === "height") {
+      if (e === "width" || e === "height" || e === "aspect") {
         this._applySize(), this._stax?.resize();
         return;
       }
@@ -24101,13 +24103,34 @@ class Nm extends HTMLElement {
   _applySize() {
     const e = this.getAttribute("width"), t = this.getAttribute("height");
     e && (this.style.width = /^\d+$/.test(e) ? `${e}px` : e), t && (this.style.height = /^\d+$/.test(t) ? `${t}px` : t);
+    const i = this.getAttribute("aspect");
+    i && i.trim() && (this.style.aspectRatio = i.trim().replace(/[:x]/i, " / "));
+  }
+  /**
+   * Issue 701: an inline scene declared as a child `<script type="application/json">` (or
+   * `application/vexy-scene+json`). This is the no-escaping way to "specify the full scene
+   * right where you load the component" — drop the whole scene JSON inside the element instead
+   * of pointing `scene` at a URL. Returns the parsed object (later normalized by loadScene), or
+   * null when there is no such child. A `<script>` child is never rendered, so it is invisible.
+   */
+  _inlineScene() {
+    if (typeof this.querySelector != "function") return null;
+    const t = this.querySelector(
+      'script[type="application/json"], script[type="application/vexy-scene+json"]'
+    )?.textContent?.trim();
+    if (!t) return null;
+    try {
+      return JSON.parse(t);
+    } catch (i) {
+      throw new Error(`<vexy-stax>: inline <script> scene is not valid JSON (${i.message})`);
+    }
   }
   async _mount() {
     if (!this._mounting) {
       this._mounting = !0;
       try {
         this._stax?.destroy(), this._stax = null;
-        const e = typeof document < "u" ? document.baseURI : void 0, t = this._config ?? this.getAttribute("scene"), i = this.getAttribute("slides");
+        const e = typeof document < "u" ? document.baseURI : void 0, t = this._config ?? this._inlineScene() ?? this.getAttribute("scene"), i = this.getAttribute("slides");
         let r;
         if (t)
           r = await wo(t, { baseUrl: e });

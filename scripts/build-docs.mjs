@@ -266,6 +266,15 @@ ${FONT_LINK}
   slides="layer-0.png layer-1.png https://example.com/layer-2.png"
   view="compact" mode="playable"&gt;&lt;/vexy-stax&gt;</code></pre>
 
+      <h2>Web Component — the whole scene inline (no URL)</h2>
+      <pre><code>&lt;vexy-stax view="compact" mode="playable" aspect="3"&gt;
+  &lt;script type="application/json"&gt;
+  { "version": 1, "transition": { "kind": "expand_collapse" },
+    "slides": [ { "src": "layer-0.png" }, { "src": "layer-1.png" } ] }
+  &lt;/script&gt;
+&lt;/vexy-stax&gt;</code></pre>
+      <p style="color:#6b7280;font-size:13px;margin-top:-8px">Drop the full scene JSON right inside the element — and <code>aspect="3"</code> shapes the box to 3:1 (also <code>"3/1"</code>, <code>"16:9"</code>, …).</p>
+
       <h2>ES Module — createStax</h2>
       <pre><code>import { createStax } from "${CDN_ELEMENT}";
 
@@ -536,6 +545,43 @@ ${cdnBanner(`&lt;script type="module" src="${CDN_ELEMENT}"&gt;&lt;/script&gt;`)}
 </vexy-stax>`)}</code></pre></div>
       <div class="stage">
         <vexy-stax scene="airbl-demo.scene.json" view="compact" mode="playable"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Issue 701: the whole scene <em>inline</em> — a <code>&lt;script type="application/json"&gt;</code> child (no external scene URL)</div>
+      <div class="code"><pre><code class="language-html">${esc(`<vexy-stax view="compact" mode="playable">
+  <script type="application/json">
+  {
+    "version": 1,
+    "transition": { "kind": "expand_collapse" },
+    "slides": [
+      { "src": "${DEMO_SLIDES[0]}" },
+      { "src": "${DEMO_SLIDES[1]}" },
+      { "src": "${DEMO_SLIDES[2]}" },
+      { "src": "${DEMO_SLIDES[3]}" }
+    ]
+  }
+  </script>
+</vexy-stax>`)}</code></pre></div>
+      <div class="stage">
+        <vexy-stax view="compact" mode="playable">
+          <script type="application/json">
+          { "version": 1, "transition": { "kind": "expand_collapse" }, "slides": [ { "src": "${DEMO_SLIDES[0]}" }, { "src": "${DEMO_SLIDES[1]}" }, { "src": "${DEMO_SLIDES[2]}" }, { "src": "${DEMO_SLIDES[3]}" } ] }
+          </script>
+        </vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Issue 701: a short, wide deck — the <code>aspect</code> attribute (here <code>3</code>, i.e. 3:1)</div>
+      <div class="code"><pre><code class="language-html">${esc(`<vexy-stax
+  scene="airbl-demo.scene.json"
+  view="expanded"
+  aspect="3">
+</vexy-stax>`)}</code></pre></div>
+      <div class="stage" style="align-self:center">
+        <vexy-stax scene="airbl-demo.scene.json" view="expanded" aspect="3" style="height:auto;min-height:0"></vexy-stax>
       </div>
     </div>
 

@@ -416,7 +416,7 @@ export class VexyStax {
 // MOUNT (view/mode/trigger/width/height) or WHICH source (slides/scene). Everything else in
 // `opts` is treated as a flat scene override and forwarded to makeScene (issue 341).
 const MOUNT_KEYS = new Set([
-  "slides", "scene", "view", "mode", "trigger", "width", "height", "baseUrl", "clickToggle",
+  "slides", "scene", "view", "mode", "trigger", "width", "height", "aspect", "baseUrl", "clickToggle",
 ]);
 
 /**
@@ -436,6 +436,7 @@ const MOUNT_KEYS = new Set([
  *       "playable" plays scene.transition once when ready; "scrollspy" attaches a scroll story.
  *   @param {Element|string} [opts.trigger]  scrollspy trigger (default: the element).
  *   @param {string} [opts.width] @param {string} [opts.height]  CSS size overrides on the element.
+ *   @param {string|number} [opts.aspect]  CSS aspect-ratio for the box (e.g. 3, "3/1", "3:1").
  *   @param {string} [opts.baseUrl]  base for resolving relative slide/scene URLs.
  *   ...any other key is a flat scene override forwarded to makeScene (size, camera, gap,
  *      transition, background, captions, floor, edge, caption_defaults, …).
@@ -450,6 +451,9 @@ export async function createStax(elOrSelector, opts = {}) {
   // Optional CSS size on the host element (parity with the <vexy-stax> width/height attrs).
   if (opts.width) el.style.width = /^\d+$/.test(String(opts.width)) ? `${opts.width}px` : opts.width;
   if (opts.height) el.style.height = /^\d+$/.test(String(opts.height)) ? `${opts.height}px` : opts.height;
+  // Issue 701: `aspect` shapes the box via CSS aspect-ratio (e.g. 3, "3/1", "3:1" → a 3:1 deck);
+  // ":"/"x" are normalized to "/". Parity with the <vexy-stax aspect="…"> attribute.
+  if (opts.aspect) el.style.aspectRatio = String(opts.aspect).trim().replace(/[:x]/i, " / ");
   if (typeof el.style === "object") {
     el.style.position = el.style.position || "relative";
     el.style.display = el.style.display || "block";

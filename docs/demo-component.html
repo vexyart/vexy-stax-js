@@ -42,7 +42,7 @@
       <h1>vexy-stax-js — &lt;vexy-stax&gt;</h1>
       <p>Declarative custom element — minimal markup on the left, the live element on the right. <strong>Tip:</strong> click any deck to fluently toggle compact↔expanded (on by default; opt out with <code>click-toggle="false"</code>). <a href="index.html">← all demos</a></p>
     </header>
-    <div class="cdn">Drop-in CDN (no build step): <code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.element.js"&gt;&lt;/script&gt;</code> — these pages load the co-located local bundle, but the same code works verbatim from jsDelivr.</div>
+    <div class="cdn">Drop-in CDN (no build step): <code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.4/dist/vexy-stax.element.js"&gt;&lt;/script&gt;</code> — these pages load the co-located local bundle, but the same code works verbatim from jsDelivr.</div>
 
     <div class="example">
       <div class="head">Easiest: a list of slide URLs (the <code>slides</code> attribute)</div>
@@ -80,6 +80,43 @@
 &lt;/vexy-stax&gt;</code></pre></div>
       <div class="stage">
         <vexy-stax scene="airbl-demo.scene.json" view="compact" mode="playable"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Issue 701: the whole scene <em>inline</em> — a <code>&lt;script type="application/json"&gt;</code> child (no external scene URL)</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax view="compact" mode="playable"&gt;
+  &lt;script type="application/json"&gt;
+  {
+    "version": 1,
+    "transition": { "kind": "expand_collapse" },
+    "slides": [
+      { "src": "airbl-lores/airbl-020-source.png" },
+      { "src": "airbl-lores/airbl-030-pink.png" },
+      { "src": "airbl-lores/airbl-040-stars.png" },
+      { "src": "airbl-lores/airbl-050-backdrop.png" }
+    ]
+  }
+  &lt;/script&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage">
+        <vexy-stax view="compact" mode="playable">
+          <script type="application/json">
+          { "version": 1, "transition": { "kind": "expand_collapse" }, "slides": [ { "src": "airbl-lores/airbl-020-source.png" }, { "src": "airbl-lores/airbl-030-pink.png" }, { "src": "airbl-lores/airbl-040-stars.png" }, { "src": "airbl-lores/airbl-050-backdrop.png" } ] }
+          </script>
+        </vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Issue 701: a short, wide deck — the <code>aspect</code> attribute (here <code>3</code>, i.e. 3:1)</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax
+  scene="airbl-demo.scene.json"
+  view="expanded"
+  aspect="3"&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage" style="align-self:center">
+        <vexy-stax scene="airbl-demo.scene.json" view="expanded" aspect="3" style="height:auto;min-height:0"></vexy-stax>
       </div>
     </div>
 

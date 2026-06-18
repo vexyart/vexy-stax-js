@@ -3,9 +3,12 @@
 //
 // <vexy-stax> custom element (SPEC.md §6.2). Attributes: scene (URL), slides
 // (space/newline-separated image URLs — issue 341), captions (bool), view,
-// mode (static|playable|scrollspy), width, height. Property `config` accepts an
-// inline scene object (overrides `scene`/`slides`). Events: ready, transitionstart,
-// transitionend. Mounts a VexyStax in light DOM. Auto-registers on import.
+// mode (static|playable|scrollspy), width, height, aspect (CSS aspect-ratio,
+// e.g. "3", "3/1", "3:1" — issue 701). Property `config` accepts an inline scene
+// object (overrides `scene`/`slides`); an inline `<script type="application/json">`
+// child also supplies the scene (issue 701 — "specify the full scene right where
+// you load the component"). Events: ready, transitionstart, transitionend. Mounts
+// a VexyStax in light DOM. Auto-registers on import.
 
 import { VexyStax, loadScene, makeScene } from "./index.js";
 
@@ -21,8 +24,8 @@ export class VexyStaxElement extends HTMLElement {
     // `click-toggle` is the issue-342 opt-out for the default click-to-toggle behavior.
     // `buttons` + `explain-label`/`preview-label`/`buttons-position` are the issue-343 control buttons.
     return [
-      "scene", "slides", "captions", "view", "mode", "trigger", "width", "height", "click-toggle",
-      "buttons", "explain-label", "preview-label", "buttons-position",
+      "scene", "slides", "captions", "view", "mode", "trigger", "width", "height", "aspect",
+      "click-toggle", "buttons", "explain-label", "preview-label", "buttons-position",
     ];
   }
 
@@ -84,7 +87,7 @@ export class VexyStaxElement extends HTMLElement {
 
   attributeChangedCallback(name) {
     if (!this.isConnected) return;
-    if (name === "width" || name === "height") {
+    if (name === "width" || name === "height" || name === "aspect") {
       this._applySize();
       this._stax?.resize();
       return;
@@ -108,6 +111,36 @@ export class VexyStaxElement extends HTMLElement {
     const h = this.getAttribute("height");
     if (w) this.style.width = /^\d+$/.test(w) ? `${w}px` : w;
     if (h) this.style.height = /^\d+$/.test(h) ? `${h}px` : h;
+    // Issue 701: `aspect` sets the CSS aspect-ratio so the embed box is easy to shape
+    // (e.g. aspect="3" / "3/1" / "3:1" → a short, wide 3:1 deck). Accepts the CSS
+    // `<width>/<height>` or bare-ratio forms; ":" and "x" are normalized to "/". With
+    // only `aspect` (no height) the element's height follows from its width, and the
+    // ResizeObserver reframes the camera to the resolved box.
+    const aspect = this.getAttribute("aspect");
+    if (aspect && aspect.trim()) {
+      this.style.aspectRatio = aspect.trim().replace(/[:x]/i, " / ");
+    }
+  }
+
+  /**
+   * Issue 701: an inline scene declared as a child `<script type="application/json">` (or
+   * `application/vexy-scene+json`). This is the no-escaping way to "specify the full scene
+   * right where you load the component" — drop the whole scene JSON inside the element instead
+   * of pointing `scene` at a URL. Returns the parsed object (later normalized by loadScene), or
+   * null when there is no such child. A `<script>` child is never rendered, so it is invisible.
+   */
+  _inlineScene() {
+    if (typeof this.querySelector !== "function") return null;
+    const tag = this.querySelector(
+      'script[type="application/json"], script[type="application/vexy-scene+json"]'
+    );
+    const text = tag?.textContent?.trim();
+    if (!text) return null;
+    try {
+      return JSON.parse(text);
+    } catch (err) {
+      throw new Error(`<vexy-stax>: inline <script> scene is not valid JSON (${err.message})`);
+    }
   }
 
   async _mount() {
@@ -118,11 +151,12 @@ export class VexyStaxElement extends HTMLElement {
       this._stax = null;
 
       const baseUrl = typeof document !== "undefined" ? document.baseURI : undefined;
-      // Source precedence (issue 341): inline `config` object → `scene` URL → `slides` list.
-      // `slides` is the easy path: a space/newline-separated list of image URLs (local, data:,
-      // or remote http(s)) built into a scene via makeScene. `captions` (bool attr) toggles
-      // caption plates (default on; here off unless slides carry their own — empty by default).
-      const sceneSrc = this._config ?? this.getAttribute("scene");
+      // Source precedence (issue 341 + 701): inline `config` object → inline <script> scene →
+      // `scene` URL → `slides` list. `slides` is the easy path: a space/newline-separated list
+      // of image URLs (local, data:, or remote http(s)) built into a scene via makeScene.
+      // `captions` (bool attr) toggles caption plates (default on; here off unless slides carry
+      // their own — empty by default).
+      const sceneSrc = this._config ?? this._inlineScene() ?? this.getAttribute("scene");
       const slidesAttr = this.getAttribute("slides");
       let scene;
       if (sceneSrc) {
