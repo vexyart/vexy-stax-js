@@ -6,11 +6,11 @@
     "height": 806
   },
   "camera": {
-    "gap": 480,
+    "gap": 600,
     "distance": "100%",
     "angle": 60,
-    "elevation": 0,
-    "fov": 39.6
+    "elevation": 6,
+    "fov": 1
   },
   "transition": {
     "kind": "expand_collapse",
@@ -22,7 +22,7 @@
   "floor": {
     "color": "#ffffff",
     "opacity": 0,
-    "reflectivity": 0.1
+    "reflectivity": 0.0
   },
   "background": "#ffffff",
   "juicy": false,
@@ -34,42 +34,42 @@
     {
       "src": "airbl-lores/airbl-020-source.png",
       "caption": {
-        "text": "Source image",
+        "text": "Source",
         "show_in": "expanded"
       }
     },
     {
       "src": "airbl-lores/airbl-030-pink.png",
       "caption": {
-        "text": "Document background",
+        "text": "Document",
         "show_in": "expanded"
       }
     },
     {
       "src": "airbl-lores/airbl-040-stars.png",
       "caption": {
-        "text": "Halftone fill: Stars",
+        "text": "Halftone fill",
         "show_in": "expanded"
       }
     },
     {
       "src": "airbl-lores/airbl-050-backdrop.png",
       "caption": {
-        "text": "Trace fill: Backdrop",
+        "text": "Handmade fill",
         "show_in": "expanded"
       }
     },
     {
       "src": "airbl-lores/airbl-060-outline.png",
       "caption": {
-        "text": "Trace fill: Outline",
+        "text": "Handmade fill",
         "show_in": "expanded"
       }
     },
     {
       "src": "airbl-lores/airbl-070-inline.png",
       "caption": {
-        "text": "Trace fill: Inline",
+        "text": "Handmade fill",
         "show_in": "expanded"
       }
     },
@@ -80,14 +80,14 @@
         "compact": 0.4
       },
       "caption": {
-        "text": "Halftone fill: Dots",
+        "text": "Halftone fill",
         "show_in": "expanded"
       }
     },
     {
       "src": "airbl-lores/airbl-090-ui.png",
       "caption": {
-        "text": "Vexy Lines app UI",
+        "text": "Vexy Lines",
         "show_in": "expanded"
       }
     }

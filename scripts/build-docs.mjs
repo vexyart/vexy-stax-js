@@ -131,16 +131,23 @@ for (const f of [
 }
 
 // ── 4. Scene JSONs + slides ──────────────────────────────────────────────────
-// Base scene (smoked-glass floor + reflections) → both demos use a CLEAN-floor variant so
-// neither shows the dated grey reflection "shadows" (issue 341).
-const baseScene = JSON.parse(readFileSync(join(PY_TESTDATA, "airbl-lores.scene.json"), "utf8"));
-// New default floor (matches scene.js parseFloor / the schema): an INVISIBLE white pane
-// (opacity 0 → no grey floor rectangle) with faint reflections (0.1). The demos adopt it so
-// they show the clean, floating-deck look with just a whisper of mirror.
+// The demo scenes are EDITABLE SOURCE files committed under `demo-scenes/`. build-docs COPIES
+// them into docs/ — it does NOT regenerate them — so HAND EDITS PERSIST across builds. (They were
+// previously generated from the shared py testdata on every build, which silently overwrote edits.)
+// On a fresh checkout where a source is missing, it is SEEDED once from the py testdata with the
+// default clean floor (invisible white pane + faint reflections), then copied. Edit the files in
+// `vexy-stax-js/demo-scenes/` to customize a demo scene; the slides are still copied from testdata.
+const SCENES_DIR = join(JS_ROOT, "demo-scenes");
+mkdirSync(SCENES_DIR, { recursive: true });
 const cleanFloor = { color: "#ffffff", opacity: 0.0, reflectivity: 0.1 };
-
-write(join(DOCS, "airbl-demo.scene.json"), JSON.stringify({ ...baseScene, floor: { ...cleanFloor } }, null, 2));
-write(join(DOCS, "airbl-scrollable.scene.json"), JSON.stringify({ ...baseScene, floor: { ...cleanFloor } }, null, 2));
+for (const sceneName of ["airbl-demo.scene.json", "airbl-scrollable.scene.json"]) {
+  const srcScene = join(SCENES_DIR, sceneName);
+  if (!existsSync(srcScene)) {
+    const base = JSON.parse(readFileSync(join(PY_TESTDATA, "airbl-lores.scene.json"), "utf8"));
+    write(srcScene, JSON.stringify({ ...base, floor: { ...cleanFloor } }, null, 2));
+  }
+  cp(srcScene, join(DOCS, sceneName)); // copy the editable source → docs/ (never clobbers edits)
+}
 
 for (const name of SLIDES) {
   cp(join(PY_TESTDATA, "airbl-lores", name), join(slidesDir, name));
@@ -390,7 +397,9 @@ ${FONT_LINK}
       .copy h1 { font-size: clamp(28px, 6vw, 64px); margin: 0; letter-spacing: -0.02em; }
       .copy p { max-width: 46ch; margin: 0; color: #555; }
       .hint { font-size: 13px; color: #8a8a8a; }
-      #stax { display: block; width: 100vw; aspect-ratio: 2 / 1; height: auto; background: #ffffff; }
+      /* Full-width, 60vh-tall stage (user request) — short + wide; the camera fits the deck to
+         this live aspect, so the morph framing follows the container, not the scene aspect. */
+      #stax { display: block; width: 100vw; height: 60vh; background: #ffffff; }
     </style>
   </head>
   <body>
@@ -401,7 +410,8 @@ ${FONT_LINK}
       <p class="hint">↓</p>
     </section>
 
-    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static"></vexy-stax>
+    <!-- Issue 343: built-in control buttons (single relabeling toggle) — bottom-centered frosted pill. -->
+    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static" buttons="toggle"></vexy-stax>
 
     <section class="copy">
       <h1>Layer by layer</h1>
@@ -414,29 +424,35 @@ ${FONT_LINK}
       const el = document.getElementById("stax");
       const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
       let ready = false;
-      let tMax = 0;
-      // Issue 342: click-to-toggle is ON by default for <vexy-stax>. It runs ON TOP of the
-      // scroll-driven morph here — while a toggle animation plays we pause the scroll seek so the
-      // fluent fold/unfold is visible, then resume the scroll ratchet from wherever it lands.
-      let suppressUntil = 0;
-      const update = () => {
-        if (!ready || Date.now() < suppressUntil) return;
+      let animating = false; // true while a click-toggle leg is playing
+      let hold = null;       // 0|1 when a click set a manual state; null = scroll drives
+      // Absolute scroll→morph: the deck starts unfolding when 75% of the scene is in view and is
+      // fully expanded when the scene CENTER reaches the top of the viewport.
+      const scrollT = () => {
         const r = el.getBoundingClientRect();
-        const h = r.height;
-        const vh = window.innerHeight;
-        if (h <= 0) return;
-        const startTop = vh - 0.75 * h;
-        const endTop = -h / 2;
-        const p = (startTop - r.top) / (startTop - endTop);
-        const t = ease(Math.max(0, Math.min(1, p)));
-        if (t > tMax) { tMax = t; el.seek(tMax); }
+        const h = r.height, vh = window.innerHeight;
+        if (h <= 0) return 0;
+        const startTop = vh - 0.75 * h, endTop = -h / 2;
+        return ease(Math.max(0, Math.min(1, (startTop - r.top) / (startTop - endTop))));
       };
-      // Pause the scroll seek for the duration of a click-toggle, then re-sync the ratchet to
-      // the toggled position so scroll continues smoothly from there (no snap-back).
-      el.addEventListener("transitionstart", () => { suppressUntil = Date.now() + 4000; });
+      const update = () => {
+        if (!ready || animating) return; // never fight the click-toggle animation
+        const t = scrollT();
+        if (hold !== null) {
+          // Issue 342: a click toggled the deck; KEEP that state until the scroll position
+          // reaches the same endpoint, then hand control back to scroll seamlessly — so the deck
+          // does NOT snap back to the scroll-derived value right after a click.
+          if (hold === 1 ? t >= 0.999 : t <= 0.001) hold = null;
+          else return;
+        }
+        el.seek(t);
+      };
+      // A click fluently toggles compact↔expanded ON TOP of the scroll. Suppress the scroll seek
+      // while the toggle plays, then hold the toggled state (see update()).
+      el.addEventListener("transitionstart", () => { animating = true; });
       el.addEventListener("transitionend", () => {
-        suppressUntil = 0;
-        tMax = el.instance ? el.instance._morphT : tMax;
+        animating = false;
+        hold = (el.instance && el.instance._currentView === "compact") ? 0 : 1;
       });
       window.addEventListener("scroll", update, { passive: true });
       window.addEventListener("resize", update, { passive: true });
@@ -520,6 +536,36 @@ ${cdnBanner(`&lt;script type="module" src="${CDN_ELEMENT}"&gt;&lt;/script&gt;`)}
 </vexy-stax>`)}</code></pre></div>
       <div class="stage">
         <vexy-stax scene="airbl-demo.scene.json" view="compact" mode="playable"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Issue 343: a built-in toggle button (relabels Explain ⇄ Preview)</div>
+      <div class="code"><pre><code class="language-html">${esc(`<vexy-stax
+  scene="airbl-demo.scene.json"
+  view="compact"
+  buttons="toggle">
+</vexy-stax>`)}</code></pre></div>
+      <div class="stage">
+        <vexy-stax scene="airbl-demo.scene.json" view="compact" buttons="toggle"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">A pair of buttons, custom labels + position + theme (<code>--vexy-btn-*</code>)</div>
+      <div class="code"><pre><code class="language-html">${esc(`<vexy-stax
+  scene="airbl-demo.scene.json" view="compact"
+  buttons="pair"
+  explain-label="Break apart" preview-label="Reassemble"
+  buttons-position="top"
+  style="--vexy-btn-color:#fff;
+         --vexy-btn-bg:rgba(0,0,0,0.45);
+         --vexy-btn-blur:14px">
+</vexy-stax>`)}</code></pre></div>
+      <div class="stage">
+        <vexy-stax scene="airbl-demo.scene.json" view="compact"
+          buttons="pair" explain-label="Break apart" preview-label="Reassemble" buttons-position="top"
+          style="--vexy-btn-color:#fff;--vexy-btn-bg:rgba(0,0,0,0.45);--vexy-btn-blur:14px"></vexy-stax>
       </div>
     </div>
 ${HLJS_JS}

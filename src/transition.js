@@ -114,8 +114,12 @@ export function playTransition(scene, apply, opts = {}) {
   const tr = scene.transition;
   const kind = opts.kind ?? tr?.kind;
   if (!kind) throw new Error("playTransition: no transition kind (scene.transition is null and no kind given)");
-  const duration = tr?.duration ?? 3.0;
-  const wait = tr?.wait ?? 0.0;
+  // `opts.duration` overrides the scene timing (issue 342: a click-toggle plays a SNAPPY leg, not
+  // the scene's full transition.duration). `opts.aspect` is the LIVE container aspect — without it
+  // frameStateAt() falls back to the scene aspect and the compact endpoint is framed too close for
+  // a non-scene-aspect container (e.g. the wide scrollable demo).
+  const duration = opts.duration ?? tr?.duration ?? 3.0;
+  const wait = opts.duration != null ? 0.0 : tr?.wait ?? 0.0;
   const easing = tr?.easing ?? "easeInOutCubic";
   const timeline = buildTimeline(kind, { duration, wait });
 
@@ -147,7 +151,7 @@ export function playTransition(scene, apply, opts = {}) {
     const elapsed = now() - start;
     const p = totalMs > 0 ? Math.min(1, elapsed / totalMs) : 1;
     const t = morphAtProgress(timeline, p, (x) => ease(easing, x));
-    apply(frameStateAt(scene, t));
+    apply(frameStateAt(scene, t, opts.aspect));
     opts.onProgress?.(p);
     if (p >= 1) {
       resolveFn();

@@ -4,6 +4,80 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.17] — control-button + docs-scene follow-ups
+
+### Fixed
+
+- **Control-button label was stale during scrollspy** (343/344): the single toggle button only
+  refreshed on a click-toggle's `transitionend`, so while the deck morphed by SCROLL (`seek`) the
+  label lagged (said "Explain" while already expanded). `VexyStax` now emits a **`viewchange`**
+  CustomEvent whenever `_currentView` flips — from `seek` (scroll), `setView`, or a transition — and
+  the buttons listen to it, so the label always reflects the current view (and thus the action a
+  click will perform). Verified: `seek(0.7)` → "Preview", `seek(0.2)` → "Explain".
+- **Demo scene edits were silently overwritten** (build): `docs/airbl-demo.scene.json` and
+  `docs/airbl-scrollable.scene.json` were REGENERATED from the shared py testdata on every
+  `build:docs`, clobbering hand edits. The demos now have **editable source files** under
+  `vexy-stax-js/demo-scenes/` that the build merely COPIES into `docs/` (seeding them once from the
+  testdata + default floor if absent). Edit `demo-scenes/airbl-scrollable.scene.json` to customize
+  the scrollable demo — it persists. (The slide PNGs are still copied from the py testdata.)
+
+## [3.0.16] — issue 344
+
+### Fixed
+
+- **Back slides' caption plates painted over front slides** (344): in the expanded view a caption
+  attached to a slide behind the front (e.g. "Halftone fill: Dots") drew ON TOP OF the frontmost
+  slide. The three.js plates use `depthWrite:false` and the captions `depthTest:false`, so DRAW
+  ORDER — not depth — decides compositing, but every plate shared `renderOrder 0` and every caption
+  `renderOrder 2`, so all captions painted over all plates. Each slide now owns a **per-slide
+  render-order block** `i*4` (index 0 = backmost): plate `i*4`, border `i*4+1`, caption `i*4+2`. A
+  front slide's plate (`(i+1)*4`) therefore paints AFTER — and its opaque pixels cover — a back
+  slide's caption (`i*4+2`), while transparent areas still let it show through. Mirrors the pygfx
+  engine's issue-327 ordering. (The pygfx + Blender engines occlude correctly via the depth buffer /
+  real 3D depth and were unaffected.) Verified: the frontmost slide is no longer overdrawn by the
+  caption of the slide behind it.
+
+## [3.0.15] — issue 343
+
+### Added
+
+- **Built-in control buttons** (343): an opt-in overlay over the deck that switches views via the
+  smooth click-toggle. Two layouts: `buttons="toggle"` — ONE relabeling button ("Explain" while
+  compact → expand, then "Preview" while expanded → collapse); `buttons="pair"` — two side-by-side
+  buttons ("Explain" / "Preview"). Default placement is just above the bottom, horizontally
+  centered; default styling is black text on a barely-there (5 %) blurred black pill. Fully
+  customizable: labels via `explain-label`/`preview-label`, placement via `buttons-position`
+  (`bottom`|`top`|`bottom-left`|…|`center`), and every visual via `--vexy-btn-*` CSS custom
+  properties (`--vexy-btn-color`/`-bg`/`-blur`/`-radius`/`-pad`/…). Exposed three ways:
+  the `<vexy-stax buttons="…">` attributes, `createStax(el, { buttons, explainLabel, previewLabel,
+  buttonsPosition, buttonStyle })`, and the `VexyStax.controls(opts)` method. New `src/controls.js`
+  (`attachControls`). Showcased on the scrollable demo + demo-component. Verified headless: the
+  toggle relabels Explain⇄Preview across clicks, the pair renders with custom labels, no errors.
+
+## [3.0.14] — issue 342 (scrollspy polish)
+
+### Fixed
+
+- **Click-toggle on the scrollspy demo snapped back to expanded** (342): after a click collapsed
+  the deck, the next scroll event re-seeked it to the scroll-position-derived value (expanded). The
+  `scrollable.html` scroll handler now uses a **manual-hold** model — a click-toggled state is held
+  until the scroll position naturally reaches the matching endpoint, then control hands back to
+  scroll seamlessly. The deck no longer snaps back.
+- **Post-toggle compact view was framed "too close" (plates cropped)** (342): `playTransition` ran
+  `frameStateAt(scene, t)` **without** the live container aspect, so animated transition frames fell
+  back to the scene aspect and the compact endpoint was framed closer than `setView`/`seek` (which
+  pass the live aspect). `transition()` now threads `this.stage.camera.aspect` through to
+  `playTransition` → `frameStateAt`. Verified: the post-toggle compact camera matches the initial
+  compact camera exactly on a wide container.
+- **Click-toggle transition was too slow** (342): a toggle reused the scene's `transition.duration`
+  (up to 3 s for scroll-story scenes). `toggleView()` now plays a snappy fixed **0.7 s** leg via a
+  new `opts.duration` override on `transition()`/`playTransition()`, independent of the scene timing.
+
+### Changed
+
+- **Scrollable demo stage is `100vw × 60vh`** (user request): shorter and wider than the previous
+  2:1 box. The camera fits the deck to this live aspect (see the aspect fix above).
+
 ## [3.0.13] — issues 341, 342
 
 ### Added

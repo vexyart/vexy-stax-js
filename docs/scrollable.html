@@ -24,7 +24,9 @@
       .copy h1 { font-size: clamp(28px, 6vw, 64px); margin: 0; letter-spacing: -0.02em; }
       .copy p { max-width: 46ch; margin: 0; color: #555; }
       .hint { font-size: 13px; color: #8a8a8a; }
-      #stax { display: block; width: 100vw; aspect-ratio: 2 / 1; height: auto; background: #ffffff; }
+      /* Full-width, 60vh-tall stage (user request) — short + wide; the camera fits the deck to
+         this live aspect, so the morph framing follows the container, not the scene aspect. */
+      #stax { display: block; width: 100vw; height: 60vh; background: #ffffff; }
     </style>
   </head>
   <body>
@@ -35,7 +37,8 @@
       <p class="hint">↓</p>
     </section>
 
-    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static"></vexy-stax>
+    <!-- Issue 343: built-in control buttons (single relabeling toggle) — bottom-centered frosted pill. -->
+    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static" buttons="toggle"></vexy-stax>
 
     <section class="copy">
       <h1>Layer by layer</h1>
@@ -48,29 +51,35 @@
       const el = document.getElementById("stax");
       const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
       let ready = false;
-      let tMax = 0;
-      // Issue 342: click-to-toggle is ON by default for <vexy-stax>. It runs ON TOP of the
-      // scroll-driven morph here — while a toggle animation plays we pause the scroll seek so the
-      // fluent fold/unfold is visible, then resume the scroll ratchet from wherever it lands.
-      let suppressUntil = 0;
-      const update = () => {
-        if (!ready || Date.now() < suppressUntil) return;
+      let animating = false; // true while a click-toggle leg is playing
+      let hold = null;       // 0|1 when a click set a manual state; null = scroll drives
+      // Absolute scroll→morph: the deck starts unfolding when 75% of the scene is in view and is
+      // fully expanded when the scene CENTER reaches the top of the viewport.
+      const scrollT = () => {
         const r = el.getBoundingClientRect();
-        const h = r.height;
-        const vh = window.innerHeight;
-        if (h <= 0) return;
-        const startTop = vh - 0.75 * h;
-        const endTop = -h / 2;
-        const p = (startTop - r.top) / (startTop - endTop);
-        const t = ease(Math.max(0, Math.min(1, p)));
-        if (t > tMax) { tMax = t; el.seek(tMax); }
+        const h = r.height, vh = window.innerHeight;
+        if (h <= 0) return 0;
+        const startTop = vh - 0.75 * h, endTop = -h / 2;
+        return ease(Math.max(0, Math.min(1, (startTop - r.top) / (startTop - endTop))));
       };
-      // Pause the scroll seek for the duration of a click-toggle, then re-sync the ratchet to
-      // the toggled position so scroll continues smoothly from there (no snap-back).
-      el.addEventListener("transitionstart", () => { suppressUntil = Date.now() + 4000; });
+      const update = () => {
+        if (!ready || animating) return; // never fight the click-toggle animation
+        const t = scrollT();
+        if (hold !== null) {
+          // Issue 342: a click toggled the deck; KEEP that state until the scroll position
+          // reaches the same endpoint, then hand control back to scroll seamlessly — so the deck
+          // does NOT snap back to the scroll-derived value right after a click.
+          if (hold === 1 ? t >= 0.999 : t <= 0.001) hold = null;
+          else return;
+        }
+        el.seek(t);
+      };
+      // A click fluently toggles compact↔expanded ON TOP of the scroll. Suppress the scroll seek
+      // while the toggle plays, then hold the toggled state (see update()).
+      el.addEventListener("transitionstart", () => { animating = true; });
       el.addEventListener("transitionend", () => {
-        suppressUntil = 0;
-        tMax = el.instance ? el.instance._morphT : tMax;
+        animating = false;
+        hold = (el.instance && el.instance._currentView === "compact") ? 0 : 1;
       });
       window.addEventListener("scroll", update, { passive: true });
       window.addEventListener("resize", update, { passive: true });

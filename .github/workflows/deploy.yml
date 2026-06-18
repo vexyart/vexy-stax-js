@@ -41,13 +41,20 @@ jobs:
 
       - name: Update package.json version
         if: steps.version.outputs.version != 'dev'
+        # --allow-same-version: the tag (v3.1.2) may already match package.json (we commit the
+        # bumped version), and plain `npm version X` errors "Version not changed" otherwise,
+        # which used to fail the whole deploy and block GitHub Pages.
         run: |
-          npm version ${{ steps.version.outputs.version }} --no-git-tag-version
+          npm version ${{ steps.version.outputs.version }} --no-git-tag-version --allow-same-version
 
       - name: Install dependencies
         run: npm ci
 
       - name: Build
+        # Just the dist bundles. We do NOT regenerate docs/ here: scripts/build-docs.mjs copies
+        # slides/scene from the sibling vexy-stax-py package, which is NOT checked out in this
+        # JS-only repo. The committed docs/ is self-contained (bundles + slides + scenes + HTML)
+        # — regenerate it locally with `npm run build:docs` (or build.sh) and commit before tagging.
         run: npm run build
 
       - name: Upload artifacts

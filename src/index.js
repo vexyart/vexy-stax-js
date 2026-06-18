@@ -11,6 +11,7 @@ import { loadScene, parseScene, makeScene, resolvedOpacity } from "./scene.js";
 import { frameStateAt, ease } from "./geometry.js";
 import { playTransition, transitionEndpoints, buildTimeline, morphAtProgress } from "./transition.js";
 import { attachScrollspy } from "./scrollspy.js";
+import { attachControls } from "./controls.js";
 import { canvasToPngBlob, recordVideo } from "./export.js";
 
 export {
@@ -57,6 +58,7 @@ export class VexyStax {
     this._currentView = scene.view === "compact" ? "compact" : "expanded";
     this._morphT = this._currentView === "compact" ? 0 : 1;
     this._clickToggle = null; // { handler } when wired (enableClickToggle)
+    this._controls = null; // { destroy } when wired (controls(), issue 343)
     this._toggling = false; // guard against overlapping toggle transitions
     this._ready = this.stage.init().then(() => {
       this.stage.render();
@@ -95,8 +97,8 @@ export class VexyStax {
     await this._ready;
     this.stage.setView(view);
     this.stage.render();
-    this._currentView = view === "compact" ? "compact" : "expanded";
-    this._morphT = this._currentView === "compact" ? 0 : 1;
+    this._morphT = view === "compact" ? 0 : 1;
+    this._setView_(view === "compact" ? "compact" : "expanded");
     return this;
   }
 
@@ -112,8 +114,17 @@ export class VexyStax {
     // Issue 342: remember the morph position so a click-toggle on a scroll-driven deck knows
     // whether it is currently nearer compact (→ expand) or expanded (→ collapse).
     this._morphT = tt;
-    this._currentView = tt >= 0.5 ? "expanded" : "compact";
+    // Issue 344 follow-up: emit a viewchange when the scroll crosses the compact/expanded midpoint
+    // so the control-button label (and any host UI) stays in sync during a scroll-driven morph.
+    this._setView_(tt >= 0.5 ? "expanded" : "compact");
     return this;
+  }
+
+  /** Set `_currentView` and emit a "viewchange" CustomEvent on the container when it changes (343/344). */
+  _setView_(view) {
+    if (view === this._currentView) return;
+    this._currentView = view;
+    this.container?.dispatchEvent?.(new CustomEvent("viewchange", { detail: { view } }));
   }
 
   /** Resize the renderer/camera to the container (or explicit size). */
@@ -186,7 +197,10 @@ export class VexyStax {
       const t = this._morphFromGaps(state.gaps);
       this.stage.applyFrameState(state, t);
       this.stage.render();
-    }, { kind: resolvedKind, onProgress: opts.onProgress });
+      // Pass the LIVE container aspect so the animated frames match setView()/seek() framing
+      // (issue 342: otherwise the compact endpoint is framed too close on a wide container).
+      // `opts.duration` lets a click-toggle play a snappy leg instead of the full scene timing.
+    }, { kind: resolvedKind, onProgress: opts.onProgress, aspect: this.stage.camera.aspect, duration: opts.duration });
 
     this._cancelTransition = controller.cancel;
     this.container.dispatchEvent?.(new CustomEvent("transitionstart", { detail: { kind: resolvedKind } }));
@@ -195,7 +209,7 @@ export class VexyStax {
       // Settle the tracked view to the transition's end endpoint (issue 342).
       const { endMorph } = transitionEndpoints(resolvedKind);
       this._morphT = endMorph;
-      this._currentView = endMorph >= 0.5 ? "expanded" : "compact";
+      this._setView_(endMorph >= 0.5 ? "expanded" : "compact");
       this.container.dispatchEvent?.(new CustomEvent("transitionend", { detail: { kind: resolvedKind } }));
     } finally {
       this._cancelTransition = null;
@@ -217,11 +231,13 @@ export class VexyStax {
     this._toggling = true;
     try {
       // The scene may have no `transition` section (e.g. a slides-only deck) — supply timing so
-      // toggle still animates. transition() reads scene.transition for timing; ensure one exists.
+      // toggle still animates. transition() reads scene.transition for the easing; ensure one exists.
       if (!this.scene.transition) {
-        this.scene.transition = { kind, duration: 0.9, wait: 0, fps: 30, easing: "easeInOutCubic" };
+        this.scene.transition = { kind, duration: 0.7, wait: 0, fps: 30, easing: "easeInOutCubic" };
       }
-      await this.transition(kind);
+      // Issue 342: a click-toggle plays a SNAPPY leg (0.7 s) regardless of the scene's
+      // transition.duration (which may be a long 3 s scroll-story ramp) — overriding it here.
+      await this.transition(kind, { duration: 0.7 });
     } finally {
       this._toggling = false;
     }
@@ -246,6 +262,19 @@ export class VexyStax {
     // Pointer affordance so it reads as clickable.
     if (this.container.style && !this.container.style.cursor) this.container.style.cursor = "pointer";
     this._clickToggle = { handler };
+    return this;
+  }
+
+  /**
+   * Add built-in control buttons over the deck (issue 343): a single relabeling toggle
+   * ("Explain" → expand, "Preview" → compact) or a side-by-side pair. Frosted, bottom-centered by
+   * default; themeable via `--vexy-btn-*` CSS custom properties on the element. Replaces any prior
+   * controls. Pass `false` to remove them. Options: `{type:"toggle"|"pair", explainLabel,
+   * previewLabel, position, style}`.
+   */
+  controls(opts = {}) {
+    this._controls?.destroy();
+    this._controls = opts === false ? null : attachControls(this, this.container, opts);
     return this;
   }
 
@@ -375,6 +404,8 @@ export class VexyStax {
     this._cancelTransition?.();
     this._scrollspy?.disconnect?.();
     this.disableClickToggle();
+    this._controls?.destroy();
+    this._controls = null;
     this._ro?.disconnect?.();
     this._ro = null;
     this.stage?.dispose();
@@ -460,5 +491,19 @@ export async function createStax(elOrSelector, opts = {}) {
   // and layers on top of scrollspy (scroll drives the morph; a click still toggles). Opt out
   // with `clickToggle: false`.
   if (opts.clickToggle !== false) stax.enableClickToggle();
+
+  // Issue 343: built-in control buttons. `buttons: true` (or "toggle"/"pair") shows the overlay;
+  // `explainLabel`/`previewLabel`/`buttonsPosition`/`buttonStyle` customize it (or pass a full
+  // object as `buttons`).
+  if (opts.buttons) {
+    const c = typeof opts.buttons === "object" ? opts.buttons : { type: opts.buttons === "pair" ? "pair" : "toggle" };
+    stax.controls({
+      explainLabel: opts.explainLabel,
+      previewLabel: opts.previewLabel,
+      position: opts.buttonsPosition,
+      style: opts.buttonStyle,
+      ...c,
+    });
+  }
   return stax;
 }

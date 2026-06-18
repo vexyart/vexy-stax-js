@@ -30,6 +30,11 @@ import {
 } from "./geometry.js";
 import { resolvedOpacity } from "./scene.js";
 
+// Per-slide render-order block size (issue 344): each slide owns [i*BLOCK, i*BLOCK+BLOCK) for its
+// plate (+0), border (+1) and caption (+2). Blocks grow with the slide index (front slides last),
+// so a front slide's plate occludes the captions of slides behind it. Reflections/floor sit below.
+const RENDER_BLOCK = 4;
+
 /**
  * Build a white OPAQUE bordered caption PLATE (issue 311). The whole caption is one
  * rectangle drawn on a single canvas texture: solid white fill, a stroked border of
@@ -277,11 +282,14 @@ export class Stage {
         opacity: 1,
       });
       const mesh = new THREE.Mesh(geometry, material);
-      // Explicit renderOrder so the transparent draw order is STABLE (reflection -2 <
-      // floor -1 < plate 0 < border 1 < caption 2). Equal renderOrders (plate==floor==0)
-      // let three.js distance-sort them, which flips frame-to-frame at the floor line and
-      // flickers at the bottom of each slide (issue 320 §9).
-      mesh.renderOrder = 0;
+      // PER-SLIDE render-order blocks (issue 344, mirrors pygfx issue 327): the plates and
+      // captions are alpha-blended with depthWrite/Test off, so DRAW ORDER — not depth — decides
+      // compositing. Give each slide a contiguous block `i*BLOCK` that grows with the slide index
+      // (index 0 = backmost, last = frontmost), so a FRONT slide's plate (i*BLOCK) paints AFTER —
+      // and its opaque pixels cover — a BACK slide's caption (`(i-1)*BLOCK + 2`). Within a block:
+      // plate(+0) < border(+1) < caption(+2). Reflections/floor stay below all of it (-2 / -1).
+      // Equal renderOrders would let three.js distance-sort and flip frame-to-frame (issue 320 §9).
+      mesh.renderOrder = i * RENDER_BLOCK;
       this.threeScene.add(mesh);
 
       // BLURRY mirror reflection (issue 303 §1): a mirror copy below the floor line
@@ -319,7 +327,7 @@ export class Stage {
       let border = null;
       if (this._edgeWidth > 0) {
         border = this._makeBorder(w, h, this._edgeWidth, this._edgeColor);
-        border.group.renderOrder = 1; // draw on top of the plate
+        border.group.renderOrder = i * RENDER_BLOCK + 1; // on top of this slide's plate (issue 344)
         this.threeScene.add(border.group);
       }
 
@@ -450,7 +458,10 @@ export class Stage {
         borderColor,
       };
       const { mesh, material, worldWidth } = makeCaptionSprite(caption.text, style);
-      mesh.renderOrder = 2; // draw the caption plate on top of the deck + borders
+      // Issue 344: this slide's caption draws on top of its OWN plate + border (i*BLOCK + 2), but
+      // BELOW the next (more frontward) slide's plate ((i+1)*BLOCK), so front slides occlude the
+      // captions of slides behind them.
+      mesh.renderOrder = i * RENDER_BLOCK + 2;
       this.threeScene.add(mesh);
       this.captions.push({ sprite: mesh, material, plateIndex: i, caption, worldWidth });
     });

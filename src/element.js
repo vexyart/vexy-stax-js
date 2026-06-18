@@ -19,7 +19,11 @@ export class VexyStaxElement extends HTMLElement {
   static get observedAttributes() {
     // `slides` + `captions` are the issue-341 easy path (a scene from a bare URL list);
     // `click-toggle` is the issue-342 opt-out for the default click-to-toggle behavior.
-    return ["scene", "slides", "captions", "view", "mode", "trigger", "width", "height", "click-toggle"];
+    // `buttons` + `explain-label`/`preview-label`/`buttons-position` are the issue-343 control buttons.
+    return [
+      "scene", "slides", "captions", "view", "mode", "trigger", "width", "height", "click-toggle",
+      "buttons", "explain-label", "preview-label", "buttons-position",
+    ];
   }
 
   constructor() {
@@ -156,6 +160,19 @@ export class VexyStaxElement extends HTMLElement {
       // works.
       if (this.getAttribute("click-toggle") !== "false") {
         this._stax?.enableClickToggle();
+      }
+
+      // Issue 343: built-in control buttons. `buttons` = "toggle" (single relabeling button) or
+      // "pair" (two buttons); a bare `buttons` attribute defaults to "toggle". `explain-label`,
+      // `preview-label` and `buttons-position` customize text + placement (style via --vexy-btn-*).
+      const buttonsAttr = this.getAttribute("buttons");
+      if (buttonsAttr !== null && buttonsAttr !== "false") {
+        this._stax?.controls({
+          type: buttonsAttr === "pair" ? "pair" : "toggle",
+          explainLabel: this.getAttribute("explain-label") ?? undefined,
+          previewLabel: this.getAttribute("preview-label") ?? undefined,
+          position: this.getAttribute("buttons-position") ?? undefined,
+        });
       }
 
       this.dispatchEvent(new CustomEvent("ready", { detail: { instance: this._stax } }));

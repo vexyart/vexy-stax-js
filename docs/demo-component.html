@@ -82,6 +82,36 @@
         <vexy-stax scene="airbl-demo.scene.json" view="compact" mode="playable"></vexy-stax>
       </div>
     </div>
+
+    <div class="example">
+      <div class="head">Issue 343: a built-in toggle button (relabels Explain ⇄ Preview)</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax
+  scene="airbl-demo.scene.json"
+  view="compact"
+  buttons="toggle"&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage">
+        <vexy-stax scene="airbl-demo.scene.json" view="compact" buttons="toggle"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">A pair of buttons, custom labels + position + theme (<code>--vexy-btn-*</code>)</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax
+  scene="airbl-demo.scene.json" view="compact"
+  buttons="pair"
+  explain-label="Break apart" preview-label="Reassemble"
+  buttons-position="top"
+  style="--vexy-btn-color:#fff;
+         --vexy-btn-bg:rgba(0,0,0,0.45);
+         --vexy-btn-blur:14px"&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage">
+        <vexy-stax scene="airbl-demo.scene.json" view="compact"
+          buttons="pair" explain-label="Break apart" preview-label="Reassemble" buttons-position="top"
+          style="--vexy-btn-color:#fff;--vexy-btn-bg:rgba(0,0,0,0.45);--vexy-btn-blur:14px"></vexy-stax>
+      </div>
+    </div>
     <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
     <script>hljs.highlightAll();</script>
   </body>
