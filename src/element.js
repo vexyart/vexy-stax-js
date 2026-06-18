@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: Apache-2.0
 // this_file: src/element.js
 //
-// <vexy-stax> custom element (SPEC.md §6.2). Attributes: scene (URL), view,
+// <vexy-stax> custom element (SPEC.md §6.2). Attributes: scene (URL), slides
+// (space/newline-separated image URLs — issue 341), captions (bool), view,
 // mode (static|playable|scrollspy), width, height. Property `config` accepts an
-// inline scene object (overrides `scene`). Events: ready, transitionstart,
+// inline scene object (overrides `scene`/`slides`). Events: ready, transitionstart,
 // transitionend. Mounts a VexyStax in light DOM. Auto-registers on import.
 
-import { VexyStax, loadScene } from "./index.js";
+import { VexyStax, loadScene, makeScene } from "./index.js";
+
+// Re-export the public ESM API from the element bundle (issue 341): the built
+// dist/vexy-stax.element.js has src/element.js as its entry, so a user who loads that single
+// file can also `import { createStax, makeScene, loadScene, VexyStax }` from it (the how-to
+// ESM demo + the documented CDN URL both rely on this).
+export { VexyStax, loadScene, parseScene, makeScene, createStax } from "./index.js";
 
 export class VexyStaxElement extends HTMLElement {
   static get observedAttributes() {
-    return ["scene", "view", "mode", "trigger", "width", "height"];
+    // `slides` + `captions` are the issue-341 easy path (a scene from a bare URL list);
+    // `click-toggle` is the issue-342 opt-out for the default click-to-toggle behavior.
+    return ["scene", "slides", "captions", "view", "mode", "trigger", "width", "height", "click-toggle"];
   }
 
   constructor() {
@@ -20,13 +29,33 @@ export class VexyStaxElement extends HTMLElement {
     this._mounting = false;
   }
 
-  /** Inline scene object (or JSON string); overrides the `scene` attribute. */
+  /** Inline scene object (or JSON string); overrides the `scene`/`slides` attributes. */
   set config(value) {
     this._config = typeof value === "string" ? JSON.parse(value) : value;
     if (this.isConnected) this._mount();
   }
   get config() {
     return this._config;
+  }
+
+  /**
+   * Scene-in-init (issue 342): assigning an OBJECT (or JSON string) sets the inline scene
+   * (same as `config`), so `el.scene = {version:1, slides:[…]}` works at init. Assigning a
+   * STRING URL is treated as the `scene` attribute (a URL to fetch). This makes the property
+   * mirror the lines-nano-style "pass the data right in" ergonomics for the Web Component.
+   */
+  set scene(value) {
+    if (value && typeof value === "object") {
+      this.config = value; // inline scene object
+    } else if (typeof value === "string") {
+      // Looks like JSON? treat as an inline scene; otherwise it's a URL attribute.
+      const trimmed = value.trim();
+      if (trimmed.startsWith("{")) this.config = JSON.parse(trimmed);
+      else this.setAttribute("scene", value);
+    }
+  }
+  get scene() {
+    return this._config ?? this.getAttribute("scene");
   }
 
   /** The underlying VexyStax instance (null until mounted). */
@@ -60,6 +89,12 @@ export class VexyStaxElement extends HTMLElement {
       this._stax?.setView(this.getAttribute("view") || "expanded");
       return;
     }
+    if (name === "click-toggle") {
+      // Toggle the issue-342 behavior in place (no costly remount).
+      if (this.getAttribute("click-toggle") === "false") this._stax?.disableClickToggle();
+      else this._stax?.enableClickToggle();
+      return;
+    }
     // scene/mode changes re-mount.
     this._mount();
   }
@@ -78,10 +113,25 @@ export class VexyStaxElement extends HTMLElement {
       this._stax?.destroy();
       this._stax = null;
 
-      const sceneSrc = this._config ?? this.getAttribute("scene");
-      if (!sceneSrc) return; // nothing to render yet
       const baseUrl = typeof document !== "undefined" ? document.baseURI : undefined;
-      const scene = await loadScene(sceneSrc, { baseUrl });
+      // Source precedence (issue 341): inline `config` object → `scene` URL → `slides` list.
+      // `slides` is the easy path: a space/newline-separated list of image URLs (local, data:,
+      // or remote http(s)) built into a scene via makeScene. `captions` (bool attr) toggles
+      // caption plates (default on; here off unless slides carry their own — empty by default).
+      const sceneSrc = this._config ?? this.getAttribute("scene");
+      const slidesAttr = this.getAttribute("slides");
+      let scene;
+      if (sceneSrc) {
+        scene = await loadScene(sceneSrc, { baseUrl });
+      } else if (slidesAttr && slidesAttr.trim()) {
+        const urls = slidesAttr.split(/\s+/).filter(Boolean);
+        const captionsAttr = this.getAttribute("captions");
+        const opts = { baseUrl };
+        if (captionsAttr !== null) opts.captions = captionsAttr !== "false";
+        scene = makeScene(urls, opts);
+      } else {
+        return; // nothing to render yet
+      }
 
       const view = this.getAttribute("view") || scene.view || "expanded";
       scene.view = view;
@@ -98,6 +148,15 @@ export class VexyStaxElement extends HTMLElement {
       }
       // mode="playable" leaves the deck at its initial view; the host calls
       // el.transition(...) (e.g. on a button) to play it.
+
+      // Issue 342: click-to-toggle is ON by default for the interactive container — a click
+      // anywhere inside fluently toggles compact↔expanded, layered on top of scrollspy. Opt
+      // out with the `click-toggle="false"` attribute (or mode="static" pages that don't want it
+      // can still opt out explicitly). Default ON for every mode so a generic <vexy-stax> just
+      // works.
+      if (this.getAttribute("click-toggle") !== "false") {
+        this._stax?.enableClickToggle();
+      }
 
       this.dispatchEvent(new CustomEvent("ready", { detail: { instance: this._stax } }));
     } catch (err) {
@@ -126,6 +185,10 @@ export class VexyStaxElement extends HTMLElement {
   }
   seek(t) {
     return this._stax?.seek(t);
+  }
+  /** Issue 342: fluently toggle compact↔expanded (the default click behavior, exposed). */
+  toggleView() {
+    return this._stax?.toggleView();
   }
 }
 

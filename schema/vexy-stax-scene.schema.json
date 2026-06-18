@@ -53,9 +53,9 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "color": { "type": "string", "default": "#1a1a1a" },
-        "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.04, "description": "Smoked glass — ~4% (issue 303)." },
-        "reflectivity": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.5 }
+        "color": { "type": "string", "default": "#ffffff" },
+        "opacity": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.0, "description": "Invisible floor pane by default (no grey rectangle); faint reflections only." },
+        "reflectivity": { "type": "number", "minimum": 0, "maximum": 1, "default": 0.1 }
       }
     },
     "edge": {

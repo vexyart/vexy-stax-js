@@ -1,0 +1,134 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/docs/demo-module.html
+     ESM factory demo (issue 341): `createStax(el, opts)` — one call builds a scene from a
+     URL list (via makeScene), mounts a VexyStax, and returns the ready instance. Modeled on
+     i.vexy.art/dev/lines-nano/demo-module.html (createNano). Minimal source on the left, the
+     live result on the right. Imports the co-located bundle; the import works from the CDN. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vexy-stax-js — ES Module demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root { color-scheme: light dark; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #202226; background: #f4f4f5; }
+      header { padding: 20px 24px; }
+      header h1 { font-size: 18px; font-weight: 700; }
+      header p { color: #6b7280; font-size: 13px; }
+      header a { color: #2563eb; text-decoration: none; }
+      .cdn { margin: 0 24px 14px; padding: 10px 14px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; font-size: 12.5px; color: #3730a3; }
+      .cdn code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+      .example { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); margin: 0 24px 18px; background: #fff; border-radius: 14px; box-shadow: 0 8px 28px rgba(15,23,42,.08); overflow: hidden; }
+      .example .head { grid-column: 1 / -1; padding: 11px 16px; font-size: 13px; font-weight: 600; border-bottom: 1px solid #eef0f2; }
+      .example .code { overflow: auto; border-right: 1px solid #eef0f2; background: #fafafa; }
+      .example pre { margin: 0; }
+      .example pre code { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 16px !important; display: block; }
+      .example .stage { position: relative; min-height: 320px; background: #fff; }
+      .example vexy-stax, .example .stage > * { display: block; width: 100%; height: 100%; min-height: 320px; }
+      @media (max-width: 760px) { .example { grid-template-columns: 1fr; } .example .code { border-right: 0; border-bottom: 1px solid #eef0f2; } }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>vexy-stax-js — ES Module</h1>
+      <p><code>import { createStax }</code> — each example shows its minimal source on the left and the live result on the right. <a href="index.html">← all demos</a></p>
+    </header>
+    <div class="cdn">Drop-in CDN (no build step): <code>import { createStax } from "https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.element.js";</code> — these pages load the co-located local bundle, but the same code works verbatim from jsDelivr.</div>
+
+    <div class="example">
+      <div class="head">Minimal — a list of slides</div>
+      <div class="code"><pre><code class="language-javascript">import { createStax } from
+  "https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.element.js";
+
+await createStax(el, {
+  slides: [
+    "airbl-lores/airbl-020-source.png",
+    "airbl-lores/airbl-030-pink.png",
+    "airbl-lores/airbl-040-stars.png",
+    "airbl-lores/airbl-050-backdrop.png",
+  ],
+  view: "compact",
+});</code></pre></div>
+      <div class="stage" id="stage-min"></div>
+    </div>
+
+    <div class="example">
+      <div class="head">Playable — gap + transition kind</div>
+      <div class="code"><pre><code class="language-javascript">const stax = await createStax(el, {
+  slides: [/* … */],
+  gap: 480,
+  transition: "expand_collapse",
+  mode: "playable",     // plays the transition once when ready
+});</code></pre></div>
+      <div class="stage" id="stage-play"></div>
+    </div>
+
+    <div class="example">
+      <div class="head">Inline scene OBJECT — no URL, no fetch (issue 342)</div>
+      <div class="code"><pre><code class="language-javascript">// Pass a full scene object straight into createStax (scene-in-init):
+await createStax(el, {
+  scene: {
+    version: 1,
+    size: { width: 1246, height: 806 },
+    slides: [
+      { src: "airbl-lores/airbl-020-source.png", caption: { text: "Source" } },
+      { src: "airbl-lores/airbl-030-pink.png" },
+    ],
+  },
+  view: "expanded",
+});</code></pre></div>
+      <div class="stage" id="stage-scene"></div>
+    </div>
+
+    <div class="example">
+      <div class="head">Click to toggle + imperative API</div>
+      <div class="code"><pre><code class="language-javascript">// Click-to-toggle is ON by default — clicking the deck fluently
+// toggles compact↔expanded. (Opt out with clickToggle: false.)
+const stax = await createStax(el, { slides: [/* … */] });
+
+// …or drive it by hand:
+await stax.toggleView();          // fluent compact↔expanded
+await stax.transition("collapse_expand");</code></pre></div>
+      <div class="stage" id="stage-api"></div>
+    </div>
+
+    <script type="module">
+      import { createStax } from "./vexy-stax.element.js";
+      const SLIDES = ["airbl-lores/airbl-020-source.png","airbl-lores/airbl-030-pink.png","airbl-lores/airbl-040-stars.png","airbl-lores/airbl-050-backdrop.png"];
+      const SIZE = {"width":1246,"height":806};
+
+      await createStax(document.getElementById("stage-min"), {
+        slides: SLIDES, size: SIZE, view: "compact",
+      });
+
+      await createStax(document.getElementById("stage-play"), {
+        slides: SLIDES, size: SIZE, gap: 480, transition: "expand_collapse", mode: "playable",
+      });
+
+      // Inline scene OBJECT (scene-in-init): no URL, built straight from the object.
+      await createStax(document.getElementById("stage-scene"), {
+        scene: {
+          version: 1,
+          size: SIZE,
+          slides: [{ src: SLIDES[0] }, { src: SLIDES[1] }, { src: SLIDES[2] }],
+        },
+        view: "expanded",
+      });
+
+      // Click-to-toggle is on by default here — click the deck to fold/unfold it.
+      await createStax(document.getElementById("stage-api"), {
+        slides: SLIDES, size: SIZE, view: "compact",
+      });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+  </body>
+</html>

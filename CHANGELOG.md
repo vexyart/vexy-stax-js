@@ -4,6 +4,76 @@
 
 All notable changes to this project are documented here.
 
+## [3.0.13] — issues 341, 342
+
+### Added
+
+- **`makeScene(slides, opts)`** (341): the "extremely easy to use" entry point — build a valid scene
+  from a bare list of slide image URLs (or `{src, caption, opacity, gap}` objects) plus a flat
+  options bag (`size`, `camera`, `gap`, `transition`, `view`, `background`, `captions`, `floor`,
+  `edge`, …). Defaults are filled so `makeScene(["a.png", "b.png"])` renders. Goes through the same
+  strict `parseScene` (illegal scenes still throw) and resolves slide srcs against `opts.baseUrl`.
+  Exported from `vexy-stax-js`, the element bundle, and the global build.
+- **`createStax(elOrSelector, opts)`** (341): an ESM factory mirroring lines-nano's `createNano`.
+  Resolves the element, builds the scene (from `slides` via `makeScene`, or `scene` via `loadScene`
+  — a URL **or** an inline object), mounts a `VexyStax`, waits for `ready`, optionally starts a mode
+  (`playable`/`scrollspy`), and returns the ready instance. Re-exported from the element bundle so a
+  single CDN `<script>` import gives `createStax`/`makeScene`/`loadScene`/`VexyStax`.
+- **`slides` + `captions` attributes on `<vexy-stax>`** (341): `<vexy-stax slides="a.png b.png c.png"
+  view="compact" mode="playable">` builds a scene from a space/newline-separated URL list (no scene
+  JSON needed). `captions` toggles caption plates. The existing `scene`/`config` paths are unchanged.
+- **Remote slide images** (341): the three.js `TextureLoader` now sets `crossOrigin="anonymous"`, so
+  slide `src` may be a remote `http(s)` URL — the image loads cross-origin **and** the canvas stays
+  exportable (`toImage`/`toVideo`) when the server sends CORS headers. `resolveSrc` already preserved
+  absolute URLs; this is the last piece. Verified headless (a slide referenced by an absolute http
+  URL loads and exports a non-trivial PNG).
+- **Click-to-toggle** (342): clicking anywhere inside an interactive container fluently transitions
+  between views — not-compact → collapse to compact, compact → expand. It reuses the morph driver (a
+  smooth `expand`/`collapse` leg — never a snap) and is **ON by default** for the `<vexy-stax>`
+  element and every `createStax` instance, layered **on top of** scrollspy (scroll drives the morph;
+  a click still toggles). New methods: `VexyStax.toggleView()` / `.enableClickToggle()` /
+  `.disableClickToggle()` and `el.toggleView()`. Opt out via `click-toggle="false"` (attribute) or
+  `createStax(el, { clickToggle: false })`.
+- **Scene-in-init** (342): pass a full inline scene **object** at initialization — `createStax(el,
+  { scene: {…} })` and the `<vexy-stax>` `el.scene = {…}` property (alongside the existing `config`
+  property). No URL / fetch required.
+- **Step-by-step how-to demos in `docs/`** (341): `scripts/build-docs.mjs` now also emits
+  `demo-component.html` (declarative `<vexy-stax>`), `demo-module.html` (ESM `createStax`/inline scene
+  /click-to-toggle), and `demo-library.html` (global `window.VexyStax.create`) — each a side-by-side
+  "minimal code + live element" page modeled on i.vexy.art/dev/lines-nano. The landing page gains a
+  "Use it — three ways" section linking to them, and every page documents **both** the co-located
+  local bundle and the **jsDelivr CDN** URL (`https://cdn.jsdelivr.net/npm/vexy-stax-js@<version>/…`,
+  version read from `package.json`). The existing `playable.html` / `scrollable.html` are unchanged
+  except the scrollspy demo now lets a click toggle on top of the scroll.
+
+### Changed
+
+- **Default floor → invisible white pane with faint reflections** (`#ffffff` / opacity `0.0` /
+  reflectivity `0.1`): `scene.js` `parseFloor`, the JSON schema, and the docs demos now default to a
+  floor with **no visible grey rectangle** (opacity 0) and only a whisper of mirror (reflectivity
+  0.1). Kept in exact lockstep with `vexy_stax.scene.Floor` (PY↔JS parity). The previous default was
+  a smoked-glass dark tint (`#1a1a1a` / `0.04` / `0.5`).
+
+### Notes
+
+- The package version is `3.1.2` (the next patch after the published `3.1.1`); this CHANGELOG entry
+  follows the repo's `3.0.x` issue-tracking heading convention for issues 341/342. CDN URLs in the
+  docs/README pin to `3.1.2`.
+
+## [3.0.12] — issue 341
+
+### Changed
+
+- **`docs/` is now a proper landing page** (341): https://vexy.dev/vexy-stax-js/ used to embed the
+  playable animation directly (with the dated grey-reflection floor) and linked to nothing.
+  `scripts/build-docs.mjs` now emits `index.html` as a LANDING PAGE — a hero + three cards linking
+  to the **Animated demo** (`playable.html`), the **Scrollspy demo** (`scrollable.html`), and the
+  **Documentation** at https://vexy.dev/vexy-stax-py/ — plus install/usage snippets, and no embedded
+  animation. The two demos are emitted as their own pages using clean-floor scene variants
+  (`airbl-demo.scene.json` / `airbl-scrollable.scene.json`, reflectivity 0) so neither shows the grey
+  reflection "shadows". All paths are relative so the site works both locally and under
+  `/vexy-stax-js/`. Verified headless: both demos mount without errors and the landing cards resolve.
+
 ## [3.0.11] — issues 335, 336, 337
 
 ### Added

@@ -7,7 +7,7 @@
 // mapping, and exporters are in transition.js / scrollspy.js / export.js.
 
 import { Stage } from "./stage.js";
-import { loadScene, parseScene, resolvedOpacity } from "./scene.js";
+import { loadScene, parseScene, makeScene, resolvedOpacity } from "./scene.js";
 import { frameStateAt, ease } from "./geometry.js";
 import { playTransition, transitionEndpoints, buildTimeline, morphAtProgress } from "./transition.js";
 import { attachScrollspy } from "./scrollspy.js";
@@ -16,6 +16,7 @@ import { canvasToPngBlob, recordVideo } from "./export.js";
 export {
   loadScene,
   parseScene,
+  makeScene,
   resolvedOpacity,
 };
 
@@ -50,6 +51,13 @@ export class VexyStax {
     this.scene = scene;
     this.stage = new Stage(container, scene);
     this._ro = null; // ResizeObserver for post-layout resize
+    // Issue 342: track the CURRENT view so click-to-toggle knows which way to go. Starts at the
+    // scene's initial view; updated by setView/seek/transition/toggleView. `_morphT` is the last
+    // applied morph factor (0=compact, 1=expanded) used to disambiguate mid-morph clicks.
+    this._currentView = scene.view === "compact" ? "compact" : "expanded";
+    this._morphT = this._currentView === "compact" ? 0 : 1;
+    this._clickToggle = null; // { handler } when wired (enableClickToggle)
+    this._toggling = false; // guard against overlapping toggle transitions
     this._ready = this.stage.init().then(() => {
       this.stage.render();
       // After mount, observe the container for its first actual layout dimensions.
@@ -87,6 +95,8 @@ export class VexyStax {
     await this._ready;
     this.stage.setView(view);
     this.stage.render();
+    this._currentView = view === "compact" ? "compact" : "expanded";
+    this._morphT = this._currentView === "compact" ? 0 : 1;
     return this;
   }
 
@@ -99,6 +109,10 @@ export class VexyStax {
     const tt = Math.max(0, Math.min(1, Number(t) || 0));
     this.stage.applyFrameState(frameStateAt(this.scene, tt, this.stage.camera.aspect), tt);
     this.stage.render();
+    // Issue 342: remember the morph position so a click-toggle on a scroll-driven deck knows
+    // whether it is currently nearer compact (→ expand) or expanded (→ collapse).
+    this._morphT = tt;
+    this._currentView = tt >= 0.5 ? "expanded" : "compact";
     return this;
   }
 
@@ -178,9 +192,68 @@ export class VexyStax {
     this.container.dispatchEvent?.(new CustomEvent("transitionstart", { detail: { kind: resolvedKind } }));
     try {
       await controller.promise;
+      // Settle the tracked view to the transition's end endpoint (issue 342).
+      const { endMorph } = transitionEndpoints(resolvedKind);
+      this._morphT = endMorph;
+      this._currentView = endMorph >= 0.5 ? "expanded" : "compact";
       this.container.dispatchEvent?.(new CustomEvent("transitionend", { detail: { kind: resolvedKind } }));
     } finally {
       this._cancelTransition = null;
+    }
+    return this;
+  }
+
+  /**
+   * Click-to-toggle (issue 342): fluently transition between the two views. If the deck is
+   * currently expanded (or mid-morph past halfway), collapse to compact; otherwise expand.
+   * Reuses the existing morph driver (a smooth `collapse`/`expand` leg) — never a snap. Safe to
+   * call repeatedly: an in-flight toggle is ignored until it settles. Returns the played kind.
+   */
+  async toggleView() {
+    await this._ready;
+    if (this._toggling) return null;
+    const goCompact = this._currentView !== "compact"; // not compact ⇒ collapse to compact
+    const kind = goCompact ? "collapse" : "expand";
+    this._toggling = true;
+    try {
+      // The scene may have no `transition` section (e.g. a slides-only deck) — supply timing so
+      // toggle still animates. transition() reads scene.transition for timing; ensure one exists.
+      if (!this.scene.transition) {
+        this.scene.transition = { kind, duration: 0.9, wait: 0, fps: 30, easing: "easeInOutCubic" };
+      }
+      await this.transition(kind);
+    } finally {
+      this._toggling = false;
+    }
+    return kind;
+  }
+
+  /**
+   * Enable click-to-toggle on the container (issue 342): a pointer click anywhere inside the
+   * element fluently toggles compact↔expanded. ON by default for interactive containers (the
+   * <vexy-stax> element + createStax) and layered ON TOP of scrollspy (scroll drives the morph;
+   * a click still toggles). Idempotent. Pass to disableClickToggle() to opt out.
+   */
+  enableClickToggle() {
+    if (this._clickToggle || !this.container?.addEventListener) return this;
+    const handler = (ev) => {
+      // Ignore clicks on interactive controls a host may overlay (buttons/links/inputs).
+      const tag = ev.target?.tagName;
+      if (tag && /^(BUTTON|A|INPUT|SELECT|TEXTAREA|LABEL)$/.test(tag)) return;
+      this.toggleView();
+    };
+    this.container.addEventListener("click", handler);
+    // Pointer affordance so it reads as clickable.
+    if (this.container.style && !this.container.style.cursor) this.container.style.cursor = "pointer";
+    this._clickToggle = { handler };
+    return this;
+  }
+
+  /** Remove the click-to-toggle handler (issue 342 opt-out). */
+  disableClickToggle() {
+    if (this._clickToggle) {
+      this.container.removeEventListener?.("click", this._clickToggle.handler);
+      this._clickToggle = null;
     }
     return this;
   }
@@ -301,8 +374,91 @@ export class VexyStax {
   destroy() {
     this._cancelTransition?.();
     this._scrollspy?.disconnect?.();
+    this.disableClickToggle();
     this._ro?.disconnect?.();
     this._ro = null;
     this.stage?.dispose();
   }
+}
+
+// Scene-construction options consumed by createStax/makeScene rather than describing how to
+// MOUNT (view/mode/trigger/width/height) or WHICH source (slides/scene). Everything else in
+// `opts` is treated as a flat scene override and forwarded to makeScene (issue 341).
+const MOUNT_KEYS = new Set([
+  "slides", "scene", "view", "mode", "trigger", "width", "height", "baseUrl", "clickToggle",
+]);
+
+/**
+ * The "extremely easy to use" ESM factory (issue 341), mirroring lines-nano's `createNano`.
+ * Resolve the mount element, build the scene (from a bare `slides` list via makeScene, or
+ * from a `scene` URL/object via loadScene), mount a VexyStax, wait until it's ready, optionally
+ * start a mode (playable/scrollspy), and return the ready instance.
+ *
+ * @param {HTMLElement|string} elOrSelector mount element or a CSS selector for it
+ * @param {object} [opts]
+ *   @param {string[]|object[]} [opts.slides]  slide image URLs (local/data:/remote) or slide
+ *       objects — the easy path; built via makeScene with the remaining opts as overrides.
+ *   @param {string|object} [opts.scene]  a scene URL or inline scene object (via loadScene);
+ *       used when `slides` is not given.
+ *   @param {"expanded"|"compact"} [opts.view]  initial view.
+ *   @param {"static"|"playable"|"scrollspy"} [opts.mode]  mount mode (default "static").
+ *       "playable" plays scene.transition once when ready; "scrollspy" attaches a scroll story.
+ *   @param {Element|string} [opts.trigger]  scrollspy trigger (default: the element).
+ *   @param {string} [opts.width] @param {string} [opts.height]  CSS size overrides on the element.
+ *   @param {string} [opts.baseUrl]  base for resolving relative slide/scene URLs.
+ *   ...any other key is a flat scene override forwarded to makeScene (size, camera, gap,
+ *      transition, background, captions, floor, edge, caption_defaults, …).
+ * @returns {Promise<VexyStax>} the ready instance.
+ */
+export async function createStax(elOrSelector, opts = {}) {
+  const el =
+    typeof elOrSelector === "string" ? document.querySelector(elOrSelector) : elOrSelector;
+  if (!el) throw new Error(`createStax: element not found (${String(elOrSelector)})`);
+  if (opts === null || typeof opts !== "object") throw new Error("createStax: opts must be an object");
+
+  // Optional CSS size on the host element (parity with the <vexy-stax> width/height attrs).
+  if (opts.width) el.style.width = /^\d+$/.test(String(opts.width)) ? `${opts.width}px` : opts.width;
+  if (opts.height) el.style.height = /^\d+$/.test(String(opts.height)) ? `${opts.height}px` : opts.height;
+  if (typeof el.style === "object") {
+    el.style.position = el.style.position || "relative";
+    el.style.display = el.style.display || "block";
+  }
+
+  const baseUrl = opts.baseUrl ?? (typeof document !== "undefined" ? document.baseURI : undefined);
+
+  let scene;
+  if (opts.slides) {
+    // Flat scene overrides = every opt that isn't a mount/source key.
+    const sceneOpts = { baseUrl };
+    for (const [k, v] of Object.entries(opts)) {
+      if (!MOUNT_KEYS.has(k)) sceneOpts[k] = v;
+    }
+    scene = makeScene(opts.slides, sceneOpts);
+  } else if (opts.scene !== undefined) {
+    scene = await loadScene(opts.scene, { baseUrl });
+  } else {
+    throw new Error("createStax: provide `slides` (URLs) or `scene` (URL/object)");
+  }
+
+  // The view override wins over the scene's own initial view.
+  if (opts.view) scene.view = opts.view;
+
+  const stax = new VexyStax(el, scene);
+  await stax.ready;
+
+  const mode = opts.mode ?? "static";
+  if (mode === "scrollspy") {
+    const trigger =
+      typeof opts.trigger === "string" ? document.querySelector(opts.trigger) : opts.trigger ?? el;
+    stax.scrollspy({ trigger });
+  } else if (mode === "playable" && scene.transition) {
+    // Kick off the scene's transition once (best-effort; ignore if it's cancelled by teardown).
+    stax.transition().catch(() => {});
+  }
+
+  // Issue 342: click-to-toggle is ON by default for the interactive container (every mode),
+  // and layers on top of scrollspy (scroll drives the morph; a click still toggles). Opt out
+  // with `clickToggle: false`.
+  if (opts.clickToggle !== false) stax.enableClickToggle();
+  return stax;
 }

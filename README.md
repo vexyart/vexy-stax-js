@@ -28,29 +28,88 @@ node verify/run.mjs && python3 verify/gate.py
 
 ## Usage
 
-ESM:
+Three ways to drop a deck on a page, easiest first (issues 341 / 342).
 
-```js
-import { VexyStax, loadScene } from "vexy-stax-js";
-const scene = await loadScene("scene.json");
-const stax = new VexyStax(container, scene);
-await stax.setView("compact");
-const blob = await stax.toImage({ scale: 2 });
-```
-
-Web Component:
+### Web Component — just a list of slides
 
 ```html
 <script type="module" src="./dist/vexy-stax.element.js"></script>
+
+<!-- The `slides` attribute: a space/newline-separated list of image URLs (local, data:, or
+     remote http(s)). Captions off by default; mode="playable" plays the transition once. -->
+<vexy-stax
+  slides="layer-0.png layer-1.png https://example.com/layer-2.png"
+  view="compact" mode="playable">
+</vexy-stax>
+
+<!-- …or point at a full scene JSON (with captions, camera, transition, …): -->
 <vexy-stax scene="scene.json" view="expanded"></vexy-stax>
 ```
 
-Global:
+**Click-to-toggle is on by default** (issue 342): clicking anywhere inside a `<vexy-stax>` fluently
+toggles compact↔expanded. Opt out with `click-toggle="false"`.
+
+**Scene-in-init** (issue 342): assign an inline scene **object** without a URL —
+`el.scene = { version: 1, slides: [{ src: "a.png" }, …] }` (or the `config` property).
+
+### ES Module — `createStax`
+
+```js
+import { createStax, makeScene, VexyStax, loadScene } from "vexy-stax-js";
+
+// One call: build a scene from a URL list, mount, wait for ready.
+const stax = await createStax("#stage", {
+  slides: ["layer-0.png", "https://example.com/layer-1.png"],
+  gap: 480, transition: "expand_collapse", mode: "playable",
+});
+
+await stax.toggleView();          // fluent compact↔expanded (the default click behavior)
+const mp4 = await stax.toVideo(); // seekable mp4
+
+// createStax also accepts an inline scene object (scene-in-init):
+await createStax("#hero", { scene: { version: 1, slides: [{ src: "a.png" }] }, view: "expanded" });
+
+// makeScene builds a valid scene from a bare URL list, filling sensible defaults:
+const scene = makeScene(["a.png", "b.png", "c.png"], { gap: 480, transition: "expand_collapse" });
+const low  = new VexyStax(container, scene); // the low-level path is still available
+```
+
+`createStax(elOrSelector, opts)` — `opts` accepts `{ slides | scene, view, mode, trigger, width,
+height, clickToggle, baseUrl, …sceneOverrides }`. Any remaining key (`size`, `camera`, `gap`,
+`transition`, `background`, `captions`, `floor`, `edge`, …) is forwarded to `makeScene`.
+
+### Global script — `window.VexyStax`
 
 ```html
 <script src="./dist/vexy-stax.global.js"></script>
-<script>const stax = new VexyStax.VexyStax(el, scene);</script>
+<script>
+  VexyStax.create("#stage", { slides: ["a.png", "b.png", "c.png"] });
+</script>
 ```
+
+### CDN (no build step)
+
+Every snippet above also works verbatim from the jsDelivr CDN — swap the local bundle path for:
+
+```html
+<!-- Web Component / ESM -->
+<script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.element.js"></script>
+<!-- Global script -->
+<script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.global.js"></script>
+```
+
+### Remote slide images
+
+Slide `src` may be a local path, a `data:` URI, **or a remote `http(s)` URL**. The texture loader
+requests cross-origin images with `crossOrigin="anonymous"`, so a server that sends CORS headers
+lets the image load **and** keeps the canvas exportable (`toImage` / `toVideo`).
+
+### Live demos & how-to pages
+
+`npm run build:docs` emits a [docs site](https://vexy.dev/vexy-stax-js/): a landing page, the
+**Animated** (`playable.html`) and **Scrollspy** (`scrollable.html`) demos, plus three side-by-side
+"how to use" pages — `demo-component.html`, `demo-module.html`, `demo-library.html` — each showing
+the minimal code beside the live result (modeled on i.vexy.art/dev/lines-nano).
 
 ## Layout
 
@@ -74,4 +133,4 @@ for the same scene; both are tested against the same fixture vectors.
 
 ## License
 
-Apache-2.0 — Copyright 2026 Adam Twardoch / VexyArt
+Apache-2.0 — Copyright 2026 Fontlab Ltd.

@@ -239,6 +239,12 @@ export class Stage {
 
   async _buildPlates() {
     const loader = new THREE.TextureLoader();
+    // Issue 341: load slide images from REMOTE http(s) URLs, not just local paths/data: URIs.
+    // setCrossOrigin("anonymous") makes the underlying <img> a CORS request, so a server that
+    // sends `Access-Control-Allow-Origin` lets the image load AND keeps the WebGL canvas
+    // un-tainted (toImage/toVideo stay exportable). Local same-origin and data: URIs are
+    // unaffected. resolveSrc already preserves absolute URLs, so this is the last piece.
+    loader.setCrossOrigin("anonymous");
     const textures = await Promise.all(this.scene.slides.map((s) => loadTexture(loader, s.src)));
     const reflectivity = this.scene.floor.reflectivity;
 

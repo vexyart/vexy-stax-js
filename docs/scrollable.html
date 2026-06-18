@@ -1,0 +1,82 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/docs/scrollable.html
+     Scroll-driven (scrollspy) demo (issues 304.2 + 314 + 341): a full-viewport intro, the
+     deck as a FULL-WIDTH 2:1 white scene, then an outro. The deck starts COMPACT; the
+     transition starts when 75% of the scene is in view and reaches fully EXPANDED when the
+     scene CENTER hits the TOP of the viewport, then LATCHES. Clean floor. Static; relative. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vexy-stax-js — scrollspy demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #ffffff; }
+      body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1c1e; }
+      .back { position: fixed; top: 14px; left: 16px; z-index: 10; color: #2563eb; text-decoration: none; font-size: 13px; }
+      .copy { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 12px; padding: 0 24px; }
+      .copy h1 { font-size: clamp(28px, 6vw, 64px); margin: 0; letter-spacing: -0.02em; }
+      .copy p { max-width: 46ch; margin: 0; color: #555; }
+      .hint { font-size: 13px; color: #8a8a8a; }
+      #stax { display: block; width: 100vw; aspect-ratio: 2 / 1; height: auto; background: #ffffff; }
+    </style>
+  </head>
+  <body>
+    <a class="back" href="index.html">← vexy-stax-js</a>
+    <section class="copy">
+      <h1>Scroll down</h1>
+      <p>A layered deck of glass plates. Keep scrolling — it will rise into view and unfold.</p>
+      <p class="hint">↓</p>
+    </section>
+
+    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static"></vexy-stax>
+
+    <section class="copy">
+      <h1>Layer by layer</h1>
+      <p>Once unfolded the deck stays expanded — keep scrolling to read on.</p>
+      <p class="hint">Tip: click the deck to fluently toggle compact↔expanded — it works on top of the scroll (issue 342).</p>
+    </section>
+
+    <script type="module" src="vexy-stax.element.js"></script>
+    <script type="module">
+      const el = document.getElementById("stax");
+      const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+      let ready = false;
+      let tMax = 0;
+      // Issue 342: click-to-toggle is ON by default for <vexy-stax>. It runs ON TOP of the
+      // scroll-driven morph here — while a toggle animation plays we pause the scroll seek so the
+      // fluent fold/unfold is visible, then resume the scroll ratchet from wherever it lands.
+      let suppressUntil = 0;
+      const update = () => {
+        if (!ready || Date.now() < suppressUntil) return;
+        const r = el.getBoundingClientRect();
+        const h = r.height;
+        const vh = window.innerHeight;
+        if (h <= 0) return;
+        const startTop = vh - 0.75 * h;
+        const endTop = -h / 2;
+        const p = (startTop - r.top) / (startTop - endTop);
+        const t = ease(Math.max(0, Math.min(1, p)));
+        if (t > tMax) { tMax = t; el.seek(tMax); }
+      };
+      // Pause the scroll seek for the duration of a click-toggle, then re-sync the ratchet to
+      // the toggled position so scroll continues smoothly from there (no snap-back).
+      el.addEventListener("transitionstart", () => { suppressUntil = Date.now() + 4000; });
+      el.addEventListener("transitionend", () => {
+        suppressUntil = 0;
+        tMax = el.instance ? el.instance._morphT : tMax;
+      });
+      window.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update, { passive: true });
+      const go = () => { ready = true; update(); };
+      el.addEventListener("ready", go, { once: true });
+      setTimeout(go, 1500);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,84 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/docs/demo-library.html
+     Global-script demo (issue 341): one classic <script> exposes window.VexyStax, and
+     `VexyStax.create(el, opts)` mounts a deck from a slide-URL list. Modeled on
+     i.vexy.art/dev/lines-nano/demo-library.html. Loads the co-located IIFE bundle; the same
+     tag works from the jsDelivr CDN. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vexy-stax-js — global library demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root { color-scheme: light dark; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #202226; background: #f4f4f5; }
+      header { padding: 20px 24px; }
+      header h1 { font-size: 18px; font-weight: 700; }
+      header p { color: #6b7280; font-size: 13px; }
+      header a { color: #2563eb; text-decoration: none; }
+      .cdn { margin: 0 24px 14px; padding: 10px 14px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; font-size: 12.5px; color: #3730a3; }
+      .cdn code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+      .example { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); margin: 0 24px 18px; background: #fff; border-radius: 14px; box-shadow: 0 8px 28px rgba(15,23,42,.08); overflow: hidden; }
+      .example .head { grid-column: 1 / -1; padding: 11px 16px; font-size: 13px; font-weight: 600; border-bottom: 1px solid #eef0f2; }
+      .example .code { overflow: auto; border-right: 1px solid #eef0f2; background: #fafafa; }
+      .example pre { margin: 0; }
+      .example pre code { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 16px !important; display: block; }
+      .example .stage { position: relative; min-height: 320px; background: #fff; }
+      .example vexy-stax, .example .stage > * { display: block; width: 100%; height: 100%; min-height: 320px; }
+      @media (max-width: 760px) { .example { grid-template-columns: 1fr; } .example .code { border-right: 0; border-bottom: 1px solid #eef0f2; } }
+    </style>
+    <!-- Traditional global script: one classic <script> tag, no module type. -->
+    <script src="vexy-stax.global.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>vexy-stax-js — traditional library</h1>
+      <p>One classic <code>&lt;script&gt;</code> exposes <code>window.VexyStax</code>. <a href="index.html">← all demos</a></p>
+    </header>
+    <div class="cdn">Drop-in CDN (no build step): <code>&lt;script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.global.js"&gt;&lt;/script&gt;</code> — these pages load the co-located local bundle, but the same code works verbatim from jsDelivr.</div>
+
+    <div class="example">
+      <div class="head">Global script → window.VexyStax.create</div>
+      <div class="code"><pre><code class="language-html">&lt;script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.global.js"&gt;&lt;/script&gt;
+
+&lt;div id="stage"&gt;&lt;/div&gt;
+
+&lt;script&gt;
+  VexyStax.create(stage, {
+    slides: [
+      "airbl-lores/airbl-020-source.png",
+      "airbl-lores/airbl-030-pink.png",
+      "airbl-lores/airbl-040-stars.png",
+      "airbl-lores/airbl-050-backdrop.png",
+    ],
+    view: "compact",
+    mode: "playable",
+  }).then(function (stax) {
+    console.log("ready", stax.scene.slides.length);
+  });
+&lt;/script&gt;</code></pre></div>
+      <div class="stage" id="stage"></div>
+    </div>
+
+    <script>
+      VexyStax.create(document.getElementById("stage"), {
+        slides: ["airbl-lores/airbl-020-source.png","airbl-lores/airbl-030-pink.png","airbl-lores/airbl-040-stars.png","airbl-lores/airbl-050-backdrop.png"],
+        size: {"width":1246,"height":806},
+        view: "compact",
+        mode: "playable",
+      }).then(function (stax) {
+        console.log("[demo-library] ready", stax.scene.slides.length);
+      }).catch(function (e) { console.error(e); });
+    </script>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+  </body>
+</html>

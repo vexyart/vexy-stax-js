@@ -1,0 +1,83 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/docs/playable.html
+     Animated demo (issue 341): loads the <vexy-stax> element and plays the compact↔expanded
+     transition. Uses a clean-floor scene variant. Static; relative paths. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vexy-stax-js — animated demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root { color-scheme: light dark; }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; flex-direction: column; min-height: 100vh;
+        font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1c1e;
+        background: radial-gradient(120% 120% at 50% 0%, #ffffff 0%, #e9ecf2 100%);
+      }
+      header { padding: 18px 24px 6px; text-align: center; }
+      header a { color: #2563eb; text-decoration: none; font-size: 13px; }
+      h1 { margin: 6px 0 4px; font-size: 19px; letter-spacing: -0.01em; }
+      header p { margin: 0; color: #6b7280; font-size: 13px; }
+      main { flex: 1; display: flex; align-items: center; justify-content: center; padding: 16px; }
+      #stax {
+        width: min(92vw, 880px, calc((100vh - 220px) * 1.546)); aspect-ratio: 1246 / 806; height: auto;
+        border-radius: 14px; background: #fff; overflow: hidden; box-shadow: 0 8px 36px rgba(17, 24, 39, 0.16);
+      }
+      .controls { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; padding: 14px 16px 26px; }
+      button {
+        font: inherit; padding: 9px 18px; border: 1px solid #d1d5db; border-radius: 10px;
+        background: #fff; color: #111; cursor: pointer; transition: background .15s, border-color .15s, color .15s;
+      }
+      button:hover { background: #f3f4f6; }
+      button[aria-pressed="true"] { background: #111; color: #fff; border-color: #111; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="index.html">← vexy-stax-js</a>
+      <h1>Animated demo</h1>
+      <p>Morph the layered deck between its <strong>compact</strong> and <strong>expanded</strong> views.</p>
+    </header>
+    <main>
+      <vexy-stax id="stax" scene="airbl-demo.scene.json" view="compact" mode="playable"></vexy-stax>
+    </main>
+    <div class="controls">
+      <button id="play">▶ Play transition</button>
+      <button id="compact" aria-pressed="true">Compact</button>
+      <button id="expanded">Expanded</button>
+    </div>
+    <script type="module" src="vexy-stax.element.js"></script>
+    <script type="module">
+      const el = document.getElementById("stax");
+      const play = document.getElementById("play");
+      const compact = document.getElementById("compact");
+      const expanded = document.getElementById("expanded");
+      const mark = (view) => {
+        compact.setAttribute("aria-pressed", String(view === "compact"));
+        expanded.setAttribute("aria-pressed", String(view === "expanded"));
+      };
+      fetch("airbl-demo.scene.json").then((r) => r.json()).then((s) => {
+        if (!s?.size?.width || !s?.size?.height) return;
+        const ar = s.size.width / s.size.height;
+        el.style.aspectRatio = s.size.width + " / " + s.size.height;
+        el.style.width = "min(92vw, 880px, calc((100vh - 220px) * " + ar + "))";
+      }).catch(() => {});
+      play.addEventListener("click", () => { mark(null); el.transition("expand_collapse"); });
+      compact.addEventListener("click", () => { el.setView("compact"); mark("compact"); });
+      expanded.addEventListener("click", () => { el.setView("expanded"); mark("expanded"); });
+      el.addEventListener("ready", () => {
+        mark(null);
+        setTimeout(() => el.transition("expand"), 450);
+        el.addEventListener("transitionend", () => mark("expanded"), { once: true });
+      });
+    </script>
+  </body>
+</html>

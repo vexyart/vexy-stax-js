@@ -1,0 +1,88 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/docs/demo-component.html
+     Declarative Web Component demo (issue 341): minimal markup on the left, the live
+     <vexy-stax> element on the right (modeled on i.vexy.art/dev/lines-nano/demo-component.html).
+     Shows the issue-341 `slides` attribute (a bare URL list) plus `scene`, `view`, `mode`.
+     Loads the co-located local bundle; the same markup works from the jsDelivr CDN. -->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>vexy-stax-js — Web Component demo</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/styles/atom-one-light.min.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root { color-scheme: light dark; }
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { font: 15px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #202226; background: #f4f4f5; }
+      header { padding: 20px 24px; }
+      header h1 { font-size: 18px; font-weight: 700; }
+      header p { color: #6b7280; font-size: 13px; }
+      header a { color: #2563eb; text-decoration: none; }
+      .cdn { margin: 0 24px 14px; padding: 10px 14px; background: #eef2ff; border: 1px solid #c7d2fe; border-radius: 10px; font-size: 12.5px; color: #3730a3; }
+      .cdn code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+      .example { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); margin: 0 24px 18px; background: #fff; border-radius: 14px; box-shadow: 0 8px 28px rgba(15,23,42,.08); overflow: hidden; }
+      .example .head { grid-column: 1 / -1; padding: 11px 16px; font-size: 13px; font-weight: 600; border-bottom: 1px solid #eef0f2; }
+      .example .code { overflow: auto; border-right: 1px solid #eef0f2; background: #fafafa; }
+      .example pre { margin: 0; }
+      .example pre code { font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace; padding: 16px !important; display: block; }
+      .example .stage { position: relative; min-height: 320px; background: #fff; }
+      .example vexy-stax, .example .stage > * { display: block; width: 100%; height: 100%; min-height: 320px; }
+      @media (max-width: 760px) { .example { grid-template-columns: 1fr; } .example .code { border-right: 0; border-bottom: 1px solid #eef0f2; } }
+    </style>
+    <script type="module" src="vexy-stax.element.js"></script>
+  </head>
+  <body>
+    <header>
+      <h1>vexy-stax-js — &lt;vexy-stax&gt;</h1>
+      <p>Declarative custom element — minimal markup on the left, the live element on the right. <strong>Tip:</strong> click any deck to fluently toggle compact↔expanded (on by default; opt out with <code>click-toggle="false"</code>). <a href="index.html">← all demos</a></p>
+    </header>
+    <div class="cdn">Drop-in CDN (no build step): <code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.element.js"&gt;&lt;/script&gt;</code> — these pages load the co-located local bundle, but the same code works verbatim from jsDelivr.</div>
+
+    <div class="example">
+      <div class="head">Easiest: a list of slide URLs (the <code>slides</code> attribute)</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax
+  slides="airbl-lores/airbl-020-source.png
+          airbl-lores/airbl-030-pink.png
+          airbl-lores/airbl-040-stars.png
+          airbl-lores/airbl-050-backdrop.png"
+  view="compact"
+  mode="playable"&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage">
+        <vexy-stax slides="airbl-lores/airbl-020-source.png airbl-lores/airbl-030-pink.png airbl-lores/airbl-040-stars.png airbl-lores/airbl-050-backdrop.png" view="compact" mode="playable"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Captions on, expanded view (static)</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax
+  scene="airbl-demo.scene.json"
+  view="expanded"
+  mode="static"&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage">
+        <vexy-stax scene="airbl-demo.scene.json" view="expanded" mode="static"></vexy-stax>
+      </div>
+    </div>
+
+    <div class="example">
+      <div class="head">Scene URL + playable transition</div>
+      <div class="code"><pre><code class="language-html">&lt;vexy-stax
+  scene="airbl-demo.scene.json"
+  view="compact"
+  mode="playable"&gt;
+&lt;/vexy-stax&gt;</code></pre></div>
+      <div class="stage">
+        <vexy-stax scene="airbl-demo.scene.json" view="compact" mode="playable"></vexy-stax>
+      </div>
+    </div>
+    <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.9.0/build/highlight.min.js"></script>
+    <script>hljs.highlightAll();</script>
+  </body>
+</html>

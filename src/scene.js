@@ -136,15 +136,17 @@ function parseVideo(raw) {
 }
 
 function parseFloor(raw) {
-  // Smoked glass: ~4% opacity, dark tint, reflective (issue 303 §1).
-  if (raw === undefined) return { color: "#1a1a1a", opacity: 0.04, reflectivity: 0.5 };
+  // Default floor: an INVISIBLE white pane (opacity 0 → no grey floor rectangle) with faint
+  // reflections (reflectivity 0.1) so decks read as floating with just a whisper of mirror.
+  // Kept in exact lockstep with vexy_stax.scene.Floor (PY↔JS parity).
+  if (raw === undefined) return { color: "#ffffff", opacity: 0.0, reflectivity: 0.1 };
   const o = asObject(raw, "floor");
   rejectExtraKeys(o, new Set(["color", "opacity", "reflectivity"]), "floor");
   return {
-    color: o.color === undefined ? "#1a1a1a" : str(o.color, "floor.color"),
-    opacity: o.opacity === undefined ? 0.04 : num(o.opacity, "floor.opacity", { min: 0, max: 1 }),
+    color: o.color === undefined ? "#ffffff" : str(o.color, "floor.color"),
+    opacity: o.opacity === undefined ? 0.0 : num(o.opacity, "floor.opacity", { min: 0, max: 1 }),
     reflectivity:
-      o.reflectivity === undefined ? 0.5 : num(o.reflectivity, "floor.reflectivity", { min: 0, max: 1 }),
+      o.reflectivity === undefined ? 0.1 : num(o.reflectivity, "floor.reflectivity", { min: 0, max: 1 }),
   };
 }
 
@@ -288,6 +290,129 @@ export function parseScene(raw) {
     caption_fade: parseCaptionFade(o.caption_fade),
     slides: o.slides.map((s, i) => parseSlide(s, i)),
   };
+}
+
+// Issue 341: the "extremely easy to use" entry point. Build a valid Scene object from a
+// bare list of slide image URLs (or {src, caption, opacity, gap} objects) + a flat options
+// bag, filling sensible defaults so even `makeScene(["a.png", "b.png"])` renders. The result
+// goes straight through parseScene (so the SAME strict invariants apply — illegal scenes
+// still throw) and is returned normalized, ready for `new VexyStax(el, scene)`. Slide `src`
+// may be a local path, a `data:` URI, OR a remote http(s) URL — resolveSrc/the TextureLoader
+// preserve absolute URLs (and stage.js sets crossOrigin so remote images load + stay
+// canvas-exportable). This keeps "easy scene customization" + "remote URL" in one helper.
+
+/** One slide entry → a raw scene-slide object. A bare string is treated as `src`. */
+function slideEntry(entry, index, defaults) {
+  if (typeof entry === "string") {
+    const slide = { src: entry };
+    if (defaults.caption) slide.caption = { text: "", show_in: "expanded" };
+    return slide;
+  }
+  if (entry === null || typeof entry !== "object" || Array.isArray(entry)) {
+    throw new Error(`makeScene: slides[${index}] must be a string URL or an object`);
+  }
+  // Accept the friendly shape {src, caption, opacity, gap}. `caption` may be a plain
+  // string (→ {text, show_in:"expanded"}) for ergonomics, or the full caption object.
+  const slide = {};
+  if (entry.src === undefined) throw new Error(`makeScene: slides[${index}].src is required`);
+  slide.src = entry.src;
+  if (entry.gap !== undefined && entry.gap !== null) slide.gap = entry.gap;
+  if (entry.opacity !== undefined) slide.opacity = entry.opacity;
+  if (entry.caption !== undefined) {
+    slide.caption =
+      typeof entry.caption === "string"
+        ? { text: entry.caption, show_in: "expanded" }
+        : entry.caption;
+  }
+  return slide;
+}
+
+/**
+ * Build a normalized Scene from a list of slide image URLs (or slide objects) plus a flat
+ * options bag (issue 341). Returns a parsed scene (via parseScene), so it is ready to hand
+ * to `new VexyStax(container, scene)`. Sensible defaults are filled so a bare list of URLs
+ * renders. Slide `src` may be local, `data:`, or a remote http(s) URL.
+ *
+ * @param {Array<string|{src:string, caption?:string|object, opacity?:number|object, gap?:number}>} slides
+ *   slide image URLs or slide objects (at least one).
+ * @param {object} [opts] flat scene options:
+ *   @param {{width:number,height:number}|number[]} [opts.size]  scene size (default 1920×1080)
+ *   @param {object} [opts.camera]      camera overrides (gap/distance/angle/elevation/fov)
+ *   @param {string} [opts.gap]         shortcut for camera.gap (expanded plate spacing)
+ *   @param {string|object} [opts.transition]  a transition KIND string, or a full transition object
+ *   @param {string} [opts.view]        initial view ("expanded" | "compact")
+ *   @param {string} [opts.background]  background CSS color
+ *   @param {boolean} [opts.captions]   global captions toggle (default: true)
+ *   @param {object} [opts.floor]       floor overrides (color/opacity/reflectivity)
+ *   @param {object} [opts.edge]        plate edge overrides (width/color)
+ *   @param {object} [opts.caption_defaults] caption style defaults (size/color/font/…)
+ *   @param {object} [opts.caption_fade]     caption fade overrides
+ *   @param {object} [opts.video]       video render overrides
+ * @returns {object} a normalized scene (same shape as parseScene's output)
+ */
+export function makeScene(slides, opts = {}) {
+  if (!Array.isArray(slides) || slides.length < 1) {
+    throw new Error("makeScene: pass a non-empty array of slide URLs or slide objects");
+  }
+  if (opts === null || typeof opts !== "object" || Array.isArray(opts)) {
+    throw new Error("makeScene: opts must be an object");
+  }
+  // Fail loud on unknown options (parse, don't validate): a typo'd override (e.g. `juicey`)
+  // shouldn't be silently dropped. `baseUrl`/`gap` are makeScene conveniences; the rest map
+  // 1:1 onto scene keys validated by parseScene.
+  const ALLOWED_OPTS = new Set([
+    "baseUrl", "gap", "size", "camera", "transition", "view", "background",
+    "captions", "floor", "edge", "juicy", "caption_defaults", "caption_fade", "video",
+  ]);
+  for (const key of Object.keys(opts)) {
+    if (!ALLOWED_OPTS.has(key)) throw new Error(`makeScene: unknown option ${JSON.stringify(key)}`);
+  }
+
+  // A bare list of objects with no caption text shouldn't auto-add empty caption plates;
+  // `captions` only forces empty captions for STRING slides when explicitly requested.
+  const wantCaptions = opts.captions === true;
+  const raw = { version: 1, slides: slides.map((s, i) => slideEntry(s, i, { caption: wantCaptions })) };
+
+  // size: accept {width,height} or [w,h].
+  if (opts.size !== undefined) {
+    if (Array.isArray(opts.size)) raw.size = { width: opts.size[0], height: opts.size[1] };
+    else raw.size = opts.size;
+  }
+
+  // camera: start from explicit overrides, then fold in the `gap` shortcut.
+  if (opts.camera !== undefined || opts.gap !== undefined) {
+    raw.camera = { ...(opts.camera ?? {}) };
+    if (opts.gap !== undefined) raw.camera.gap = opts.gap;
+  }
+
+  // transition: a bare kind string is expanded to a minimal transition object; an object
+  // passes through (parseScene fills its own defaults + validates the kind).
+  if (opts.transition !== undefined) {
+    raw.transition =
+      typeof opts.transition === "string" ? { kind: opts.transition } : opts.transition;
+  }
+
+  if (opts.view !== undefined) raw.view = opts.view;
+  if (opts.background !== undefined) raw.background = opts.background;
+  // captions: only forward an explicit boolean (string-slide empty captions handled above).
+  if (typeof opts.captions === "boolean") raw.captions = opts.captions;
+  if (opts.floor !== undefined) raw.floor = opts.floor;
+  if (opts.edge !== undefined) raw.edge = opts.edge;
+  if (opts.juicy !== undefined) raw.juicy = opts.juicy;
+  if (opts.caption_defaults !== undefined) raw.caption_defaults = opts.caption_defaults;
+  if (opts.caption_fade !== undefined) raw.caption_fade = opts.caption_fade;
+  if (opts.video !== undefined) raw.video = opts.video;
+
+  const scene = parseScene(raw);
+  // Resolve slide srcs against an optional base (the host page / scene URL). Absolute
+  // http(s) URLs and `data:` URIs are preserved (resolveSrc uses `new URL(src, base)`), so
+  // remote slide images keep working; relative paths resolve against the base (issue 341).
+  const base =
+    opts.baseUrl ?? (typeof document !== "undefined" ? document.baseURI : undefined);
+  if (base) {
+    for (const slide of scene.slides) slide.src = resolveSrc(slide.src, base);
+  }
+  return scene;
 }
 
 /** Resolve a slide `src` against `base` (a URL string). `data:` URIs pass through. */
