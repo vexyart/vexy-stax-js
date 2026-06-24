@@ -22,12 +22,28 @@ const POSITIONS = {
 };
 
 let _styleInjected = false;
+
+/** Safari does not apply backdrop-filter over a WebGL canvas; use a solid pill there instead. */
+function isSafari(doc) {
+  const ua = doc.defaultView?.navigator?.userAgent ?? "";
+  return /Safari/i.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|Edg\//i.test(ua);
+}
+
 function injectStyle(doc) {
   if (_styleInjected || !doc?.head) return;
   _styleInjected = true;
   const s = doc.createElement("style");
   // All visual knobs are CSS custom properties so a host overrides them with one rule, e.g.
   //   vexy-stax { --vexy-btn-color:#fff; --vexy-btn-bg:rgba(0,0,0,.4); --vexy-btn-blur:14px; }
+  // Safari: backdrop-filter is ignored over canvas — use --vexy-btn-bg-solid instead (issue 343).
+  const safariBtn = isSafari(doc)
+    ? `
+.vexy-stax-controls button{
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  background:var(--vexy-btn-bg-solid,rgba(255,255,255,0.92));
+}
+.vexy-stax-controls button:hover{background:var(--vexy-btn-bg-solid-hover,rgba(255,255,255,0.97))}`
+    : "";
   s.textContent = `
 .vexy-stax-controls{position:absolute;z-index:5;display:flex;gap:8px;pointer-events:none}
 .vexy-stax-controls button{
@@ -43,7 +59,7 @@ function injectStyle(doc) {
   transition:background .15s,transform .12s;
 }
 .vexy-stax-controls button:hover{background:var(--vexy-btn-bg-hover,rgba(0,0,0,0.10))}
-.vexy-stax-controls button:active{transform:translateY(1px)}
+.vexy-stax-controls button:active{transform:translateY(1px)}${safariBtn}
 `;
   doc.head.appendChild(s);
 }

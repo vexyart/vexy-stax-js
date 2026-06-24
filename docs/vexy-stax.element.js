@@ -22349,9 +22349,18 @@ const eo = {
 };
 let to = !1;
 function Sp(n) {
+  const e = n.defaultView?.navigator?.userAgent ?? "";
+  return /Safari/i.test(e) && !/Chrome|Chromium|CriOS|FxiOS|EdgiOS|Edg\//i.test(e);
+}
+function Mp(n) {
   if (to || !n?.head) return;
   to = !0;
-  const e = n.createElement("style");
+  const e = n.createElement("style"), t = Sp(n) ? `
+.vexy-stax-controls button{
+  -webkit-backdrop-filter:none;backdrop-filter:none;
+  background:var(--vexy-btn-bg-solid,rgba(255,255,255,0.92));
+}
+.vexy-stax-controls button:hover{background:var(--vexy-btn-bg-solid-hover,rgba(255,255,255,0.97))}` : "";
   e.textContent = `
 .vexy-stax-controls{position:absolute;z-index:5;display:flex;gap:8px;pointer-events:none}
 .vexy-stax-controls button{
@@ -22367,13 +22376,13 @@ function Sp(n) {
   transition:background .15s,transform .12s;
 }
 .vexy-stax-controls button:hover{background:var(--vexy-btn-bg-hover,rgba(0,0,0,0.10))}
-.vexy-stax-controls button:active{transform:translateY(1px)}
+.vexy-stax-controls button:active{transform:translateY(1px)}${t}
 `, n.head.appendChild(e);
 }
-function Mp(n, e, t = {}) {
+function bp(n, e, t = {}) {
   if (!e?.ownerDocument || !e.appendChild) return null;
   const i = e.ownerDocument;
-  Sp(i);
+  Mp(i);
   const r = t.type === "pair" ? "pair" : "toggle", s = t.explainLabel ?? "Explain", a = t.previewLabel ?? "Preview", o = t.position && eo[t.position] ? t.position : "bottom";
   e.style && typeof getComputedStyle == "function" && getComputedStyle(e).position === "static" && (e.style.position = "relative");
   const l = i.createElement("div");
@@ -22413,14 +22422,14 @@ var zs = (n, e, t) => {
   if (e.has(n))
     throw TypeError("Cannot add the same private member more than once");
   e instanceof WeakSet ? e.add(n) : e.set(n, t);
-}, wt = (n, e, t, i) => (zs(n, e, "write to private field"), e.set(n, t), t), bp = (n, e, t, i) => ({
+}, wt = (n, e, t, i) => (zs(n, e, "write to private field"), e.set(n, t), t), yp = (n, e, t, i) => ({
   set _(r) {
     wt(n, e, r);
   },
   get _() {
     return R(n, e, i);
   }
-}), qe = (n, e, t) => (zs(n, e, "access private method"), t), $e = new Uint8Array(8), fn = new DataView($e.buffer), Mt = (n) => [(n % 256 + 256) % 256], Je = (n) => (fn.setUint16(0, n, !1), [$e[0], $e[1]]), yp = (n) => (fn.setInt16(0, n, !1), [$e[0], $e[1]]), Fo = (n) => (fn.setUint32(0, n, !1), [$e[1], $e[2], $e[3]]), pe = (n) => (fn.setUint32(0, n, !1), [$e[0], $e[1], $e[2], $e[3]]), Ep = (n) => (fn.setInt32(0, n, !1), [$e[0], $e[1], $e[2], $e[3]]), Jn = (n) => (fn.setUint32(0, Math.floor(n / 2 ** 32), !1), fn.setUint32(4, n, !1), [$e[0], $e[1], $e[2], $e[3], $e[4], $e[5], $e[6], $e[7]]), Gs = (n) => (fn.setInt16(0, 2 ** 8 * n, !1), [$e[0], $e[1]]), cn = (n) => (fn.setInt32(0, 2 ** 16 * n, !1), [$e[0], $e[1], $e[2], $e[3]]), _s = (n) => (fn.setInt32(0, 2 ** 30 * n, !1), [$e[0], $e[1], $e[2], $e[3]]), Kt = (n, e = !1) => {
+}), qe = (n, e, t) => (zs(n, e, "access private method"), t), $e = new Uint8Array(8), fn = new DataView($e.buffer), Mt = (n) => [(n % 256 + 256) % 256], Je = (n) => (fn.setUint16(0, n, !1), [$e[0], $e[1]]), Ep = (n) => (fn.setInt16(0, n, !1), [$e[0], $e[1]]), Fo = (n) => (fn.setUint32(0, n, !1), [$e[1], $e[2], $e[3]]), pe = (n) => (fn.setUint32(0, n, !1), [$e[0], $e[1], $e[2], $e[3]]), Tp = (n) => (fn.setInt32(0, n, !1), [$e[0], $e[1], $e[2], $e[3]]), Jn = (n) => (fn.setUint32(0, Math.floor(n / 2 ** 32), !1), fn.setUint32(4, n, !1), [$e[0], $e[1], $e[2], $e[3], $e[4], $e[5], $e[6], $e[7]]), Gs = (n) => (fn.setInt16(0, 2 ** 8 * n, !1), [$e[0], $e[1]]), cn = (n) => (fn.setInt32(0, 2 ** 16 * n, !1), [$e[0], $e[1], $e[2], $e[3]]), _s = (n) => (fn.setInt32(0, 2 ** 30 * n, !1), [$e[0], $e[1], $e[2], $e[3]]), Kt = (n, e = !1) => {
   let t = Array(n.length).fill(null).map((i, r) => n.charCodeAt(r));
   return e && t.push(0), t;
 }, Ar = (n) => n && n[n.length - 1], Vs = (n) => {
@@ -22462,7 +22471,7 @@ var zs = (n, e, t) => {
   n,
   [Mt(e), Fo(t), i ?? []],
   r
-), Tp = (n) => {
+), Ap = (n) => {
   let e = 512;
   return n.fragmented ? St("ftyp", [
     Kt("iso5"),
@@ -22483,11 +22492,11 @@ var zs = (n, e, t) => {
     n.holdsAvc ? Kt("avc1") : [],
     Kt("mp41")
   ]);
-}, ys = (n) => ({ type: "mdat", largeSize: n }), Ap = (n) => ({ type: "free", size: n }), _r = (n, e, t = !1) => St("moov", null, [
-  wp(e, n),
-  ...n.map((i) => Cp(i, e)),
-  t ? sm(n) : null
-]), wp = (n, e) => {
+}, ys = (n) => ({ type: "mdat", largeSize: n }), wp = (n) => ({ type: "free", size: n }), _r = (n, e, t = !1) => St("moov", null, [
+  Cp(e, n),
+  ...n.map((i) => Rp(i, e)),
+  t ? am(n) : null
+]), Cp = (n, e) => {
   let t = un(Math.max(
     0,
     ...e.filter((a) => a.samples.length > 0).map((a) => {
@@ -22517,10 +22526,10 @@ var zs = (n, e, t) => {
     pe(i)
     // Next track ID
   ]);
-}, Cp = (n, e) => St("trak", null, [
-  Rp(n, e),
-  Pp(n, e)
-]), Rp = (n, e) => {
+}, Rp = (n, e) => St("trak", null, [
+  Pp(n, e),
+  Dp(n, e)
+]), Pp = (n, e) => {
   let t = Vs(n.samples), i = un(
     t ? t.presentationTimestamp + t.duration : 0,
     As
@@ -22553,11 +22562,11 @@ var zs = (n, e, t) => {
     cn(n.info.type === "video" ? n.info.height : 0)
     // Track height
   ]);
-}, Pp = (n, e) => St("mdia", null, [
-  Dp(n, e),
-  Lp(n.info.type === "video" ? "vide" : "soun"),
-  Up(n)
-]), Dp = (n, e) => {
+}, Dp = (n, e) => St("mdia", null, [
+  Lp(n, e),
+  Up(n.info.type === "video" ? "vide" : "soun"),
+  Ip(n)
+]), Lp = (n, e) => {
   let t = Vs(n.samples), i = un(
     t ? t.presentationTimestamp + t.duration : 0,
     n.timescale
@@ -22576,7 +22585,7 @@ var zs = (n, e, t) => {
     Je(0)
     // Quality
   ]);
-}, Lp = (n) => dt("hdlr", 0, 0, [
+}, Up = (n) => dt("hdlr", 0, 0, [
   Kt("mhlr"),
   // Component type
   Kt(n),
@@ -22589,11 +22598,11 @@ var zs = (n, e, t) => {
   // Component flags mask
   Kt("mp4-muxer-hdlr", !0)
   // Component name
-]), Up = (n) => St("minf", null, [
-  n.info.type === "video" ? Ip() : Fp(),
-  Np(),
-  zp(n)
-]), Ip = () => dt("vmhd", 0, 1, [
+]), Ip = (n) => St("minf", null, [
+  n.info.type === "video" ? Fp() : Np(),
+  Op(),
+  Gp(n)
+]), Fp = () => dt("vmhd", 0, 1, [
   Je(0),
   // Graphics mode
   Je(0),
@@ -22602,41 +22611,41 @@ var zs = (n, e, t) => {
   // Opcolor G
   Je(0)
   // Opcolor B
-]), Fp = () => dt("smhd", 0, 0, [
+]), Np = () => dt("smhd", 0, 0, [
   Je(0),
   // Balance
   Je(0)
   // Reserved
-]), Np = () => St("dinf", null, [
-  Op()
-]), Op = () => dt("dref", 0, 0, [
+]), Op = () => St("dinf", null, [
+  Bp()
+]), Bp = () => dt("dref", 0, 0, [
   pe(1)
   // Entry count
 ], [
-  Bp()
-]), Bp = () => dt("url ", 0, 1), zp = (n) => {
+  zp()
+]), zp = () => dt("url ", 0, 1), Gp = (n) => {
   const e = n.compositionTimeOffsetTable.length > 1 || n.compositionTimeOffsetTable.some((t) => t.sampleCompositionTimeOffset !== 0);
   return St("stbl", null, [
-    Gp(n),
-    Qp(n),
+    Vp(n),
     em(n),
     tm(n),
     nm(n),
     im(n),
-    e ? rm(n) : null
+    rm(n),
+    e ? sm(n) : null
   ]);
-}, Gp = (n) => dt("stsd", 0, 0, [
+}, Vp = (n) => dt("stsd", 0, 0, [
   pe(1)
   // Entry count
 ], [
-  n.info.type === "video" ? Vp(
-    mm[n.info.codec],
+  n.info.type === "video" ? kp(
+    xm[n.info.codec],
     n
-  ) : Zp(
-    gm[n.info.codec],
+  ) : jp(
+    _m[n.info.codec],
     n
   )
-]), Vp = (n, e) => St(n, [
+]), kp = (n, e) => St(n, [
   Array(6).fill(0),
   // Reserved
   Je(1),
@@ -22663,26 +22672,26 @@ var zs = (n, e, t) => {
   // Compressor name
   Je(24),
   // Depth
-  yp(65535)
+  Ep(65535)
   // Pre-defined
 ], [
-  xm[e.info.codec](e),
-  e.info.decoderConfig.colorSpace ? Xp(e) : null
-]), kp = {
+  gm[e.info.codec](e),
+  e.info.decoderConfig.colorSpace ? qp(e) : null
+]), Hp = {
   bt709: 1,
   // ITU-R BT.709
   bt470bg: 5,
   // ITU-R BT.470BG
   smpte170m: 6
   // ITU-R BT.601 525 - SMPTE 170M
-}, Hp = {
+}, Wp = {
   bt709: 1,
   // ITU-R BT.709
   smpte170m: 6,
   // SMPTE 170M
   "iec61966-2-1": 13
   // IEC 61966-2-1
-}, Wp = {
+}, Xp = {
   rgb: 0,
   // Identity
   bt709: 1,
@@ -22691,24 +22700,24 @@ var zs = (n, e, t) => {
   // ITU-R BT.470BG
   smpte170m: 6
   // SMPTE 170M
-}, Xp = (n) => St("colr", [
+}, qp = (n) => St("colr", [
   Kt("nclx"),
   // Colour type
-  Je(kp[n.info.decoderConfig.colorSpace.primaries]),
+  Je(Hp[n.info.decoderConfig.colorSpace.primaries]),
   // Colour primaries
-  Je(Hp[n.info.decoderConfig.colorSpace.transfer]),
+  Je(Wp[n.info.decoderConfig.colorSpace.transfer]),
   // Transfer characteristics
-  Je(Wp[n.info.decoderConfig.colorSpace.matrix]),
+  Je(Xp[n.info.decoderConfig.colorSpace.matrix]),
   // Matrix coefficients
   Mt((n.info.decoderConfig.colorSpace.fullRange ? 1 : 0) << 7)
   // Full range flag
-]), qp = (n) => n.info.decoderConfig && St("avcC", [
+]), Yp = (n) => n.info.decoderConfig && St("avcC", [
   // For AVC, description is an AVCDecoderConfigurationRecord, so nothing else to do here
   ...new Uint8Array(n.info.decoderConfig.description)
-]), Yp = (n) => n.info.decoderConfig && St("hvcC", [
+]), $p = (n) => n.info.decoderConfig && St("hvcC", [
   // For HEVC, description is a HEVCDecoderConfigurationRecord, so nothing else to do here
   ...new Uint8Array(n.info.decoderConfig.description)
-]), $p = (n) => {
+]), Kp = (n) => {
   if (!n.info.decoderConfig)
     return null;
   let e = n.info.decoderConfig;
@@ -22731,7 +22740,7 @@ var zs = (n, e, t) => {
     Je(0)
     // Codec initialization data size
   ]);
-}, Kp = () => {
+}, Zp = () => {
   let t = (1 << 7) + 1;
   return St("av1C", [
     t,
@@ -22739,7 +22748,7 @@ var zs = (n, e, t) => {
     0,
     0
   ]);
-}, Zp = (n, e) => St(n, [
+}, jp = (n, e) => St(n, [
   Array(6).fill(0),
   // Reserved
   Je(1),
@@ -22761,8 +22770,8 @@ var zs = (n, e, t) => {
   cn(e.info.sampleRate)
   // Sample rate
 ], [
-  _m[e.info.codec](e)
-]), jp = (n) => {
+  vm[e.info.codec](e)
+]), Jp = (n) => {
   let e = new Uint8Array(n.info.decoderConfig.description);
   return dt("esds", 0, 0, [
     // https://stackoverflow.com/a/54803118
@@ -22800,7 +22809,7 @@ var zs = (n, e, t) => {
     Mt(2)
     // data
   ]);
-}, Jp = (n) => {
+}, Qp = (n) => {
   let e = 3840, t = 0;
   const i = n.info.decoderConfig?.description;
   if (i) {
@@ -22822,7 +22831,7 @@ var zs = (n, e, t) => {
     Mt(0)
     // ChannelMappingFamily
   ]);
-}, Qp = (n) => dt("stts", 0, 0, [
+}, em = (n) => dt("stts", 0, 0, [
   pe(n.timeToSampleTable.length),
   // Number of entries
   n.timeToSampleTable.map((e) => [
@@ -22832,7 +22841,7 @@ var zs = (n, e, t) => {
     pe(e.sampleDelta)
     // Sample duration
   ])
-]), em = (n) => {
+]), tm = (n) => {
   if (n.samples.every((t) => t.type === "key"))
     return null;
   let e = [...n.samples.entries()].filter(([, t]) => t.type === "key");
@@ -22842,7 +22851,7 @@ var zs = (n, e, t) => {
     e.map(([t]) => pe(t + 1))
     // Sync sample table
   ]);
-}, tm = (n) => dt("stsc", 0, 0, [
+}, nm = (n) => dt("stsc", 0, 0, [
   pe(n.compactlyCodedChunkTable.length),
   // Number of entries
   n.compactlyCodedChunkTable.map((e) => [
@@ -22854,14 +22863,14 @@ var zs = (n, e, t) => {
     pe(1)
     // Sample description index
   ])
-]), nm = (n) => dt("stsz", 0, 0, [
+]), im = (n) => dt("stsz", 0, 0, [
   pe(0),
   // Sample size (0 means non-constant size)
   pe(n.samples.length),
   // Number of entries
   n.samples.map((e) => pe(e.size))
   // Sample size table
-]), im = (n) => n.finalizedChunks.length > 0 && Ar(n.finalizedChunks).offset >= 2 ** 32 ? dt("co64", 0, 0, [
+]), rm = (n) => n.finalizedChunks.length > 0 && Ar(n.finalizedChunks).offset >= 2 ** 32 ? dt("co64", 0, 0, [
   pe(n.finalizedChunks.length),
   // Number of entries
   n.finalizedChunks.map((e) => Jn(e.offset))
@@ -22871,7 +22880,7 @@ var zs = (n, e, t) => {
   // Number of entries
   n.finalizedChunks.map((e) => pe(e.offset))
   // Chunk offset table
-]), rm = (n) => dt("ctts", 0, 0, [
+]), sm = (n) => dt("ctts", 0, 0, [
   pe(n.compositionTimeOffsetTable.length),
   // Number of entries
   n.compositionTimeOffsetTable.map((e) => [
@@ -22881,7 +22890,7 @@ var zs = (n, e, t) => {
     pe(e.sampleCompositionTimeOffset)
     // Sample offset
   ])
-]), sm = (n) => St("mvex", null, n.map(am)), am = (n) => dt("trex", 0, 0, [
+]), am = (n) => St("mvex", null, n.map(om)), om = (n) => dt("trex", 0, 0, [
   pe(n.id),
   // Track ID
   pe(1),
@@ -22893,19 +22902,19 @@ var zs = (n, e, t) => {
   pe(0)
   // Default sample flags
 ]), no = (n, e) => St("moof", null, [
-  om(n),
-  ...e.map(lm)
-]), om = (n) => dt("mfhd", 0, 0, [
+  lm(n),
+  ...e.map(cm)
+]), lm = (n) => dt("mfhd", 0, 0, [
   pe(n)
   // Sequence number
 ]), zo = (n) => {
   let e = 0, t = 0, i = 0, r = 0, s = n.type === "delta";
   return t |= +s, s ? e |= 1 : e |= 2, e << 24 | t << 16 | i << 8 | r;
-}, lm = (n) => St("traf", null, [
-  cm(n),
+}, cm = (n) => St("traf", null, [
   dm(n),
-  um(n)
-]), cm = (n) => {
+  um(n),
+  fm(n)
+]), dm = (n) => {
   let e = 0;
   e |= 8, e |= 16, e |= 32, e |= 131072;
   let t = n.currentChunk.samples[1] ?? n.currentChunk.samples[0], i = {
@@ -22923,10 +22932,10 @@ var zs = (n, e, t) => {
     pe(i.flags)
     // Default sample flags
   ]);
-}, dm = (n) => dt("tfdt", 1, 0, [
+}, um = (n) => dt("tfdt", 1, 0, [
   Jn(un(n.currentChunk.startTimestamp, n.timescale))
   // Base Media Decode Time
-]), um = (n) => {
+]), fm = (n) => {
   let e = n.currentChunk.samples.map((v) => v.timescaleUnitsToNextSample), t = n.currentChunk.samples.map((v) => v.size), i = n.currentChunk.samples.map(zo), r = n.currentChunk.samples.map((v) => un(v.presentationTimestamp - v.decodeTimestamp, n.timescale)), s = new Set(e), a = new Set(t), o = new Set(i), l = new Set(r), c = o.size === 2 && i[0] !== i[1], d = s.size > 1, u = a.size > 1, f = !c && o.size > 1, p = l.size > 1 || [...l].some((v) => v !== 0), x = 0;
   return x |= 1, x |= 4 * +c, x |= 256 * +d, x |= 512 * +u, x |= 1024 * +f, x |= 2048 * +p, dt("trun", 1, x, [
     pe(n.currentChunk.samples.length),
@@ -22942,13 +22951,13 @@ var zs = (n, e, t) => {
       f ? pe(i[m]) : [],
       // Sample flags
       // Sample composition time offsets
-      p ? Ep(r[m]) : []
+      p ? Tp(r[m]) : []
     ])
   ]);
-}, fm = (n) => St("mfra", null, [
-  ...n.map(hm),
-  pm()
-]), hm = (n, e) => dt("tfra", 1, 0, [
+}, hm = (n) => St("mfra", null, [
+  ...n.map(pm),
+  mm()
+]), pm = (n, e) => dt("tfra", 1, 0, [
   pe(n.id),
   // Track ID
   pe(63),
@@ -22967,27 +22976,27 @@ var zs = (n, e, t) => {
     pe(1)
     // Sample number
   ])
-]), pm = () => dt("mfro", 0, 0, [
+]), mm = () => dt("mfro", 0, 0, [
   // This value needs to be overwritten manually from the outside, where the actual size of the enclosing mfra box
   // is known
   pe(0)
   // Size
-]), mm = {
+]), xm = {
   avc: "avc1",
   hevc: "hvc1",
   vp9: "vp09",
   av1: "av01"
-}, xm = {
-  avc: qp,
-  hevc: Yp,
-  vp9: $p,
-  av1: Kp
 }, gm = {
+  avc: Yp,
+  hevc: $p,
+  vp9: Kp,
+  av1: Zp
+}, _m = {
   aac: "mp4a",
   opus: "Opus"
-}, _m = {
-  aac: jp,
-  opus: Jp
+}, vm = {
+  aac: Jp,
+  opus: Qp
 }, Nr = class {
 }, Go = class extends Nr {
   constructor() {
@@ -23010,7 +23019,7 @@ var zs = (n, e, t) => {
     if (n.chunkSize !== void 0 && (!Number.isInteger(n.chunkSize) || n.chunkSize < 1024))
       throw new TypeError("options.chunkSize, when provided, must be an integer and not smaller than 1024.");
   }
-}, vm = class extends Nr {
+}, Sm = class extends Nr {
   constructor(n, e) {
     if (super(), this.stream = n, this.options = e, !(n instanceof FileSystemWritableFileStream))
       throw new TypeError("FileSystemWritableFileStreamTarget requires a FileSystemWritableFileStream instance.");
@@ -23074,7 +23083,7 @@ var zs = (n, e, t) => {
 };
 kn = /* @__PURE__ */ new WeakMap();
 xi = /* @__PURE__ */ new WeakMap();
-var vr, Zn, Wi, Fi, Sr, Es, Sm = class extends ko {
+var vr, Zn, Wi, Fi, Sr, Es, Mm = class extends ko {
   constructor(n) {
     super(), Ge(this, Sr), Ge(this, vr, void 0), Ge(this, Zn, new ArrayBuffer(2 ** 16)), Ge(this, Wi, new Uint8Array(R(this, Zn))), Ge(this, Fi, 0), wt(this, vr, n);
   }
@@ -23099,9 +23108,9 @@ Es = function(n) {
   let t = new ArrayBuffer(e), i = new Uint8Array(t);
   i.set(R(this, Wi), 0), wt(this, Zn, t), wt(this, Wi, i);
 };
-var Mm = 2 ** 24, bm = 2, Bi, Hn, Ni, bn, Wt, wr, Ts, ks, Ho, Hs, Wo, zi, Cr, Ws = class extends ko {
+var bm = 2 ** 24, ym = 2, Bi, Hn, Ni, bn, Wt, wr, Ts, ks, Ho, Hs, Wo, zi, Cr, Ws = class extends ko {
   constructor(n) {
-    super(), Ge(this, wr), Ge(this, ks), Ge(this, Hs), Ge(this, zi), Ge(this, Bi, void 0), Ge(this, Hn, []), Ge(this, Ni, void 0), Ge(this, bn, void 0), Ge(this, Wt, []), wt(this, Bi, n), wt(this, Ni, n.options?.chunked ?? !1), wt(this, bn, n.options?.chunkSize ?? Mm);
+    super(), Ge(this, wr), Ge(this, ks), Ge(this, Hs), Ge(this, zi), Ge(this, Bi, void 0), Ge(this, Hn, []), Ge(this, Ni, void 0), Ge(this, bn, void 0), Ge(this, Wt, []), wt(this, Bi, n), wt(this, Ni, n.options?.chunked ?? !1), wt(this, bn, n.options?.chunkSize ?? bm);
   }
   write(n) {
     R(this, Hn).push({
@@ -23151,7 +23160,7 @@ Ts = function(n, e) {
     start: r,
     end: r + s.byteLength
   };
-  if (qe(this, ks, Ho).call(this, i, a), i.written[0].start === 0 && i.written[0].end === R(this, bn) && (i.shouldFlush = !0), R(this, Wt).length > bm) {
+  if (qe(this, ks, Ho).call(this, i, a), i.written[0].start === 0 && i.written[0].end === R(this, bn) && (i.shouldFlush = !0), R(this, Wt).length > ym) {
     for (let o = 0; o < R(this, Wt).length - 1; o++)
       R(this, Wt)[o].shouldFlush = !0;
     qe(this, zi, Cr).call(this);
@@ -23192,7 +23201,7 @@ Cr = function(n = !1) {
     }
   }
 };
-var ym = class extends Ws {
+var Em = class extends Ws {
   constructor(n) {
     super(new Vo({
       onData: (e, t) => n.stream.write({
@@ -23204,17 +23213,17 @@ var ym = class extends Ws {
       chunkSize: n.options?.chunkSize
     }));
   }
-}, As = 1e3, Em = ["avc", "hevc", "vp9", "av1"], Tm = ["aac", "opus"], Am = 2082844800, wm = ["strict", "offset", "cross-track-offset"], ye, De, Rr, Ht, Rt, At, gi, vi, Xs, Wn, Xn, Gi, ws, Xo, Cs, qo, qs, Yo, Rs, $o, Ys, Ko, Mr, Ps, on, vn, $s, Zo, Vi, Pr, Dr, Ks, yi, Ki, br, Ds, Cm = class {
+}, As = 1e3, Tm = ["avc", "hevc", "vp9", "av1"], Am = ["aac", "opus"], wm = 2082844800, Cm = ["strict", "offset", "cross-track-offset"], ye, De, Rr, Ht, Rt, At, gi, vi, Xs, Wn, Xn, Gi, ws, Xo, Cs, qo, qs, Yo, Rs, $o, Ys, Ko, Mr, Ps, on, vn, $s, Zo, Vi, Pr, Dr, Ks, yi, Ki, br, Ds, Rm = class {
   constructor(n) {
-    if (Ge(this, ws), Ge(this, Cs), Ge(this, qs), Ge(this, Rs), Ge(this, Ys), Ge(this, Mr), Ge(this, on), Ge(this, $s), Ge(this, Vi), Ge(this, Dr), Ge(this, yi), Ge(this, br), Ge(this, ye, void 0), Ge(this, De, void 0), Ge(this, Rr, void 0), Ge(this, Ht, void 0), Ge(this, Rt, null), Ge(this, At, null), Ge(this, gi, Math.floor(Date.now() / 1e3) + Am), Ge(this, vi, []), Ge(this, Xs, 1), Ge(this, Wn, []), Ge(this, Xn, []), Ge(this, Gi, !1), qe(this, ws, Xo).call(this, n), n.video = Oi(n.video), n.audio = Oi(n.audio), n.fastStart = Oi(n.fastStart), this.target = n.target, wt(this, ye, {
+    if (Ge(this, ws), Ge(this, Cs), Ge(this, qs), Ge(this, Rs), Ge(this, Ys), Ge(this, Mr), Ge(this, on), Ge(this, $s), Ge(this, Vi), Ge(this, Dr), Ge(this, yi), Ge(this, br), Ge(this, ye, void 0), Ge(this, De, void 0), Ge(this, Rr, void 0), Ge(this, Ht, void 0), Ge(this, Rt, null), Ge(this, At, null), Ge(this, gi, Math.floor(Date.now() / 1e3) + wm), Ge(this, vi, []), Ge(this, Xs, 1), Ge(this, Wn, []), Ge(this, Xn, []), Ge(this, Gi, !1), qe(this, ws, Xo).call(this, n), n.video = Oi(n.video), n.audio = Oi(n.audio), n.fastStart = Oi(n.fastStart), this.target = n.target, wt(this, ye, {
       firstTimestampBehavior: "strict",
       ...n
     }), n.target instanceof Go)
-      wt(this, De, new Sm(n.target));
+      wt(this, De, new Mm(n.target));
     else if (n.target instanceof Vo)
       wt(this, De, new Ws(n.target));
-    else if (n.target instanceof vm)
-      wt(this, De, new ym(n.target));
+    else if (n.target instanceof Sm)
+      wt(this, De, new Em(n.target));
     else
       throw new Error(`Invalid target: ${n.target}`);
     qe(this, Rs, $o).call(this), qe(this, Cs, qo).call(this);
@@ -23342,7 +23351,7 @@ var ym = class extends Ws {
         for (let r of i.samples)
           R(this, De).write(r.data), r.data = null;
     } else if (R(this, ye).fastStart === "fragmented") {
-      let e = R(this, De).pos, t = fm(n);
+      let e = R(this, De).pos, t = hm(n);
       R(this, De).writeBox(t);
       let i = R(this, De).pos - e;
       R(this, De).seek(R(this, De).pos - 4), R(this, De).writeU32(i);
@@ -23353,7 +23362,7 @@ var ym = class extends Ws {
       if (typeof R(this, ye).fastStart == "object") {
         R(this, De).seek(R(this, Rr)), R(this, De).writeBox(i);
         let r = e - R(this, De).pos;
-        R(this, De).writeBox(Ap(r));
+        R(this, De).writeBox(wp(r));
       } else
         R(this, De).writeBox(i);
     }
@@ -23379,7 +23388,7 @@ Xo = function(n) {
   if (!(n.target instanceof Nr))
     throw new TypeError("The target must be provided and an instance of Target.");
   if (n.video) {
-    if (!Em.includes(n.video.codec))
+    if (!Tm.includes(n.video.codec))
       throw new TypeError(`Unsupported video codec: ${n.video.codec}`);
     if (!Number.isInteger(n.video.width) || n.video.width <= 0)
       throw new TypeError(`Invalid video width: ${n.video.width}. Must be a positive integer.`);
@@ -23396,7 +23405,7 @@ Xo = function(n) {
       );
   }
   if (n.audio) {
-    if (!Tm.includes(n.audio.codec))
+    if (!Am.includes(n.audio.codec))
       throw new TypeError(`Unsupported audio codec: ${n.audio.codec}`);
     if (!Number.isInteger(n.audio.numberOfChannels) || n.audio.numberOfChannels <= 0)
       throw new TypeError(
@@ -23407,7 +23416,7 @@ Xo = function(n) {
         `Invalid audio sample rate: ${n.audio.sampleRate}. Must be a positive integer.`
       );
   }
-  if (n.firstTimestampBehavior && !wm.includes(n.firstTimestampBehavior))
+  if (n.firstTimestampBehavior && !Cm.includes(n.firstTimestampBehavior))
     throw new TypeError(`Invalid first timestamp behavior: ${n.firstTimestampBehavior}`);
   if (typeof n.fastStart == "object") {
     if (n.video) {
@@ -23429,7 +23438,7 @@ Xo = function(n) {
 };
 Cs = /* @__PURE__ */ new WeakSet();
 qo = function() {
-  if (R(this, De).writeBox(Tp({
+  if (R(this, De).writeBox(Ap({
     holdsAvc: R(this, ye).video?.codec === "avc",
     fragmented: R(this, ye).fastStart === "fragmented"
   })), wt(this, Rr, R(this, De).pos), R(this, ye).fastStart === "in-memory")
@@ -23634,7 +23643,7 @@ Ks = function(n = !0) {
   let e = [R(this, Rt), R(this, At)].filter((o) => o && o.currentChunk);
   if (e.length === 0)
     return;
-  let t = bp(this, Xs)._++;
+  let t = yp(this, Xs)._++;
   if (t === 1) {
     let o = _r(e, R(this, gi), !0);
     R(this, De).writeBox(o);
@@ -23671,7 +23680,7 @@ Ds = function() {
   if (R(this, Gi))
     throw new Error("Cannot add new video or audio chunks after the file has been finalized.");
 };
-function Rm(n) {
+function Pm(n) {
   return new Promise((e, t) => {
     if (!n || typeof n.toBlob != "function") {
       t(new Error("canvasToPngBlob: canvas.toBlob unavailable in this environment"));
@@ -23682,10 +23691,10 @@ function Rm(n) {
     }, "image/png");
   });
 }
-function Pm() {
+function Dm() {
   return typeof MediaRecorder < "u" && typeof HTMLCanvasElement < "u" && typeof HTMLCanvasElement.prototype.captureStream == "function";
 }
-function Dm() {
+function Lm() {
   return typeof MediaRecorder > "u" || typeof MediaRecorder.isTypeSupported != "function" ? void 0 : ["video/webm;codecs=vp9", "video/webm;codecs=vp8", "video/webm", "video/mp4"].find((e) => MediaRecorder.isTypeSupported(e));
 }
 async function io(n, e, t, i) {
@@ -23702,22 +23711,22 @@ async function io(n, e, t, i) {
     return !1;
   }
 }
-async function Lm({ canvas: n, run: e, fps: t = 30 }) {
+async function Um({ canvas: n, run: e, fps: t = 30 }) {
   if (!n) throw new Error("recordVideo: canvas is required");
   if (typeof e != "function") throw new Error("recordVideo: run() callback is required");
   if (typeof VideoEncoder < "u") {
     const i = n.width, r = n.height, s = "avc1.640028", a = "vp09.00.10.08", o = await io(s, i, r, t), l = !o && await io(a, i, r, t);
     if (o || l)
-      return Um({ canvas: n, run: e, fps: t, useAvc: o });
+      return Im({ canvas: n, run: e, fps: t, useAvc: o });
   }
-  if (Pm())
-    return Im({ canvas: n, run: e, fps: t });
+  if (Dm())
+    return Fm({ canvas: n, run: e, fps: t });
   throw new Error(
     "recordVideo: neither WebCodecs (VideoEncoder) nor MediaRecorder/captureStream is available in this environment"
   );
 }
-async function Um({ canvas: n, run: e, fps: t, useAvc: i }) {
-  const r = n.width, s = n.height, a = i ? "avc1.640028" : "vp09.00.10.08", o = new Go(), l = new Cm({
+async function Im({ canvas: n, run: e, fps: t, useAvc: i }) {
+  const r = n.width, s = n.height, a = i ? "avc1.640028" : "vp09.00.10.08", o = new Go(), l = new Rm({
     target: o,
     video: {
       codec: i ? "avc" : "vp9",
@@ -23751,8 +23760,8 @@ async function Um({ canvas: n, run: e, fps: t, useAvc: i }) {
   const f = i ? "video/mp4" : "video/webm";
   return new Blob([o.buffer], { type: f });
 }
-async function Im({ canvas: n, run: e, fps: t }) {
-  const i = n.captureStream(t), r = Dm(), s = new MediaRecorder(i, r ? { mimeType: r } : void 0), a = [];
+async function Fm({ canvas: n, run: e, fps: t }) {
+  const i = n.captureStream(t), r = Lm(), s = new MediaRecorder(i, r ? { mimeType: r } : void 0), a = [];
   s.ondataavailable = (l) => {
     l.data && l.data.size > 0 && a.push(l.data);
   };
@@ -23828,7 +23837,7 @@ class jo {
     }
     this.stage.render();
     try {
-      return await Rm(i);
+      return await Pm(i);
     } finally {
       r && r();
     }
@@ -23903,7 +23912,7 @@ class jo {
    * previewLabel, position, style}`.
    */
   controls(e = {}) {
-    return this._controls?.destroy(), this._controls = e === !1 ? null : Mp(this, this.container, e), this;
+    return this._controls?.destroy(), this._controls = e === !1 ? null : bp(this, this.container, e), this;
   }
   /** Remove the click-to-toggle handler (issue 342 opt-out). */
   disableClickToggle() {
@@ -23927,7 +23936,7 @@ class jo {
     const t = e.kind ?? this.scene.transition?.kind;
     if (!t) throw new Error("VexyStax.toVideo: no kind given and scene.transition is null");
     const i = this.scene.video?.fps ?? this.scene.transition?.fps ?? 30, r = this.stage.renderer.domElement, s = this.scene.video?.first_hold ?? 10, a = this.scene.video?.last_hold ?? 10, { startMorph: o, endMorph: l } = gs(t), c = this.stage.camera.aspect;
-    return Lm({
+    return Um({
       canvas: r,
       fps: i,
       run: async (d) => {
@@ -23978,7 +23987,7 @@ class jo {
     this._cancelTransition?.(), this._scrollspy?.disconnect?.(), this.disableClickToggle(), this._controls?.destroy(), this._controls = null, this._ro?.disconnect?.(), this._ro = null, this.stage?.dispose();
   }
 }
-const Fm = /* @__PURE__ */ new Set([
+const Nm = /* @__PURE__ */ new Set([
   "slides",
   "scene",
   "view",
@@ -23990,7 +23999,7 @@ const Fm = /* @__PURE__ */ new Set([
   "baseUrl",
   "clickToggle"
 ]);
-async function Om(n, e = {}) {
+async function Bm(n, e = {}) {
   const t = typeof n == "string" ? document.querySelector(n) : n;
   if (!t) throw new Error(`createStax: element not found (${String(n)})`);
   if (e === null || typeof e != "object") throw new Error("createStax: opts must be an object");
@@ -24000,7 +24009,7 @@ async function Om(n, e = {}) {
   if (e.slides) {
     const o = { baseUrl: i };
     for (const [l, c] of Object.entries(e))
-      Fm.has(l) || (o[l] = c);
+      Nm.has(l) || (o[l] = c);
     r = To(e.slides, o);
   } else if (e.scene !== void 0)
     r = await wo(e.scene, { baseUrl: i });
@@ -24027,7 +24036,7 @@ async function Om(n, e = {}) {
   }
   return s;
 }
-class Nm extends HTMLElement {
+class Om extends HTMLElement {
   static get observedAttributes() {
     return [
       "scene",
@@ -24183,11 +24192,11 @@ class Nm extends HTMLElement {
     return this._stax?.toggleView();
   }
 }
-typeof customElements < "u" && !customElements.get("vexy-stax") && customElements.define("vexy-stax", Nm);
+typeof customElements < "u" && !customElements.get("vexy-stax") && customElements.define("vexy-stax", Om);
 export {
   jo as VexyStax,
-  Nm as VexyStaxElement,
-  Om as createStax,
+  Om as VexyStaxElement,
+  Bm as createStax,
   wo as loadScene,
   To as makeScene,
   Eo as parseScene
