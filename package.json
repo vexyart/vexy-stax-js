@@ -1,6 +1,6 @@
 {
   "name": "vexy-stax-js",
-  "version": "3.1.4",
+  "version": "3.1.6",
   "description": "Browser renderer for the vexy-stax shared scene format: 3D glass plates in two views, with morphable opacity. Ships as ESM, Web Component, and a classic-script global.",
   "type": "module",
   "exports": {
