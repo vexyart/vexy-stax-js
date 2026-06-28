@@ -4,6 +4,37 @@
 
 All notable changes to this project are documented here.
 
+## [3.1.6] — Wave 1 modernisation
+
+### Added
+
+- **`src_docs/`**: MaterialX documentation pipeline (`src_docs/mkdocs.yaml` +
+  `src_docs/md/`) targeting `https://vexy.dev/vexy-stax-js/`. Three new pages:
+  - `api.md` — full ESM API reference for `toImage`, `toVideo`, `transition`,
+    `scrollspy`, `createStax`, `VexyStax`, `loadScene`, `makeScene`, `parseScene`.
+  - `web-component.md` — all `<vexy-stax>` HTML attributes, JS properties,
+    events, CSS custom properties, and the re-exported ESM bundle surface.
+  - `scene-format.md` — JSON schema reference for `.scene.json` files (all
+    fields, types, defaults, a full annotated example). Cross-links the live
+    schema at `schema/vexy-stax-scene.schema.json`.
+
+### Changed
+
+- **`package.json` version** synced to `v3.1.6` (was `3.1.4` — lagged two tags).
+- **`src/index.js` `toVideo()`**: expanded JSDoc to document the WebCodecs
+  (H.264/mp4 primary) → MediaRecorder (webm fallback) path selection logic and
+  the held-still bookends.
+- **`src/index.js` `scrollspy()`**: expanded JSDoc to describe the
+  `IntersectionObserver`-gated rAF loop and the `prefers-reduced-motion`
+  snap-to-endpoint behaviour; added `opts.map` to the parameter table.
+- **`src/scene.js` `resolveSrc()`**: replaced the one-liner comment with a full
+  JSDoc block explaining the `data:` URI pass-through (base64 payload inline,
+  decoded by the browser GPU pipeline) and how `new URL` resolves relative paths.
+
+### Fixed
+
+- README CDN snippet version updated to `3.1.6`.
+
 ## [3.1.4] — issue 701: inline scene + aspect
 
 ### Added

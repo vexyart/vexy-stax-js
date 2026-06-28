@@ -1,4 +1,7 @@
 # this_file: vexy-stax-js/.github/workflows/publish.yml
+# Trigger: create a GitHub Release from the git tag (e.g. v3.1.6) and publish it.
+# The workflow extracts the version from the tag ref and sets it in package.json
+# before publishing, so the package.json version in the repo is advisory only.
 name: Publish to npm
 
 on:

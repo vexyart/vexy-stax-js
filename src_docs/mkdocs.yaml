@@ -1,0 +1,49 @@
+# this_file: src_docs/mkdocs.yaml
+# MaterialX documentation pipeline for vexy-stax-js.
+# Build: vexy-mkdocs-tools build (from src_docs/)
+# Output: published to https://vexy.dev/vexy-stax-js/
+
+site_name: vexy-stax-js
+site_url: https://vexy.dev/vexy-stax-js/
+repo_url: https://github.com/vexyart/vexy-stax-js
+repo_name: vexyart/vexy-stax-js
+docs_dir: md
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - content.code.annotate
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - ESM API: api.md
+  - Web Component: web-component.md
+  - Scene Format: scene-format.md

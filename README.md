@@ -113,9 +113,9 @@ Every snippet above also works verbatim from the jsDelivr CDN — swap the local
 
 ```html
 <!-- Web Component / ESM -->
-<script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.element.js"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.6/dist/vexy-stax.element.js"></script>
 <!-- Global script -->
-<script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.2/dist/vexy-stax.global.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.6/dist/vexy-stax.global.js"></script>
 ```
 
 ### Remote slide images
@@ -144,6 +144,9 @@ src/
 ├── transition.js  # rAF morph driver + timeline/progress math (pure, testable)
 ├── scrollspy.js   # scroll→progress mapping (IntersectionObserver; reduced-motion)
 └── export.js      # canvas→PNG; WebCodecs/MediaRecorder video capture
+src_docs/          # MaterialX docs pipeline → https://vexy.dev/vexy-stax-js/
+├── mkdocs.yaml    #   build: vexy-mkdocs-tools build
+└── md/            #   api.md · web-component.md · scene-format.md
 tests/             # node --test (scene/geometry/transition/scrollspy) + playwright E2E
 verify/            # HARD render gate: harness.html + run.mjs (chromium) + gate.py (PIL)
 ```

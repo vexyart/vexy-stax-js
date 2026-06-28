@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "lastScanned": 1781719163604,
+  "lastScanned": 1782681269030,
   "projectRoot": "/Users/adam/Developer/vcs3/github.vexyart/vexy-stax-dev/vexy-stax-js",
   "techStack": {
     "languages": [
@@ -38,7 +38,8 @@
       "build": "VEXY_BUILD=element vite build && VEXY_BUILD=global vite build",
       "preview": "vite preview",
       "test:unit": "node --test",
-      "test": "npm run test:unit && playwright test"
+      "test": "npm run test:unit && playwright test",
+      "build:docs": "node scripts/build-docs.mjs"
     }
   },
   "conventions": {
@@ -51,6 +52,8 @@
     "isMonorepo": false,
     "workspaces": [],
     "mainDirectories": [
+      "docs",
+      "scripts",
       "src",
       "tests"
     ],
@@ -61,11 +64,21 @@
   },
   "customNotes": [],
   "directoryMap": {
+    "demo-scenes": {
+      "path": "demo-scenes",
+      "purpose": null,
+      "fileCount": 3,
+      "lastAccessed": 1782681269018,
+      "keyFiles": [
+        "airbl-demo.scene.json",
+        "airbl-scrollable.scene.json"
+      ]
+    },
     "dist": {
       "path": "dist",
       "purpose": "Distribution/build output",
       "fileCount": 4,
-      "lastAccessed": 1781719163592,
+      "lastAccessed": 1782681269018,
       "keyFiles": [
         "vexy-stax.element.js",
         "vexy-stax.element.js.map",
@@ -73,62 +86,84 @@
         "vexy-stax.global.js.map"
       ]
     },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 14,
+      "lastAccessed": 1782681269025,
+      "keyFiles": [
+        "README.md",
+        "airbl-demo.scene.json",
+        "airbl-scrollable.scene.json",
+        "demo-component.html",
+        "demo-library.html"
+      ]
+    },
     "outputs": {
       "path": "outputs",
       "purpose": null,
-      "fileCount": 11,
-      "lastAccessed": 1781719163592,
+      "fileCount": 12,
+      "lastAccessed": 1782681269025,
       "keyFiles": [
         "airbl-combined.png",
         "airbl-compact.png",
         "airbl-expanded.png",
-        "airbl-transition.webm",
-        "airbl.scene.json"
+        "airbl-scrollable.scene.json",
+        "airbl-transition.mp4"
       ]
     },
     "schema": {
       "path": "schema",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1781719163600,
+      "lastAccessed": 1782681269025,
       "keyFiles": [
         "vexy-stax-scene.schema.json"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 1,
+      "lastAccessed": 1782681269025,
+      "keyFiles": [
+        "build-docs.mjs"
       ]
     },
     "src": {
       "path": "src",
       "purpose": "Source code",
-      "fileCount": 9,
-      "lastAccessed": 1781719163600,
+      "fileCount": 10,
+      "lastAccessed": 1782681269025,
       "keyFiles": [
+        "controls.js",
         "element.js",
         "export.js",
         "geometry.js",
-        "global.js",
-        "index.js"
+        "global.js"
+      ]
+    },
+    "src_docs": {
+      "path": "src_docs",
+      "purpose": null,
+      "fileCount": 1,
+      "lastAccessed": 1782681269026,
+      "keyFiles": [
+        "mkdocs.yaml"
       ]
     },
     "test-results": {
       "path": "test-results",
       "purpose": null,
       "fileCount": 1,
-      "lastAccessed": 1781719163601,
+      "lastAccessed": 1782681269026,
       "keyFiles": []
-    },
-    "testdata": {
-      "path": "testdata",
-      "purpose": null,
-      "fileCount": 1,
-      "lastAccessed": 1781719163601,
-      "keyFiles": [
-        "airbl.scene.json"
-      ]
     },
     "tests": {
       "path": "tests",
       "purpose": "Test files",
       "fileCount": 4,
-      "lastAccessed": 1781719163601,
+      "lastAccessed": 1782681269026,
       "keyFiles": [
         "geometry.test.js",
         "scene.test.js",
@@ -139,8 +174,8 @@
     "verify": {
       "path": "verify",
       "purpose": null,
-      "fileCount": 7,
-      "lastAccessed": 1781719163601,
+      "fileCount": 8,
+      "lastAccessed": 1782681269026,
       "keyFiles": [
         "example-harness.html",
         "example.mjs",
@@ -153,7 +188,7 @@
       "path": "verify/out",
       "purpose": "Build output",
       "fileCount": 4,
-      "lastAccessed": 1781719163601,
+      "lastAccessed": 1782681269026,
       "keyFiles": [
         "airbl-compact.png",
         "airbl-expanded.png",

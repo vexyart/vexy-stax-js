@@ -415,7 +415,19 @@ export function makeScene(slides, opts = {}) {
   return scene;
 }
 
-/** Resolve a slide `src` against `base` (a URL string). `data:` URIs pass through. */
+/**
+ * Resolve a slide `src` against `base` (a URL string).
+ *
+ * **`data:` URI pass-through**: when `src` begins with `"data:"` it is returned
+ * unchanged. These URIs carry their payload (often base64-encoded image bytes)
+ * inline — no network request is needed and no URL resolution applies. Three.js
+ * texture loader accepts them directly. The actual base64 decode happens inside
+ * the browser's image decoding pipeline when the texture is uploaded to the GPU.
+ *
+ * For all other values `new URL(src, base)` resolves relative paths against the
+ * scene file's location (or `options.baseUrl`). Absolute `http(s)` URLs are
+ * preserved as-is by `URL` resolution.
+ */
 function resolveSrc(src, base) {
   if (src.startsWith("data:")) return src;
   if (!base) return src;
