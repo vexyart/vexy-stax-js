@@ -75,6 +75,31 @@ test("plateGaps fall back to camera.gap", () => {
   assert.ok(gaps.every((x) => close(x, scene.camera.gap)));
 });
 
+test("plateGaps customizable and zero gaps", () => {
+  const scene = loadExample();
+  scene.camera.gap = 500.0;
+  scene.slides[0].gap = null;
+  scene.slides[1].gap = 0.0;
+  scene.slides[2].gap = 100.0;
+
+  const gaps = g.plateGaps(scene);
+  assert.ok(close(gaps[0], 500.0)); // fallback to camera.gap
+  assert.ok(close(gaps[1], g.MIN_GAP)); // zero gap resolved to MIN_GAP
+  assert.ok(close(gaps[2], 100.0)); // custom gap preserved
+
+  // Test camera.gap = 0.0 resolves to MIN_GAP for slides without override
+  scene.camera.gap = 0.0;
+  scene.slides[0].gap = null;
+  scene.slides[1].gap = null;
+  scene.slides[2].gap = 100.0;
+
+  const gaps2 = g.plateGaps(scene);
+  assert.ok(close(gaps2[0], g.MIN_GAP));
+  assert.ok(close(gaps2[1], g.MIN_GAP));
+  assert.ok(close(gaps2[2], 100.0));
+});
+
+
 test("compactCamera head-on +Z with dual-axis crop-free fit (slide only, issue 337)", () => {
   const scene = loadExample();
   const cam = g.compactCamera(scene);

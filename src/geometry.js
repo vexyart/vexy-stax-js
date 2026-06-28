@@ -122,9 +122,18 @@ export function captionBaselineY(scene) {
   return -(scene.size.height / 2.0) + CAPTION_BASELINE_EM * captionSize(scene);
 }
 
-/** Per-slide gap (points), falling back to camera.gap when unset (null). */
+/**
+ * Per-slide gap (points), falling back to camera.gap when unset (null).
+ * Resolves a gap of 0 to MIN_GAP.
+ */
 export function plateGaps(scene) {
-  return scene.slides.map((s) => (s.gap === null || s.gap === undefined ? scene.camera.gap : s.gap));
+  return scene.slides.map((s) => {
+    let g = (s.gap === null || s.gap === undefined ? scene.camera.gap : s.gap);
+    if (g === 0) {
+      g = MIN_GAP;
+    }
+    return g;
+  });
 }
 
 /**
