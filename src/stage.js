@@ -544,14 +544,15 @@ export class Stage {
     // it sits ON TOP of its on-floor caption plate (0 when captions are off → on the floor).
     const lift = slideLift(this.scene);
 
-    // Cumulative Z: index 0 farthest (most negative), last at 0.
-    // stack_depth = sum(gaps[1:]); place slide i at z = -(stack_depth - cumGapTo(i)).
+    // Cumulative Z: index 0 farthest (most negative), last at 0. A slide's gap is the
+    // gap IN FRONT of it (between slide i and i+1), so the interval before slide i is
+    // gaps[i-1] and gaps[n-1] is unused. stack_depth = sum(gaps[:-1]).
     let totalDepth = 0;
-    for (let i = 1; i < gaps.length; i++) totalDepth += gaps[i];
+    for (let i = 0; i < gaps.length - 1; i++) totalDepth += gaps[i];
 
     let cum = 0;
     this.plates.forEach((plate, i) => {
-      if (i > 0) cum += gaps[i];
+      if (i > 0) cum += gaps[i - 1];
       const z = -(totalDepth - cum);
       const y = bottomY + lift + plate.height / 2;
       const op = opacities[i];

@@ -29,7 +29,7 @@
     "runtime": "Node.js 18.0.0"
   },
   "build": {
-    "buildCommand": "pnpm build",
+    "buildCommand": "cd /Users/adam/Developer/vcs3/github.vexyart/vexy-stax-dev/vexy-stax-js\nnpm run build 2>&1 | tail -20",
     "testCommand": "pnpm test",
     "lintCommand": null,
     "devCommand": "pnpm dev",

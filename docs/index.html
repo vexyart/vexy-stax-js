@@ -107,10 +107,10 @@
       <h2>Install</h2>
       <pre><code>npm install vexy-stax-js
 # …or skip the build step entirely — load it from the jsDelivr CDN:
-# &lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.7/dist/vexy-stax.element.js"&gt;&lt;/script&gt;</code></pre>
+# &lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.element.js"&gt;&lt;/script&gt;</code></pre>
 
       <h2>Web Component — just a list of slides</h2>
-      <pre><code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.7/dist/vexy-stax.element.js"&gt;&lt;/script&gt;
+      <pre><code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.element.js"&gt;&lt;/script&gt;
 &lt;vexy-stax
   slides="layer-0.png layer-1.png https://example.com/layer-2.png"
   view="compact" mode="playable"&gt;&lt;/vexy-stax&gt;</code></pre>
@@ -125,7 +125,7 @@
       <p style="color:#6b7280;font-size:13px;margin-top:-8px">Drop the full scene JSON right inside the element — and <code>aspect="3"</code> shapes the box to 3:1 (also <code>"3/1"</code>, <code>"16:9"</code>, …).</p>
 
       <h2>ES Module — createStax</h2>
-      <pre><code>import { createStax } from "https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.7/dist/vexy-stax.element.js";
+      <pre><code>import { createStax } from "https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.element.js";
 
 // One call: build a scene from a URL list, mount, wait for ready.
 const stax = await createStax("#stage", {
@@ -135,7 +135,7 @@ const stax = await createStax("#stage", {
 const mp4 = await stax.toVideo(); // seekable mp4</code></pre>
 
       <h2>Global script — window.VexyStax</h2>
-      <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.7/dist/vexy-stax.global.js"&gt;&lt;/script&gt;
+      <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.global.js"&gt;&lt;/script&gt;
 &lt;script&gt;
   VexyStax.create("#stage", { slides: ["a.png", "b.png", "c.png"] });
 &lt;/script&gt;</code></pre>

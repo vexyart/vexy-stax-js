@@ -99,6 +99,26 @@ test("plateGaps customizable and zero gaps", () => {
   assert.ok(close(gaps2[2], 100.0));
 });
 
+test("gap is the spacing IN FRONT of a slide; frontmost gap unused (issue 351)", () => {
+  const scene = parseScene({
+    version: 1,
+    camera: { gap: 100 },
+    slides: [
+      { src: "a.png", gap: 10 }, // interval a->b
+      { src: "b.png", gap: 20 }, // interval b->c
+      { src: "c.png", gap: 30 }, // frontmost: unused
+    ],
+  });
+  // stack_depth sums the intervals in front of each slide = gaps[:-1] = 10 + 20 = 30.
+  assert.ok(close(g.stackDepth(scene, "expanded"), 30));
+  // Changing the FRONTMOST slide's gap has no effect (it has no successor).
+  scene.slides[2].gap = 999;
+  assert.ok(close(g.stackDepth(scene, "expanded"), 30));
+  // Changing a non-frontmost slide's gap does change the depth.
+  scene.slides[0].gap = 50;
+  assert.ok(close(g.stackDepth(scene, "expanded"), 70));
+});
+
 test("plateGaps tri-state end-to-end (issue 351)", () => {
   // Parse -> plateGaps. Omitted gap inherits camera.gap; explicit null or 0
   // collapses to MIN_GAP; a positive value is preserved.

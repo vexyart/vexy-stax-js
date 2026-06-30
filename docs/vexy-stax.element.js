@@ -21770,16 +21770,16 @@ function Bs(n, e) {
   if (e === "compact") return (t - 1) * Wi;
   const i = Fr(n);
   let r = 0;
-  for (let s = 1; s < i.length; s++) r += i[s];
+  for (let s = 0; s < i.length - 1; s++) r += i[s];
   return r;
 }
 function cp(n) {
   const e = n.length;
   if (e === 0) return [];
   let t = 0;
-  for (let r = 1; r < e; r++) t += n[r];
+  for (let r = 0; r < e - 1; r++) t += n[r];
   const i = [0];
-  for (let r = 1; r < e; r++) i.push(i[i.length - 1] + n[r]);
+  for (let r = 1; r < e; r++) i.push(i[i.length - 1] + n[r - 1]);
   return i.map((r) => r - t);
 }
 const Ka = (n, e) => [n[0] - e[0], n[1] - e[1], n[2] - e[2]], pi = (n, e) => n[0] * e[0] + n[1] * e[1] + n[2] * e[2], Za = (n, e) => [
@@ -22165,10 +22165,10 @@ class gp {
   _placePlates(e, t) {
     const r = -this._tallestHeight() / 2, s = r, a = this.scene.floor.reflectivity, o = Os(this.scene);
     let l = 0;
-    for (let d = 1; d < e.length; d++) l += e[d];
+    for (let d = 0; d < e.length - 1; d++) l += e[d];
     let c = 0;
     this.plates.forEach((d, u) => {
-      u > 0 && (c += e[u]);
+      u > 0 && (c += e[u - 1]);
       const f = -(l - c), p = r + o + d.height / 2, x = t[u];
       d.mesh.position.set(0, p, f), d.mesh.material.opacity = x, d.reflection && (d.reflection.position.set(0, 2 * s - p, f), d.reflection.material.opacity = x * a, d.reflection.visible = x * a > 1e-3), d.border && (d.border.group.position.set(0, p, f), d.border.material.opacity = x, d.border.group.visible = x > 1e-3);
     });

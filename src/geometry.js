@@ -139,7 +139,9 @@ export function plateGaps(scene) {
 
 /**
  * Total deck depth along Z. Compact collapses every gap to MIN_GAP; expanded
- * sums the (N-1) inter-plate gaps (gaps[0] is before slide 0 and unused).
+ * sums the (N-1) inter-plate gaps. A slide's gap is the gap IN FRONT of it (toward
+ * the camera, i.e. between slide i and slide i+1), so the frontmost slide's gap is
+ * unused — sum gaps[:-1].
  */
 export function stackDepth(scene, view) {
   const n = scene.slides.length;
@@ -147,18 +149,22 @@ export function stackDepth(scene, view) {
   if (view === "compact") return (n - 1) * MIN_GAP;
   const gaps = plateGaps(scene);
   let sum = 0;
-  for (let i = 1; i < gaps.length; i++) sum += gaps[i];
+  for (let i = 0; i < gaps.length - 1; i++) sum += gaps[i];
   return sum;
 }
 
-/** Per-plate Z (front plate at 0, index 0 at -stackDepth). Mirrors _stack_positions. */
+/**
+ * Per-plate Z (front plate at 0, index 0 at -stackDepth). Mirrors _stack_positions.
+ * `gaps[i]` is the gap in front of slide i (between slide i and slide i+1); the
+ * interval between slide i-1 and i is therefore gaps[i-1], and gaps[n-1] is unused.
+ */
 function stackPositions(gaps) {
   const n = gaps.length;
   if (n === 0) return [];
   let depth = 0;
-  for (let i = 1; i < n; i++) depth += gaps[i];
+  for (let i = 0; i < n - 1; i++) depth += gaps[i];
   const cum = [0.0];
-  for (let i = 1; i < n; i++) cum.push(cum[cum.length - 1] + gaps[i]);
+  for (let i = 1; i < n; i++) cum.push(cum[cum.length - 1] + gaps[i - 1]);
   return cum.map((c) => c - depth);
 }
 
