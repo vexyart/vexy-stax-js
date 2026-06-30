@@ -196,6 +196,31 @@
       ]
     }
   },
-  "hotPaths": [],
+  "hotPaths": [
+    {
+      "path": "src/geometry.js",
+      "accessCount": 1,
+      "lastAccessed": 1782851494037,
+      "type": "file"
+    },
+    {
+      "path": "src/scene.js",
+      "accessCount": 1,
+      "lastAccessed": 1782851505530,
+      "type": "file"
+    },
+    {
+      "path": "tests/geometry.test.js",
+      "accessCount": 1,
+      "lastAccessed": 1782851799482,
+      "type": "file"
+    },
+    {
+      "path": "src/index.js",
+      "accessCount": 1,
+      "lastAccessed": 1782852032016,
+      "type": "file"
+    }
+  ],
   "userDirectives": []
 }

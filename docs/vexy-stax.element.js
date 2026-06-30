@@ -21613,7 +21613,7 @@ function $h(n, e) {
   const t = `slides[${e}]`, i = Jt(n, t);
   if (jt(i, /* @__PURE__ */ new Set(["src", "gap", "opacity", "caption"]), t), i.src === void 0) throw new Error(`${t}.src is required`);
   let r = null;
-  return i.gap !== void 0 && i.gap !== null && (r = Ct(i.gap, `${t}.gap`, { min: 0 })), {
+  return i.gap === null ? r = 0 : i.gap !== void 0 && (r = Ct(i.gap, `${t}.gap`, { min: 0 })), {
     src: Sn(i.src, `${t}.src`),
     gap: r,
     opacity: Yh(i.opacity, `${t}.opacity`),
@@ -21675,7 +21675,7 @@ function Kh(n, e, t) {
     throw new Error(`makeScene: slides[${e}] must be a string URL or an object`);
   const i = {};
   if (n.src === void 0) throw new Error(`makeScene: slides[${e}].src is required`);
-  return i.src = n.src, n.gap !== void 0 && n.gap !== null && (i.gap = n.gap), n.opacity !== void 0 && (i.opacity = n.opacity), n.caption !== void 0 && (i.caption = typeof n.caption == "string" ? { text: n.caption, show_in: "expanded" } : n.caption), i;
+  return i.src = n.src, n.gap !== void 0 && (i.gap = n.gap), n.opacity !== void 0 && (i.opacity = n.opacity), n.caption !== void 0 && (i.caption = typeof n.caption == "string" ? { text: n.caption, show_in: "expanded" } : n.caption), i;
 }
 function To(n, e = {}) {
   if (!Array.isArray(n) || n.length < 1)
@@ -23928,11 +23928,26 @@ class jo {
     return i <= 0 ? e[1] >= t ? 1 : 0 : Math.max(0, Math.min(1, (e[1] - 3) / i));
   }
   /**
-   * Record the transition to a video Blob (WebCodecs preferred, MediaRecorder
-   * fallback). Plays the full transition while capturing the canvas.
+   * Record the transition to a video Blob.
+   *
+   * **Encoding path selection** (export.js `recordVideo`):
+   * 1. **PRIMARY — WebCodecs + mp4-muxer** (issue 331): uses `VideoEncoder` to
+   *    encode each rendered frame directly into H.264/mp4 (preferred) or VP9/webm.
+   *    Produces a fully seekable container with correct duration and per-stream
+   *    frame-count metadata. Available in Chrome 94+, Edge 94+, and recent Safari.
+   * 2. **FALLBACK — MediaRecorder** (`canvas.captureStream`): used when
+   *    `VideoEncoder` is unavailable (older browsers, some WebViews). Output is a
+   *    non-seekable webm stream; duration/frame metadata may be absent. The
+   *    recorded MIME type reflects the first supported codec from
+   *    `[vp9, vp8, webm, mp4]`.
+   *
+   * The clip is bookended by held stills: `scene.video.first_hold` copies of the
+   * start frame and `scene.video.last_hold` copies of the end frame (default 10
+   * each, matching the Python `frame_plan` holds).
+   *
    * @param {object} [opts]
    * @param {string} [opts.kind] override scene.transition.kind
-   * @returns {Promise<Blob>}
+   * @returns {Promise<Blob>} mp4 Blob (WebCodecs path) or webm Blob (MediaRecorder fallback)
    */
   async toVideo(e = {}) {
     await this._ready;
@@ -23958,14 +23973,25 @@ class jo {
   }
   /**
    * Drive the transition from scroll position over a trigger region (SPEC.md
-   * §6.4). Maps scroll progress [0,1] to the morph; respects
-   * prefers-reduced-motion (snaps to endpoints).
+   * §6.4). Attaches an `IntersectionObserver` that activates a
+   * `scroll`+`requestAnimationFrame` loop only while the trigger is visible,
+   * mapping scroll progress [0,1] to a morph factor via the scene's transition
+   * timeline (`buildTimeline` → `morphAtProgress`).
+   *
+   * **`prefers-reduced-motion` handling**: when the OS/browser reports reduced
+   * motion (or when `opts.reducedMotion` is `true`), the rAF loop is skipped
+   * entirely. Instead, a lightweight scroll listener snaps the deck to the
+   * nearest endpoint (0 or 1) based on whether the trigger's center has passed
+   * the middle of the viewport — no per-frame interpolation occurs.
    *
    * @param {object} opts
-   * @param {Element|string} opts.trigger element or selector for the scroll region
+   * @param {Element|string} opts.trigger element or CSS selector for the scroll region
    * @param {string} [opts.kind] override scene.transition.kind
-   * @param {boolean} [opts.reducedMotion] override prefers-reduced-motion
-   * @returns {{disconnect:()=>void}}
+   * @param {boolean} [opts.reducedMotion] override prefers-reduced-motion detection
+   * @param {(p:number)=>number} [opts.map] custom progress→morph mapping (e.g. tent
+   *   function for compact-at-edges / expanded-at-center stories; overrides the
+   *   built-in timeline mapping when provided)
+   * @returns {{disconnect:()=>void}} handle — call `.disconnect()` to stop observing
    */
   scrollspy(e = {}) {
     const t = e.kind ?? this.scene.transition?.kind ?? "expand", i = typeof e.trigger == "string" ? document.querySelector(e.trigger) : e.trigger;

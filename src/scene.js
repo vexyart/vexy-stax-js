@@ -219,8 +219,12 @@ function parseSlide(raw, index) {
   const o = asObject(raw, where);
   rejectExtraKeys(o, new Set(["src", "gap", "opacity", "caption"]), where);
   if (o.src === undefined) throw new Error(`${where}.src is required`);
+  // Tri-state gap: key absent ⇒ null (inherit camera.gap); explicit `null` or `0`
+  // ⇒ the minimal gap (geometry resolves 0 ⇒ MIN_GAP, the compact-view spacing);
+  // any positive number ⇒ that value. `null` and absence are deliberately distinct.
   let gap = null;
-  if (o.gap !== undefined && o.gap !== null) gap = num(o.gap, `${where}.gap`, { min: 0 });
+  if (o.gap === null) gap = 0;
+  else if (o.gap !== undefined) gap = num(o.gap, `${where}.gap`, { min: 0 });
   return {
     src: str(o.src, `${where}.src`),
     gap,
@@ -316,7 +320,9 @@ function slideEntry(entry, index, defaults) {
   const slide = {};
   if (entry.src === undefined) throw new Error(`makeScene: slides[${index}].src is required`);
   slide.src = entry.src;
-  if (entry.gap !== undefined && entry.gap !== null) slide.gap = entry.gap;
+  // Pass `null` through so the friendly array can request the minimal gap too;
+  // parseSlide maps absent ⇒ inherit, null/0 ⇒ minimal.
+  if (entry.gap !== undefined) slide.gap = entry.gap;
   if (entry.opacity !== undefined) slide.opacity = entry.opacity;
   if (entry.caption !== undefined) {
     slide.caption =

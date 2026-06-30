@@ -99,6 +99,26 @@ test("plateGaps customizable and zero gaps", () => {
   assert.ok(close(gaps2[2], 100.0));
 });
 
+test("plateGaps tri-state end-to-end (issue 351)", () => {
+  // Parse -> plateGaps. Omitted gap inherits camera.gap; explicit null or 0
+  // collapses to MIN_GAP; a positive value is preserved.
+  const scene = parseScene({
+    version: 1,
+    camera: { gap: 800 },
+    slides: [
+      { src: "a.png" }, // omitted -> camera.gap
+      { src: "b.png", gap: null }, // null -> MIN_GAP
+      { src: "c.png", gap: 0 }, // 0 -> MIN_GAP
+      { src: "d.png", gap: 250 }, // positive
+    ],
+  });
+  const gaps = g.plateGaps(scene);
+  assert.ok(close(gaps[0], 800.0));
+  assert.ok(close(gaps[1], g.MIN_GAP));
+  assert.ok(close(gaps[2], g.MIN_GAP));
+  assert.ok(close(gaps[3], 250.0));
+});
+
 
 test("compactCamera head-on +Z with dual-axis crop-free fit (slide only, issue 337)", () => {
   const scene = loadExample();

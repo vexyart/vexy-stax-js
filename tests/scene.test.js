@@ -183,6 +183,28 @@ test("makeScene preserves remote http(s) URLs and data: URIs", () => {
   assert.equal(scene.slides[2].src, "https://x.test/deck/local.png"); // relative resolved
 });
 
+test("parseScene gap tri-state: omit ⇒ inherit (null), null/0 ⇒ minimal (0)", () => {
+  const scene = parseScene({
+    version: 1,
+    slides: [
+      { src: "a.png" }, // omitted ⇒ inherit camera.gap
+      { src: "b.png", gap: null }, // explicit null ⇒ minimal
+      { src: "c.png", gap: 0 }, // explicit 0 ⇒ minimal
+      { src: "d.png", gap: 100 }, // positive ⇒ that value
+    ],
+  });
+  assert.equal(scene.slides[0].gap, null);
+  assert.equal(scene.slides[1].gap, 0);
+  assert.equal(scene.slides[2].gap, 0);
+  assert.equal(scene.slides[3].gap, 100);
+});
+
+test("makeScene friendly array passes null gap through ⇒ minimal", () => {
+  const scene = makeScene([{ src: "a.png" }, { src: "b.png", gap: null }], {});
+  assert.equal(scene.slides[0].gap, null); // omitted ⇒ inherit
+  assert.equal(scene.slides[1].gap, 0); // null ⇒ minimal
+});
+
 test("makeScene accepts slide objects with string captions + opacity + gap", () => {
   const scene = makeScene(
     [
