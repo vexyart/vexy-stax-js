@@ -1,0 +1,7 @@
+{
+  "tool_name": "Bash",
+  "tool_input_preview": "{\"command\":\"cd /Users/adam/Developer/vcs3/github.vexyart/vexy-stax-dev\\ncat > \\\"$TMPDIR/issue351_user.mjs\\\" <<'EOF'\\nimport { parseScene } from \\\"./vexy-stax-js/src/scene.js\\\";\\nimport { plateGaps, st...",
+  "error": "Exit code 1\nnode:internal/modules/run_main:107\n    triggerUncaughtException(\n    ^\n\nError [ERR_MODULE_NOT_FOUND]: Cannot find module '/private/var/folders/fc/gkjnc37546bccstx9gbv8yb40000gn/T/vexy-stax-js/src/scene.js' imported from /private/var/folders/fc/gkjnc37546bccstx9gbv8yb40000gn/T/issue351_user.mjs\nDid you mean to import \"../../../../../../Users/adam/Developer/vcs3/github.vexyart/vexy-stax-dev/vexy-stax-js/src/scene.js\"?\n    at finalizeResolution (node:internal/modules/esm/resolve:272:11)...",
+  "timestamp": "2026-06-30T20:42:01.445Z",
+  "retry_count": 1
+}
