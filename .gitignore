@@ -180,3 +180,10 @@ dist/
 # example.sh / verify drivers write rendered demo artifacts here.
 outputs/
 verify/out/
+
+# Tooling and build output (docs/ is NOT ignored: GitHub Pages serves it)
+.omc/
+.venv/
+*.egg-info/
+.ruff_cache/
+/site/

@@ -1,0 +1,52 @@
+# this_file: .github/workflows/docs.yml
+# Rebuild the documentation site into docs/ on every push to the default branch.
+# GitHub Pages serves docs/ at https://vexy.dev/vexy-stax-js/.
+# The live demos (bundles + demo pages) are regenerated into src_docs/md/ first with
+# `npm run build` + `npm run build:docs`, so docs/ always carries bundles built from src/.
+# The slide PNGs come from the committed src_docs/md/airbl-lores/ (the sibling
+# vexy-stax-py checkout that build-docs.mjs normally copies them from is not available here).
+name: Docs
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src_docs/**"
+      - "src/**"
+      - "demo-scenes/**"
+      - "scripts/build-docs.mjs"
+      - "package.json"
+      - "package-lock.json"
+      - "vite.config.js"
+      - ".github/workflows/docs.yml"
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: docs-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+      - name: Build bundles and live demos into src_docs/md/
+        run: |
+          npm ci
+          npm run build
+          npm run build:docs
+      - uses: astral-sh/setup-uv@v6
+      - name: Build documentation
+        run: bash src_docs/build.sh
+      - name: Commit rebuilt docs/
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A docs
+          if git diff --cached --quiet; then echo "docs/ unchanged"; exit 0; fi
+          git commit -m "docs: rebuild site [skip ci]"
+          git pull --rebase
+          git push

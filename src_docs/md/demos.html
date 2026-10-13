@@ -1,0 +1,151 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/src_docs/md/demos.html
+     GitHub Pages LANDING PAGE for https://vexy.dev/vexy-stax-js/ (issue 341).
+     Points at the two live demos (animated + scrollspy) and the Python docs, with
+     install/usage snippets. The demos live on their own pages (playable.html,
+     scrollable.html) so the landing page itself stays light. Static — all assets
+     are co-located; paths are relative so it works locally and under /vexy-stax-js/. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vexy-stax-js — browser renderer for layered 3D glass plates</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      :root { color-scheme: light dark; }
+      *, *::before, *::after { box-sizing: border-box; }
+      html, body { margin: 0; min-height: 100%; }
+      body {
+        display: flex; flex-direction: column; min-height: 100vh;
+        font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+        color: #1c1c1e;
+        background: radial-gradient(120% 120% at 50% 0%, #ffffff 0%, #eef1f6 100%);
+      }
+      header { padding: 56px 24px 8px; text-align: center; }
+      header h1 {
+        margin: 0 0 10px; font-size: clamp(28px, 6vw, 52px); letter-spacing: -0.02em; font-weight: 800;
+      }
+      header p { margin: 0 auto; max-width: 56ch; color: #5b616e; font-size: clamp(15px, 2.4vw, 18px); }
+      main { flex: 1; width: 100%; max-width: 980px; margin: 0 auto; padding: 28px 24px 8px; }
+      .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+      .card {
+        display: flex; flex-direction: column; gap: 8px; padding: 22px 22px 20px;
+        background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; text-decoration: none;
+        color: inherit; box-shadow: 0 6px 24px rgba(17, 24, 39, 0.06);
+        transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+      }
+      .card:hover { transform: translateY(-3px); box-shadow: 0 12px 34px rgba(17, 24, 39, 0.12); border-color: #c7cdd6; }
+      .card .ico { font-size: 26px; }
+      .card h2 { margin: 2px 0 0; font-size: 18px; letter-spacing: -0.01em; }
+      .card p { margin: 0; color: #6b7280; font-size: 14px; }
+      .card .go { margin-top: auto; padding-top: 8px; font-size: 13px; color: #2563eb; font-weight: 600; }
+      .usage { max-width: 980px; margin: 0 auto; padding: 8px 24px 36px; }
+      .usage h2 { font-size: 16px; letter-spacing: -0.01em; margin: 26px 0 8px; }
+      pre { background: #0f172a; color: #e2e8f0; border-radius: 10px; padding: 14px 16px; font-size: 13px; overflow-x: auto; margin: 0; }
+      code { font-family: ui-monospace, "Cascadia Code", "Fira Mono", monospace; }
+      footer { padding: 22px 24px; text-align: center; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; }
+      footer a { color: inherit; text-decoration: underline; }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>vexy-stax-js</h1>
+      <p>Browser renderer for layered artwork as a deck of 3D glass plates — compact ↔ expanded morph, scroll-driven, exportable. ESM module · Web Component · Global script.</p>
+    </header>
+
+    <main>
+      <div class="cards">
+        <a class="card" href="playable.html">
+          <div class="ico">▶</div>
+          <h2>Animated demo</h2>
+          <p>Play the compact ↔ expanded transition, or toggle the two views by hand.</p>
+          <span class="go">Open demo →</span>
+        </a>
+        <a class="card" href="scrollable.html">
+          <div class="ico">↓</div>
+          <h2>Scrollspy demo</h2>
+          <p>A scroll-driven story — the deck rises into view and unfolds as you scroll.</p>
+          <span class="go">Open demo →</span>
+        </a>
+        <a class="card" href="index.html">
+          <div class="ico">📖</div>
+          <h2>Documentation</h2>
+          <p>Installation, the Web Component, the ESM API and the shared scene format.</p>
+          <span class="go">Read the docs →</span>
+        </a>
+      </div>
+
+      <h2 style="margin:34px 0 12px; font-size:16px; letter-spacing:-0.01em;">Use it — three ways</h2>
+      <div class="cards">
+        <a class="card" href="demo-component.html">
+          <div class="ico">&lt;/&gt;</div>
+          <h2>Web Component</h2>
+          <p><code>&lt;vexy-stax slides="a.png b.png"&gt;</code> — pure markup, no JS. Minimal code beside the live element.</p>
+          <span class="go">Open demo →</span>
+        </a>
+        <a class="card" href="demo-module.html">
+          <div class="ico">📦</div>
+          <h2>ES Module</h2>
+          <p><code>createStax(el, { slides })</code> — one call mounts a ready instance from a URL list.</p>
+          <span class="go">Open demo →</span>
+        </a>
+        <a class="card" href="demo-library.html">
+          <div class="ico">🌐</div>
+          <h2>Global script</h2>
+          <p>One classic <code>&lt;script&gt;</code> → <code>window.VexyStax.create(...)</code>. No bundler.</p>
+          <span class="go">Open demo →</span>
+        </a>
+      </div>
+    </main>
+
+    <section class="usage">
+      <h2>Install</h2>
+      <pre><code>npm install vexy-stax-js
+# …or skip the build step entirely — load it from the jsDelivr CDN:
+# &lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.element.js"&gt;&lt;/script&gt;</code></pre>
+
+      <h2>Web Component — just a list of slides</h2>
+      <pre><code>&lt;script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.element.js"&gt;&lt;/script&gt;
+&lt;vexy-stax
+  slides="layer-0.png layer-1.png https://example.com/layer-2.png"
+  view="compact" mode="playable"&gt;&lt;/vexy-stax&gt;</code></pre>
+
+      <h2>Web Component — the whole scene inline (no URL)</h2>
+      <pre><code>&lt;vexy-stax view="compact" mode="playable" aspect="3"&gt;
+  &lt;script type="application/json"&gt;
+  { "version": 1, "transition": { "kind": "expand_collapse" },
+    "slides": [ { "src": "layer-0.png" }, { "src": "layer-1.png" } ] }
+  &lt;/script&gt;
+&lt;/vexy-stax&gt;</code></pre>
+      <p style="color:#6b7280;font-size:13px;margin-top:-8px">Drop the full scene JSON right inside the element — and <code>aspect="3"</code> shapes the box to 3:1 (also <code>"3/1"</code>, <code>"16:9"</code>, …).</p>
+
+      <h2>ES Module — createStax</h2>
+      <pre><code>import { createStax } from "https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.element.js";
+
+// One call: build a scene from a URL list, mount, wait for ready.
+const stax = await createStax("#stage", {
+  slides: ["layer-0.png", "https://example.com/layer-1.png"],
+  gap: 480, transition: "expand_collapse", mode: "playable",
+});
+const mp4 = await stax.toVideo(); // seekable mp4</code></pre>
+
+      <h2>Global script — window.VexyStax</h2>
+      <pre><code>&lt;script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.9/dist/vexy-stax.global.js"&gt;&lt;/script&gt;
+&lt;script&gt;
+  VexyStax.create("#stage", { slides: ["a.png", "b.png", "c.png"] });
+&lt;/script&gt;</code></pre>
+    </section>
+
+    <footer>
+      <a href="https://github.com/vexyart/vexy-stax-js">GitHub</a> ·
+      <a href="index.html">Docs</a> ·
+      <a href="https://vexy.dev/vexy-stax-py/">Python (vexy-stax-py)</a> ·
+      Apache-2.0 © 2026 Adam Twardoch / VexyArt
+    </footer>
+  </body>
+</html>

@@ -1,22 +1,32 @@
 #!/usr/bin/env bash
 # this_file: vexy-stax-js/build.sh
-# build.sh - Test + build vexy-stax-js (emits the dist bundles).
+# build.sh - Test + build vexy-stax-js (emits the dist bundles) and the documentation site.
 # Vexy Stax JS: Browser renderer for the shared vexy-stax scene format (Three.js).
-# Runs the unit tests, then builds dist/vexy-stax.element.js + dist/vexy-stax.global.js.
+# Usage: ./build.sh [all|docs]   (default: all)
+#   all   unit tests, dist bundles, the demo pages (into src_docs/md/), then the docs site (docs/)
+#   docs  only rebuild the docs site from src_docs/ into docs/ with ProperDocs
 set -euo pipefail
 cd "$(dirname "$0")"
 
-echo "==> Running unit tests..."
-npm run test:unit
+target="${1:-all}"
+case "$target" in
+  all|docs) ;;
+  *) echo "usage: $0 [all|docs]" >&2; exit 2 ;;
+esac
 
-echo "==> Building dist bundles..."
-npm run build
+if [[ "$target" == all ]]; then
+  echo "==> Running unit tests..."
+  npm run test:unit
 
-echo "==> Build complete:"
-ls -lh dist/vexy-stax.element.js dist/vexy-stax.global.js
+  echo "==> Building dist bundles..."
+  npm run build
 
-echo "==> Building docs/ for GitHub Pages..."
-npm run build:docs
+  echo "==> Build complete:"
+  ls -lh dist/vexy-stax.element.js dist/vexy-stax.global.js
 
-echo "==> docs/ contents:"
-ls -lh docs/
+  echo "==> Building the live demos into src_docs/md/..."
+  npm run build:docs
+fi
+
+echo "==> Building the documentation site into docs/..."
+src_docs/build.sh

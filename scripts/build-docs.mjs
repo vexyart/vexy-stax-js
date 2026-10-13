@@ -2,9 +2,12 @@
 // SPDX-License-Identifier: Apache-2.0
 // this_file: vexy-stax-js/scripts/build-docs.mjs
 //
-// Build the deployable docs/ site for GitHub Pages at https://vexy.dev/vexy-stax-js/
-// (issues 331 part 2, 341). Produces:
-//   - index.html         a LANDING PAGE → the live demos + the "how to use" demos + the docs
+// Build the live demos for the documentation site at https://vexy.dev/vexy-stax-js/
+// (issues 331 part 2, 341). Writes into src_docs/md/, from where the ProperDocs build
+// (src_docs/build.sh) copies every file unchanged into docs/, which GitHub Pages serves.
+// Produces:
+//   - demos.html         a LANDING PAGE → the live demos + the "how to use" demos + the docs
+//                        (index.html is the ProperDocs home page, built from src_docs/md/index.md)
 //   - playable.html      the animated demo (play/compact/expanded buttons)
 //   - scrollable.html    the scroll-driven (scrollspy) demo
 //   - demo-component.html the declarative <vexy-stax> element (attributes incl. `slides`)
@@ -15,7 +18,8 @@
 // the MINIMAL code on the left, the LIVE result on the right. Each documents BOTH the
 // co-located local bundle AND the jsDelivr CDN URL (so users can drop it in without npm).
 // All paths are relative so the site works both locally (serve docs/) and deployed
-// under /vexy-stax-js/. The landing page links to the Python docs at vexy.dev/vexy-stax-py/.
+// under /vexy-stax-js/. The landing page links to the docs home (index.html) and to the
+// Python docs at vexy.dev/vexy-stax-py/.
 //
 // Run via: npm run build:docs  (or directly: node scripts/build-docs.mjs)
 // This is called by build.sh after `npm run build`.
@@ -27,7 +31,7 @@ import { fileURLToPath } from "node:url";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const JS_ROOT = resolve(HERE, ".."); // vexy-stax-js
 const DIST = join(JS_ROOT, "dist");
-const DOCS = join(JS_ROOT, "docs");
+const DOCS = join(JS_ROOT, "src_docs", "md"); // ProperDocs source dir → copied to docs/
 const PY_DOCS_URL = "https://vexy.dev/vexy-stax-py/";
 const REPO_URL = "https://github.com/vexyart/vexy-stax-js";
 
@@ -149,13 +153,22 @@ for (const sceneName of ["airbl-demo.scene.json", "airbl-scrollable.scene.json"]
   cp(srcScene, join(DOCS, sceneName)); // copy the editable source → docs/ (never clobbers edits)
 }
 
+// The slides come from the sibling vexy-stax-py checkout. Without it (e.g. in CI, where only
+// this repo is checked out), keep the committed copies in src_docs/md/airbl-lores/.
 for (const name of SLIDES) {
-  cp(join(PY_TESTDATA, "airbl-lores", name), join(slidesDir, name));
+  const src = join(PY_TESTDATA, "airbl-lores", name);
+  const dst = join(slidesDir, name);
+  if (existsSync(src)) cp(src, dst);
+  else if (existsSync(dst)) console.log(`  keep  ${dst.replace(JS_ROOT + "/", "")} (no ${PY_TESTDATA})`);
+  else {
+    console.error(`ERROR: slide ${name} not found in ${PY_TESTDATA} and no committed copy exists.`);
+    process.exit(1);
+  }
 }
 
-// ── 5. index.html — the LANDING PAGE (issue 341) ─────────────────────────────
+// ── 5. demos.html — the LANDING PAGE (issue 341) ─────────────────────────────
 const landingHtml = `<!doctype html>
-<!-- this_file: vexy-stax-js/docs/index.html
+<!-- this_file: vexy-stax-js/src_docs/md/demos.html
      GitHub Pages LANDING PAGE for https://vexy.dev/vexy-stax-js/ (issue 341).
      Points at the two live demos (animated + scrollspy) and the Python docs, with
      install/usage snippets. The demos live on their own pages (playable.html,
@@ -223,10 +236,10 @@ ${FONT_LINK}
           <p>A scroll-driven story — the deck rises into view and unfolds as you scroll.</p>
           <span class="go">Open demo →</span>
         </a>
-        <a class="card" href="${PY_DOCS_URL}">
+        <a class="card" href="index.html">
           <div class="ico">📖</div>
           <h2>Documentation</h2>
-          <p>Concept, the shared scene format, the CLI, the engines and the JS/Python APIs.</p>
+          <p>Installation, the Web Component, the ESM API and the shared scene format.</p>
           <span class="go">Read the docs →</span>
         </a>
       </div>
@@ -294,17 +307,18 @@ const mp4 = await stax.toVideo(); // seekable mp4</code></pre>
 
     <footer>
       <a href="${REPO_URL}">GitHub</a> ·
-      <a href="${PY_DOCS_URL}">Docs</a> ·
+      <a href="index.html">Docs</a> ·
+      <a href="${PY_DOCS_URL}">Python (vexy-stax-py)</a> ·
       Apache-2.0 © 2026 Adam Twardoch / VexyArt
     </footer>
   </body>
 </html>
 `;
-write(join(DOCS, "index.html"), landingHtml);
+write(join(DOCS, "demos.html"), landingHtml);
 
 // ── 6. playable.html — the ANIMATED demo ─────────────────────────────────────
 const playableHtml = `<!doctype html>
-<!-- this_file: vexy-stax-js/docs/playable.html
+<!-- this_file: vexy-stax-js/src_docs/md/playable.html
      Animated demo (issue 341): loads the <vexy-stax> element and plays the compact↔expanded
      transition. Uses a clean-floor scene variant. Static; relative paths. -->
 <html lang="en">
@@ -342,7 +356,7 @@ ${FONT_LINK}
   </head>
   <body>
     <header>
-      <a href="index.html">← vexy-stax-js</a>
+      <a href="demos.html">← vexy-stax-js</a>
       <h1>Animated demo</h1>
       <p>Morph the layered deck between its <strong>compact</strong> and <strong>expanded</strong> views.</p>
     </header>
@@ -386,7 +400,7 @@ write(join(DOCS, "playable.html"), playableHtml);
 
 // ── 7. scrollable.html — the SCROLLSPY demo (mirrors verify/example.mjs) ──────
 const scrollableHtml = `<!doctype html>
-<!-- this_file: vexy-stax-js/docs/scrollable.html
+<!-- this_file: vexy-stax-js/src_docs/md/scrollable.html
      Scroll-driven (scrollspy) demo (issues 304.2 + 314 + 341): a full-viewport intro, the
      deck as a FULL-WIDTH 2:1 white scene, then an outro. The deck starts COMPACT; the
      transition starts when 75% of the scene is in view and reaches fully EXPANDED when the
@@ -412,7 +426,7 @@ ${FONT_LINK}
     </style>
   </head>
   <body>
-    <a class="back" href="index.html">← vexy-stax-js</a>
+    <a class="back" href="demos.html">← vexy-stax-js</a>
     <section class="copy">
       <h1>Scroll down</h1>
       <p>A layered deck of glass plates. Keep scrolling — it will rise into view and unfold.</p>
@@ -488,7 +502,7 @@ const cdnBanner = (file) =>
 // — demo-component.html : declarative <vexy-stax> with attributes (incl. `slides`) —
 const componentSlides = DEMO_SLIDES.join(" ");
 const componentDemoHtml = `<!doctype html>
-<!-- this_file: vexy-stax-js/docs/demo-component.html
+<!-- this_file: vexy-stax-js/src_docs/md/demo-component.html
      Declarative Web Component demo (issue 341): minimal markup on the left, the live
      <vexy-stax> element on the right (modeled on i.vexy.art/dev/lines-nano/demo-component.html).
      Shows the issue-341 \`slides\` attribute (a bare URL list) plus \`scene\`, \`view\`, \`mode\`.
@@ -508,7 +522,7 @@ ${DEMO_CSS}
   <body>
     <header>
       <h1>vexy-stax-js — &lt;vexy-stax&gt;</h1>
-      <p>Declarative custom element — minimal markup on the left, the live element on the right. <strong>Tip:</strong> click any deck to fluently toggle compact↔expanded (on by default; opt out with <code>click-toggle="false"</code>). <a href="index.html">← all demos</a></p>
+      <p>Declarative custom element — minimal markup on the left, the live element on the right. <strong>Tip:</strong> click any deck to fluently toggle compact↔expanded (on by default; opt out with <code>click-toggle="false"</code>). <a href="demos.html">← all demos</a></p>
     </header>
 ${cdnBanner(`&lt;script type="module" src="${CDN_ELEMENT}"&gt;&lt;/script&gt;`)}
 
@@ -622,7 +636,7 @@ write(join(DOCS, "demo-component.html"), componentDemoHtml);
 
 // — demo-module.html : ESM createStax(el, opts) + makeScene —
 const moduleDemoHtml = `<!doctype html>
-<!-- this_file: vexy-stax-js/docs/demo-module.html
+<!-- this_file: vexy-stax-js/src_docs/md/demo-module.html
      ESM factory demo (issue 341): \`createStax(el, opts)\` — one call builds a scene from a
      URL list (via makeScene), mounts a VexyStax, and returns the ready instance. Modeled on
      i.vexy.art/dev/lines-nano/demo-module.html (createNano). Minimal source on the left, the
@@ -641,7 +655,7 @@ ${DEMO_CSS}
   <body>
     <header>
       <h1>vexy-stax-js — ES Module</h1>
-      <p><code>import { createStax }</code> — each example shows its minimal source on the left and the live result on the right. <a href="index.html">← all demos</a></p>
+      <p><code>import { createStax }</code> — each example shows its minimal source on the left and the live result on the right. <a href="demos.html">← all demos</a></p>
     </header>
 ${cdnBanner(`import { createStax } from "${CDN_ELEMENT}";`)}
 
@@ -738,7 +752,7 @@ write(join(DOCS, "demo-module.html"), moduleDemoHtml);
 
 // — demo-library.html : the global-script build (window.VexyStax) —
 const libraryDemoHtml = `<!doctype html>
-<!-- this_file: vexy-stax-js/docs/demo-library.html
+<!-- this_file: vexy-stax-js/src_docs/md/demo-library.html
      Global-script demo (issue 341): one classic <script> exposes window.VexyStax, and
      \`VexyStax.create(el, opts)\` mounts a deck from a slide-URL list. Modeled on
      i.vexy.art/dev/lines-nano/demo-library.html. Loads the co-located IIFE bundle; the same
@@ -759,7 +773,7 @@ ${DEMO_CSS}
   <body>
     <header>
       <h1>vexy-stax-js — traditional library</h1>
-      <p>One classic <code>&lt;script&gt;</code> exposes <code>window.VexyStax</code>. <a href="index.html">← all demos</a></p>
+      <p>One classic <code>&lt;script&gt;</code> exposes <code>window.VexyStax</code>. <a href="demos.html">← all demos</a></p>
     </header>
 ${cdnBanner(`&lt;script src="${CDN_GLOBAL}"&gt;&lt;/script&gt;`)}
 
@@ -802,33 +816,8 @@ ${HLJS_JS}
 `;
 write(join(DOCS, "demo-library.html"), libraryDemoHtml);
 
-// ── 8. README ────────────────────────────────────────────────────────────────
-write(
-  join(DOCS, "README.md"),
-  `# vexy-stax-js — docs/
-
-GitHub Pages deployment root for https://vexy.dev/vexy-stax-js/ (issue 341).
-Generated by \`npm run build:docs\` (or \`build.sh\`). Do not edit directly — re-run the build.
-
-| File | Description |
-|------|-------------|
-| \`index.html\` | Landing page → links to the demos + the Python docs |
-| \`playable.html\` | Animated demo (compact ↔ expanded) |
-| \`scrollable.html\` | Scroll-driven (scrollspy) demo |
-| \`demo-component.html\` | How-to: the declarative \`<vexy-stax>\` element (incl. the \`slides\` attribute) |
-| \`demo-module.html\` | How-to: the ESM \`createStax(el, opts)\` factory |
-| \`demo-library.html\` | How-to: the global-script build (\`window.VexyStax.create\`) |
-| \`vexy-stax.element.js\` (+ \`.map\`) | Built Web Component bundle (three.js + gsap) |
-| \`vexy-stax.global.js\` (+ \`.map\`) | Built global/IIFE bundle (\`window.VexyStax\`) |
-| \`airbl-demo.scene.json\` / \`airbl-scrollable.scene.json\` | Demo scenes (clean floor) |
-| \`airbl-lores/\` | Slide PNGs |
-
-The demos load the **co-located** bundle, but each also documents the **jsDelivr CDN** drop-in:
-\`${CDN_ELEMENT}\` (Web Component / ESM) and \`${CDN_GLOBAL}\` (global script) — pinned to v${VERSION}.
-`
-);
-
 console.log(
-  "\ndocs/ build complete (landing + playable + scrollable + demo-component/module/library).\n" +
+  "\nsrc_docs/md/ demos complete (demos.html + playable + scrollable + demo-component/module/library).\n" +
+    "  Run src_docs/build.sh to publish them into docs/.\n" +
     `  CDN documented: ${CDN_ELEMENT}`
 );

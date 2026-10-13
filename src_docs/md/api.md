@@ -1,28 +1,40 @@
----
-title: ESM API
----
-<!-- this_file: src_docs/md/api.md -->
-
 # ESM API
 
-Import from `vexy-stax-js` (or the built `dist/vexy-stax.element.js`):
+Import the API from the element bundle, or from the npm package when you use
+a bundler:
 
 ```js
-import {
-  VexyStax,    // low-level class
-  createStax,  // high-level factory (recommended)
-  loadScene,   // fetch + parse a scene JSON URL
-  makeScene,   // build a scene from a bare URL list
-  parseScene,  // parse + validate a raw scene object
-} from "vexy-stax-js";
+import { createStax, VexyStax, loadScene, makeScene, parseScene }
+  from "https://vexy.dev/vexy-stax-js/vexy-stax.element.js";
+
+// or, with npm and a bundler
+import { createStax, VexyStax, loadScene, makeScene, parseScene } from "vexy-stax-js";
 ```
 
----
+The global bundle exposes `VexyStax`, `createStax`, `loadScene`, `makeScene`
+and `create` (an alias of `createStax`) on `window.VexyStax`.
 
-## `createStax(elOrSelector, opts)` — recommended entry point
+## createStax
 
-Resolve the mount element, build or fetch the scene, mount a `VexyStax`, wait
-until it is ready, and optionally start a mode. Returns the ready instance.
+```js
+const stax = await createStax(elOrSelector, opts);
+```
+
+`createStax` is the shortest way to a working deck. It:
+
+1. finds the mount element (an element or a CSS selector) and throws
+   `createStax: element not found (…)` if there is none;
+2. applies `width`, `height` and `aspect` to the element's style;
+3. builds the scene: from `slides` with `makeScene`, or from `scene` with
+   `loadScene`;
+4. overrides the scene's view with `view`, if given;
+5. creates a `VexyStax` and waits for `ready`;
+6. starts the mode: `playable` plays the scene's transition once (if the scene
+   has one); `scrollspy` attaches scroll tracking to `trigger`;
+7. turns on click-to-toggle unless `clickToggle` is `false`;
+8. adds control buttons if `buttons` is set.
+
+It resolves with the ready `VexyStax` instance.
 
 ```js
 const stax = await createStax("#stage", {
@@ -33,207 +45,229 @@ const stax = await createStax("#stage", {
 });
 ```
 
-### `opts` reference
+### Options
 
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `slides` | `string[] \| object[]` | — | Slide image URLs or slide objects (easy path via `makeScene`). Mutually exclusive with `scene`. |
-| `scene` | `string \| object` | — | Scene URL to fetch, or an inline scene object (via `loadScene`). |
-| `view` | `"expanded" \| "compact"` | scene default | Initial view override. |
-| `mode` | `"static" \| "playable" \| "scrollspy"` | `"static"` | `"playable"` plays the transition once when ready; `"scrollspy"` attaches a scroll story. |
-| `trigger` | `Element \| string` | the element | Scrollspy trigger (default: the mount element). |
-| `width` | `string \| number` | — | CSS width override on the element (bare numbers get `px`). |
-| `height` | `string \| number` | — | CSS height override. |
-| `aspect` | `string \| number` | — | CSS `aspect-ratio` (e.g. `3`, `"3/1"`, `"16:9"`). |
-| `clickToggle` | `boolean` | `true` | Click-to-toggle compact↔expanded. Pass `false` to opt out. |
-| `baseUrl` | `string` | `document.baseURI` | Base URL for resolving relative slide/scene paths. |
-| _any other key_ | — | — | Forwarded to `makeScene` as a flat scene override (`size`, `camera`, `gap`, `transition`, `background`, `captions`, `floor`, `edge`, …). |
+| Key | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `slides` | `string[]` or slide objects | — | Images, back to front. Takes precedence over `scene`. |
+| `scene` | URL string or scene object | — | Used when `slides` is absent |
+| `view` | `"expanded"` or `"compact"` | the scene's view | Initial view |
+| `mode` | `"static"`, `"playable"` or `"scrollspy"` | `"static"` | Start mode |
+| `trigger` | element or CSS selector | the mount element | Scroll trigger for `scrollspy` |
+| `width`, `height` | CSS length; a bare number means pixels | — | Element size |
+| `aspect` | number or string such as `"3/1"` | — | CSS `aspect-ratio` of the element |
+| `clickToggle` | boolean | `true` | `false` turns click-to-toggle off |
+| `baseUrl` | string | `document.baseURI` | Base for relative slide and scene URLs |
+| `buttons` | `true`, `"toggle"`, `"pair"` or an options object | — | Control buttons; see [`controls`](#controlsopts) |
+| `explainLabel`, `previewLabel` | string | `"Explain"`, `"Preview"` | Button labels |
+| `buttonsPosition` | string | `"bottom"` | Button position |
+| `buttonStyle` | string | — | Extra inline CSS for the button bar |
 
----
+When `slides` is given, every other key that is not in the table above
+except the button keys is passed to `makeScene` as a scene override: `size`,
+`camera`, `gap`, `transition`, `background`, `captions`, `floor`, `edge`,
+`juicy`, `caption_defaults`, `caption_fade` and `video`.
 
-## `VexyStax` class
+!!! warning "Buttons with `slides`"
+    In version 3.1.9 the button keys (`buttons`, `explainLabel`,
+    `previewLabel`, `buttonsPosition`, `buttonStyle`) are also forwarded to
+    `makeScene`, which rejects them with `makeScene: unknown option "buttons"`.
+    With `slides`, call `stax.controls()` after `createStax` instead. With
+    `scene`, the button keys work.
 
-Low-level API — use when you need full control. `createStax` wraps this.
+## VexyStax
+
+The class behind the element and `createStax`.
 
 ```js
-const scene = await loadScene("scene.json");
-const stax  = new VexyStax(container, scene);
+const scene = await loadScene("deck.scene.json");
+const stax = new VexyStax(document.querySelector("#stage"), scene);
 await stax.ready;
 ```
 
-### Constructor
+`new VexyStax(container, scene)` needs a mount element and a parsed scene
+(from `loadScene`, `parseScene` or `makeScene`). It throws
+`VexyStax: container is required` or
+`VexyStax: scene must be a parsed scene object (use loadScene first)`
+otherwise. The constructor adds a canvas to the container and starts loading
+the slide textures.
 
-```js
-new VexyStax(container: HTMLElement, scene: object)
-```
+### ready
 
-- `container` — the DOM element to mount the three.js canvas into.
-- `scene` — a **parsed** scene object (from `loadScene` / `parseScene` / `makeScene`).
+`stax.ready` is a promise that resolves to the instance once the textures are
+loaded and the first frame is drawn. The render methods wait for it
+themselves.
 
-### `ready`
-
-```js
-await stax.ready;
-```
-
-`Promise<this>` — resolves once textures are loaded and the initial view is rendered.
-
----
-
-### `toImage({ scale? })`
+### toImage({ scale })
 
 ```js
 const blob = await stax.toImage({ scale: 2 });
 ```
 
-Render the current view to a PNG `Blob`. `scale` re-renders at a higher pixel
-density (e.g. `2` for 2× HiDPI export). The canvas must remain tainted-free —
-all slide images must be served with CORS headers when remote.
+Renders the current frame and returns it as a PNG `Blob`. With `scale` other
+than `1`, it renders once at that multiple of the current pixel ratio, then
+restores the canvas. Remote images must be served with CORS headers, or the
+canvas cannot be exported.
 
-**Returns:** `Promise<Blob>` (PNG)
-
----
-
-### `toVideo(opts?)`
+### toVideo(opts)
 
 ```js
 const blob = await stax.toVideo();
-const mp4  = await stax.toVideo({ kind: "expand" });
+const blob2 = await stax.toVideo({ kind: "expand" });
 ```
 
-Record the full transition (held-still intro → animation → held-still outro) to
-an encoded video `Blob`.
+Records a clip of the transition and returns it as a `Blob`. The clip has
+three parts: the start frame repeated `video.first_hold` times (default 10),
+the animated transition, and the end frame repeated `video.last_hold` times
+(default 10). The frame rate is `video.fps`, else `transition.fps`, else 30.
 
-**Encoding path** (automatic selection, no configuration needed):
+`opts.kind` overrides the scene's transition kind. Without a kind in either
+place, the method throws.
 
-1. **PRIMARY — WebCodecs + mp4-muxer** (Chrome 94+, Edge 94+, recent Safari):
-   `VideoEncoder` encodes each rendered frame frame-accurately into H.264/mp4
-   (preferred) or VP9/webm. Output is a fully seekable container with correct
-   duration and per-stream frame-count metadata.
-2. **FALLBACK — MediaRecorder** (`canvas.captureStream`): used when
-   `VideoEncoder` is unavailable (older browsers, some WebViews). The codec is
-   selected from the first supported type in `[vp9, vp8, webm, mp4]`. The
-   resulting blob is a live-capture webm stream; it may lack seekable duration
-   metadata.
+The encoder is chosen automatically:
 
-Held stills flank the clip: `scene.video.first_hold` copies of the start frame
-and `scene.video.last_hold` copies of the end frame (default 10 each).
+1. **WebCodecs**: when `VideoEncoder` exists, frames are encoded one by one
+   as H.264 (or VP9 when the browser cannot encode H.264) and muxed with
+   [mp4-muxer](https://github.com/Vanilagy/mp4-muxer). The file has correct
+   duration metadata and can be seeked.
+2. **MediaRecorder**: otherwise the canvas stream is recorded live with the
+   first supported type among VP9, VP8, WebM and MP4. The result may lack
+   duration metadata.
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `kind` | `string` | Override `scene.transition.kind` (`expand`, `collapse`, `expand_collapse`, `collapse_expand`). |
-
-**Returns:** `Promise<Blob>` — mp4 (WebCodecs path) or webm (MediaRecorder fallback)
-
----
-
-### `transition(kind?, opts?)`
+### transition(kind, opts)
 
 ```js
 await stax.transition();
 await stax.transition("expand", { onProgress: (p) => console.log(p) });
 ```
 
-Play the transition as a real-time animation. Renders each frame via
-`requestAnimationFrame`. Resolves when the animation finishes. Emits
-`transitionstart` and `transitionend` `CustomEvent`s on the container.
+Plays a transition as an animation and resolves when it ends. `kind` is one
+of `expand`, `collapse`, `expand_collapse` and `collapse_expand`; it defaults
+to the scene's `transition.kind`. Without either, the method throws.
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `kind` | `string` | Override `scene.transition.kind`. |
-| `onProgress` | `(p: number) => void` | Called each frame with progress [0,1]. |
-| `duration` | `number` | Override the animation duration in seconds. |
+| Option | Type | Effect |
+| --- | --- | --- |
+| `onProgress` | `(p) => void` | Called each frame with the overall progress from 0 to 1 |
+| `duration` | number (seconds) | Overrides the scene's `transition.duration` |
 
-**Returns:** `Promise<this>`
+The container receives `transitionstart` and `transitionend` events, each with
+`detail.kind`.
 
----
-
-### `scrollspy(opts)`
+### scrollspy(opts)
 
 ```js
-const handle = stax.scrollspy({
-  trigger: "#scroll-region",
-  kind: "expand_collapse",
-});
-// later:
+const handle = stax.scrollspy({ trigger: "#story", kind: "expand" });
+// later
 handle.disconnect();
 ```
 
-Drive the transition from scroll position over a trigger element.
-`IntersectionObserver` activates the `scroll`+`rAF` loop only while the trigger
-is visible, mapping scroll progress [0,1] to a morph factor via the scene's
-transition timeline.
+Drives the morph from the scroll position of a trigger element. An
+`IntersectionObserver` starts the scroll tracking only while the trigger is
+visible. The scroll progress from 0 to 1 goes through the same timeline as
+the animation (including the `wait` hold), unless you pass `map`.
 
-**`prefers-reduced-motion` handling**: when the OS/browser reports reduced
-motion (or `opts.reducedMotion: true`), no per-frame interpolation occurs.
-Instead, a lightweight scroll listener snaps to the nearest endpoint (0 or 1)
-based on whether the trigger's center has passed the middle of the viewport.
+| Option | Type | Default | Effect |
+| --- | --- | --- | --- |
+| `trigger` | element or CSS selector | — | Required. Throws `VexyStax.scrollspy: trigger element not found` if missing. |
+| `kind` | string | scene transition kind, else `expand` | Timeline to follow |
+| `reducedMotion` | boolean | the `prefers-reduced-motion` setting | When true, the deck snaps between compact and expanded instead of morphing |
+| `map` | `(p) => t` | — | Your own mapping from scroll progress to morph factor; the result is clamped to 0–1 |
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `trigger` | `Element \| string` | The scroll region (element or CSS selector). Required. |
-| `kind` | `string` | Override `scene.transition.kind`. |
-| `reducedMotion` | `boolean` | Override `prefers-reduced-motion` detection. |
-| `map` | `(p: number) => number` | Custom progress→morph mapping. Use for non-linear stories such as tent functions (compact at edges, expanded when centered). |
+It returns `{ disconnect() }`. Calling `scrollspy` again replaces the previous
+tracking.
 
-**Returns:** `{ disconnect(): void }` — call `.disconnect()` to stop observing.
+### controls(opts)
 
----
+```js
+stax.controls({ type: "pair", explainLabel: "Open", previewLabel: "Close", position: "top-right" });
+stax.controls(false); // remove the buttons
+```
+
+Adds buttons over the deck and replaces any previous ones.
+
+| Option | Values | Default |
+| --- | --- | --- |
+| `type` | `"toggle"` (one button whose label follows the view) or `"pair"` | `"toggle"` |
+| `explainLabel` | text of the expand action | `"Explain"` |
+| `previewLabel` | text of the collapse action | `"Preview"` |
+| `position` | `bottom`, `top`, `bottom-left`, `bottom-right`, `top-left`, `top-right`, `center` | `bottom` |
+| `style` | extra inline CSS for the button bar | — |
+
+The buttons are themed with `--vexy-btn-*` custom properties; see
+[Web Component](web-component.md#styling-the-buttons).
 
 ### Other instance methods
 
-| Method | Description |
-|--------|-------------|
-| `setView(view)` | Position the deck for `"compact"` or `"expanded"` and render a frame. Returns `Promise<this>`. |
-| `seek(t)` | Apply morph factor `t ∈ [0,1]` (0 = compact, 1 = expanded) and render. The low-level scrub primitive used by scrollspy. |
-| `toggleView()` | Fluently transition between the two views (click-to-toggle logic). Returns `Promise<"expand"|"collapse">`. |
-| `enableClickToggle()` | Wire a click handler on the container that calls `toggleView()`. ON by default from `createStax`. |
-| `disableClickToggle()` | Remove the click-to-toggle handler. |
-| `controls(opts)` | Add built-in toggle/pair overlay buttons (issue 343). Pass `false` to remove. |
-| `resize(w?, h?)` | Resize renderer/camera (defaults to container `clientWidth/Height`). |
-| `destroy()` | Tear down the three.js stage, stop rAF loops, remove the canvas. |
+| Method | Effect |
+| --- | --- |
+| `setView(view)` | Renders the compact or expanded view without animation. Resolves with the instance. |
+| `seek(t)` | Renders the morph at `t` (0 = compact, 1 = expanded, clamped). Emits `viewchange` when `t` crosses 0.5. |
+| `toggleView()` | Animates to the other view in 0.7 seconds and resolves with the kind it played (`"expand"` or `"collapse"`), or `null` if a toggle was already running |
+| `enableClickToggle()` | Calls `toggleView()` on clicks inside the container, except on buttons, links and form fields |
+| `disableClickToggle()` | Removes that click handler |
+| `resize(width, height)` | Resizes the renderer and camera; without arguments it uses the container size |
+| `destroy()` | Stops animations and scroll tracking, removes buttons and the click handler, and disposes of the three.js stage |
 
----
+## Scene helpers
 
-## Scene construction helpers
-
-### `loadScene(urlOrObject, options?)`
-
-Fetch and parse a scene from a URL string, or parse an inline object.
+### loadScene(urlOrObject, options)
 
 ```js
-const scene = await loadScene("scene.json");
-const scene = await loadScene("scene.json", { baseUrl: "https://example.com/" });
-const scene = await loadScene({ version: 1, slides: [{ src: "a.png" }] });
+const a = await loadScene("deck.scene.json");
+const b = await loadScene("deck.scene.json", { baseUrl: "https://example.com/decks/" });
+const c = await loadScene({ version: 1, slides: [{ src: "a.png" }] });
 ```
 
-Slide `src` paths are resolved relative to the scene URL (or `options.baseUrl`).
-`data:` URIs pass through unchanged.
+With a string, fetches the JSON (relative to `options.baseUrl` or the page)
+and throws `Failed to fetch scene <url>: <status>` on an HTTP error. With an
+object, uses it directly. In both cases it runs `parseScene` and then resolves
+each slide's `src` against the scene URL or `baseUrl`. `data:` URIs are kept
+as they are.
 
-### `makeScene(slides, overrides?)`
-
-Build a valid scene from a bare list of image URLs or slide objects, filling
-sensible defaults.
+### makeScene(slides, opts)
 
 ```js
-const scene = makeScene(["a.png", "b.png"], {
-  gap: 480,
-  transition: "expand_collapse",
-  background: "#f5f5f5",
-});
+const scene = makeScene(["a.png", "b.png"], { gap: 480, transition: "expand_collapse" });
 ```
 
-Any key that appears in the JSON schema (`size`, `camera`, `gap`, `transition`,
-`background`, `captions`, `floor`, `edge`, `caption_defaults`, …) is accepted
-as a flat override. `gap` is a shortcut for `camera.gap`; `transition` as a
-string is expanded to `{ kind: value }`.
+Builds a parsed scene from a list of image URLs or slide objects
+(`{ src, caption, opacity, gap }`). Options:
 
-### `parseScene(raw)`
+- `baseUrl` resolves relative slide URLs;
+- `gap` is a shortcut for `camera.gap`;
+- `transition` may be a kind string, which becomes `{ kind: "…" }`;
+- `size`, `camera`, `view`, `background`, `captions`, `floor`, `edge`,
+  `juicy`, `caption_defaults`, `caption_fade` and `video` map to the scene
+  fields of the same name.
 
-Strict parser and validator for a raw scene object. Throws a descriptive error
-for unknown keys, bad enum values, out-of-range numbers, or a missing `slides`
-array. Fills defaults from the JSON schema.
+Any other option throws `makeScene: unknown option "…"`. An empty slide list
+throws too.
 
-```js
-const scene = parseScene(JSON.parse(jsonString));
+### parseScene(raw)
+
+Validates a raw scene object, fills in the defaults and returns the
+normalized scene. It rejects anything the schema does not allow, with
+messages such as:
+
+```text
+slides is required
+version must be 1 (got 2)
+Unknown key "bogus" in scene
+slides[0].opacity must be <= 1
+transition.kind must be one of expand, collapse, expand_collapse, collapse_expand (got "spin")
 ```
+
+## Lower-level exports
+
+`src/index.js` also exports the pure functions that the renderer is built on.
+They have no DOM dependencies and are covered by the unit tests:
+
+- geometry: `MIN_GAP`, `FILL`, `plateGaps`, `stackDepth`, `compactCamera`,
+  `expandedCamera`, `ease`, `interpolateOpacity`, `framePlan`, `frameStateAt`;
+- timing: `buildTimeline`, `morphAtProgress`, `transitionEndpoints`;
+- scroll: `computeScrollProgress`, `prefersReducedMotion`;
+- scene: `resolvedOpacity`;
+- export: `canvasToPngBlob`.
+
+These are exported from the npm entry (`src/index.js`), not from the element
+bundle.

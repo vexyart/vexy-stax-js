@@ -1,0 +1,91 @@
+<!doctype html>
+<!-- this_file: vexy-stax-js/src_docs/md/scrollable.html
+     Scroll-driven (scrollspy) demo (issues 304.2 + 314 + 341): a full-viewport intro, the
+     deck as a FULL-WIDTH 2:1 white scene, then an outro. The deck starts COMPACT; the
+     transition starts when 75% of the scene is in view and reaches fully EXPANDED when the
+     scene CENTER hits the TOP of the viewport, then LATCHES. Clean floor. Static; relative. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>vexy-stax-js — scrollspy demo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Zalando+Sans:wdth,wght@125,500&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; background: #ffffff; }
+      body { font: 16px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; color: #1c1c1e; }
+      .back { position: fixed; top: 14px; left: 16px; z-index: 10; color: #2563eb; text-decoration: none; font-size: 13px; }
+      .copy { min-height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; gap: 12px; padding: 0 24px; }
+      .copy h1 { font-size: clamp(28px, 6vw, 64px); margin: 0; letter-spacing: -0.02em; }
+      .copy p { max-width: 46ch; margin: 0; color: #555; }
+      .hint { font-size: 13px; color: #8a8a8a; }
+      /* Full-width, 60vh-tall stage (user request) — short + wide; the camera fits the deck to
+         this live aspect, so the morph framing follows the container, not the scene aspect. */
+      #stax { display: block; width: 100vw; height: 60vh; background: #ffffff; }
+    </style>
+  </head>
+  <body>
+    <a class="back" href="demos.html">← vexy-stax-js</a>
+    <section class="copy">
+      <h1>Scroll down</h1>
+      <p>A layered deck of glass plates. Keep scrolling — it will rise into view and unfold.</p>
+      <p class="hint">↓</p>
+    </section>
+
+    <!-- Issue 343: built-in control buttons (single relabeling toggle) — bottom-centered frosted pill. -->
+    <vexy-stax id="stax" scene="airbl-scrollable.scene.json" view="compact" mode="static" buttons="toggle"></vexy-stax>
+
+    <section class="copy">
+      <h1>Layer by layer</h1>
+      <p>Once unfolded the deck stays expanded — keep scrolling to read on.</p>
+      <p class="hint">Tip: click the deck to fluently toggle compact↔expanded — it works on top of the scroll (issue 342).</p>
+    </section>
+
+    <script type="module" src="vexy-stax.element.js"></script>
+    <script type="module">
+      const el = document.getElementById("stax");
+      const ease = (x) => (x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2);
+      let ready = false;
+      let animating = false; // true while a click-toggle leg is playing
+      let hold = null;       // 0|1 when a click set a manual state; null = scroll drives
+      // Absolute scroll→morph: the deck starts unfolding when 75% of the scene is in view and is
+      // fully expanded when the scene CENTER reaches the top of the viewport.
+      const scrollT = () => {
+        const r = el.getBoundingClientRect();
+        const h = r.height, vh = window.innerHeight;
+        if (h <= 0) return 0;
+        const startTop = vh - 0.75 * h, endTop = -h / 2;
+        return ease(Math.max(0, Math.min(1, (startTop - r.top) / (startTop - endTop))));
+      };
+      const update = () => {
+        if (!ready || animating) return; // never fight the click-toggle animation
+        const t = scrollT();
+        if (hold !== null) {
+          // Issue 342: a click toggled the deck; KEEP that state until the scroll position
+          // reaches the same endpoint, then hand control back to scroll seamlessly — so the deck
+          // does NOT snap back to the scroll-derived value right after a click.
+          if (hold === 1 ? t >= 0.999 : t <= 0.001) hold = null;
+          else return;
+        }
+        el.seek(t);
+      };
+      // A click fluently toggles compact↔expanded ON TOP of the scroll. Suppress the scroll seek
+      // while the toggle plays, then hold the toggled state (see update()).
+      el.addEventListener("transitionstart", () => { animating = true; });
+      el.addEventListener("transitionend", () => {
+        animating = false;
+        hold = (el.instance && el.instance._currentView === "compact") ? 0 : 1;
+      });
+      window.addEventListener("scroll", update, { passive: true });
+      window.addEventListener("resize", update, { passive: true });
+      const go = () => { ready = true; update(); };
+      el.addEventListener("ready", go, { once: true });
+      setTimeout(go, 1500);
+    </script>
+  </body>
+</html>

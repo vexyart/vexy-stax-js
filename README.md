@@ -1,5 +1,7 @@
 # vexy-stax-js
 
+**Documentation:** https://vexy.dev/vexy-stax-js/
+
 Browser renderer for the [vexy-stax](../SPEC.md) shared scene format: a deck of
 layered PNG slides drawn as 3D glass plates in two views (`expanded` / `compact`)
 with morphable per-slide opacity. Built on three.js. Ships three ways — an ESM
@@ -36,7 +38,8 @@ Three ways to drop a deck on a page, easiest first (issues 341 / 342).
 <script type="module" src="./dist/vexy-stax.element.js"></script>
 
 <!-- The `slides` attribute: a space/newline-separated list of image URLs (local, data:, or
-     remote http(s)). Captions off by default; mode="playable" plays the transition once. -->
+     remote http(s)). Captions off by default. The element does not auto-play: call
+     el.transition() (createStax({ mode: "playable" }) does play it once). -->
 <vexy-stax
   slides="layer-0.png layer-1.png https://example.com/layer-2.png"
   view="compact" mode="playable">
@@ -107,16 +110,19 @@ height, aspect, clickToggle, baseUrl, …sceneOverrides }`. Any remaining key (`
 </script>
 ```
 
-### CDN (no build step)
+### Hosted bundles (no build step)
 
-Every snippet above also works verbatim from the jsDelivr CDN — swap the local bundle path for:
+Every snippet above also works with the bundles served from the documentation site — swap the
+local bundle path for:
 
 ```html
 <!-- Web Component / ESM -->
-<script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.6/dist/vexy-stax.element.js"></script>
+<script type="module" src="https://vexy.dev/vexy-stax-js/vexy-stax.element.js"></script>
 <!-- Global script -->
-<script src="https://cdn.jsdelivr.net/npm/vexy-stax-js@3.1.6/dist/vexy-stax.global.js"></script>
+<script src="https://vexy.dev/vexy-stax-js/vexy-stax.global.js"></script>
 ```
+
+(The npm package does not include `dist/`, so jsDelivr `npm/vexy-stax-js@…/dist/…` URLs return 404.)
 
 ### Remote slide images
 
@@ -126,10 +132,12 @@ lets the image load **and** keeps the canvas exportable (`toImage` / `toVideo`).
 
 ### Live demos & how-to pages
 
-`npm run build:docs` emits a [docs site](https://vexy.dev/vexy-stax-js/): a landing page, the
+`npm run build:docs` writes the live demos into `src_docs/md/`: a landing page (`demos.html`), the
 **Animated** (`playable.html`) and **Scrollspy** (`scrollable.html`) demos, plus three side-by-side
 "how to use" pages — `demo-component.html`, `demo-module.html`, `demo-library.html` — each showing
-the minimal code beside the live result (modeled on i.vexy.art/dev/lines-nano).
+the minimal code beside the live result (modeled on i.vexy.art/dev/lines-nano). `./build.sh docs`
+then builds the [documentation site](https://vexy.dev/vexy-stax-js/) with ProperDocs into `docs/`,
+copying the demos unchanged, so they are served at https://vexy.dev/vexy-stax-js/playable.html etc.
 
 ## Layout
 
@@ -144,9 +152,10 @@ src/
 ├── transition.js  # rAF morph driver + timeline/progress math (pure, testable)
 ├── scrollspy.js   # scroll→progress mapping (IntersectionObserver; reduced-motion)
 └── export.js      # canvas→PNG; WebCodecs/MediaRecorder video capture
-src_docs/          # MaterialX docs pipeline → https://vexy.dev/vexy-stax-js/
-├── mkdocs.yaml    #   build: vexy-mkdocs-tools build
-└── md/            #   api.md · web-component.md · scene-format.md
+src_docs/          # ProperDocs + MaterialX docs → docs/ → https://vexy.dev/vexy-stax-js/
+├── mkdocs.yml     #   site config; build with src_docs/build.sh (or ./build.sh docs)
+├── build.sh       #   strict build into ../docs (`serve` for a live preview)
+└── md/            #   Markdown pages + the generated live demos, bundles, scenes, slides
 tests/             # node --test (scene/geometry/transition/scrollspy) + playwright E2E
 verify/            # HARD render gate: harness.html + run.mjs (chromium) + gate.py (PIL)
 ```

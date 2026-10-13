@@ -1,71 +1,64 @@
----
-title: vexy-stax-js
----
-<!-- this_file: src_docs/md/index.md -->
-
 # vexy-stax-js
 
-A stack of PNGs becomes a glass tower. One scene file drives both Python and the browser.
+vexy-stax-js draws a stack of images as a deck of 3D glass plates in the
+browser. It reads the vexy-stax scene format, the same JSON file that the
+Python package [vexy-stax-py](https://vexy.dev/vexy-stax-py/) renders, and
+shows the deck in two views:
 
-Browser renderer for the [vexy-stax](https://github.com/vexyart/vexy-stax-dev) shared scene
-format: a deck of layered PNG slides drawn as 3D glass plates in two views (`expanded` /
-`compact`) with morphable per-slide opacity. Built on [three.js](https://threejs.org/). Ships
-three ways — an ESM module, a `<vexy-stax>` Web Component, and a classic-script global.
+- **expanded**: the plates stand apart, seen from an angle, so each layer is
+  visible on its own;
+- **compact**: the plates close up into one flat picture, seen head-on.
 
-## Install
+The deck can morph between the two views as an animation, on a click, or as
+the page scrolls. It can export the current view as a PNG image and the
+transition as a video. Rendering uses [three.js](https://threejs.org/).
 
-```bash
-npm install vexy-stax-js
-```
+## Three ways to use it
 
-Or use from CDN — no build step needed:
+| Entry point | File | Use it when |
+| --- | --- | --- |
+| `<vexy-stax>` Web Component | `vexy-stax.element.js` | You want markup only, no JavaScript |
+| ES module: `createStax`, `VexyStax` | `vexy-stax.element.js` or the npm package | You script the deck |
+| Global script: `window.VexyStax` | `vexy-stax.global.js` | You load a classic `<script>` without modules |
+
+The smallest working page needs one script tag and one element:
 
 ```html
-<!-- Web Component + ESM bundle -->
-<script type="module" src="https://cdn.jsdelivr.net/npm/vexy-stax-js/dist/vexy-stax.element.js"></script>
-<!-- Global script (window.VexyStax) -->
-<script src="https://cdn.jsdelivr.net/npm/vexy-stax-js/dist/vexy-stax.global.js"></script>
+<script type="module" src="https://vexy.dev/vexy-stax-js/vexy-stax.element.js"></script>
+
+<vexy-stax slides="layer-0.png layer-1.png layer-2.png" view="compact"></vexy-stax>
 ```
 
-## Quickest path
+The element builds a scene from the image list, renders it in the compact
+view, and toggles between compact and expanded when you click it. See the
+[Quickstart](quickstart.md).
 
-```html
-<vexy-stax
-  slides="layer-0.png layer-1.png layer-2.png"
-  view="compact"
-  mode="playable">
-</vexy-stax>
-```
+## Live demos
 
-That is all it takes. The element builds a scene from the slide list, mounts a three.js stage,
-and plays the transition once when ready.
+| Demo | What it shows |
+| --- | --- |
+| [Demo overview](demos.html) | All demos with install snippets |
+| [Animated demo](playable.html) | Play the compact ↔ expanded transition or switch views with buttons |
+| [Scrollspy demo](scrollable.html) | The deck unfolds as the page scrolls |
+| [Web Component how-to](demo-component.html) | Minimal `<vexy-stax>` markup next to the live result |
+| [ES module how-to](demo-module.html) | `createStax` calls next to the live result |
+| [Global script how-to](demo-library.html) | `window.VexyStax.create` next to the live result |
 
-## Navigation
+The demos are described in [Live demos](live-demos.md).
 
-| Page | Contents |
-|---|---|
-| [ESM API](api.md) | `VexyStax` class, `createStax`, `toImage`, `toVideo`, `transition`, `scrollspy` |
-| [Web Component](web-component.md) | All `<vexy-stax>` HTML attributes and JS properties |
-| [Scene Format](scene-format.md) | JSON schema reference for `.scene.json` files |
+## Documentation
 
-## Architecture
-
-```
-src/
-├── index.js       — ESM public API (VexyStax class + createStax factory)
-├── element.js     — <vexy-stax> custom element (auto-registers on import)
-├── global.js      — window.VexyStax IIFE entry
-├── scene.js       — strict scene parser (mirrors vexy_stax/scene.py)
-├── geometry.js    — view math (mirrors vexy_stax/geometry.py) + frameStateAt
-├── stage.js       — three.js plates + floor + reflections + captions + camera
-├── transition.js  — rAF morph driver + timeline / progress math (pure, testable)
-├── scrollspy.js   — scroll→progress mapping (IntersectionObserver + reduced-motion)
-└── export.js      — canvas→PNG; WebCodecs / MediaRecorder video capture
-```
-
-The numeric outputs of `geometry.js` are tested against fixture vectors from the Python package
-(`vexy-stax-py`) to guarantee both renderers produce the same camera / spacing math.
+- [Installation](installation.md): npm, hosted bundles and building from
+  source
+- [Quickstart](quickstart.md): one deck, three ways
+- [Web Component](web-component.md): attributes, properties and events of
+  `<vexy-stax>`
+- [ESM API](api.md): `createStax`, the `VexyStax` class and the scene helpers
+- [Scene format](scene-format.md): every field of a `.scene.json` file
+- [Architecture](architecture.md): source layout and how a frame is drawn
+- [Contributing](contributing.md): tests, render checks and rebuilding the
+  demos
 
 ## License
 
-Apache-2.0 — Copyright 2026 Fontlab Ltd.
+Apache-2.0. Copyright 2026 Fontlab Ltd.

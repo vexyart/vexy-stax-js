@@ -1,18 +1,18 @@
----
-title: Scene Format
----
-<!-- this_file: src_docs/md/scene-format.md -->
+# Scene format
 
-# Scene Format
+A vexy-stax scene is a JSON object that describes a deck: the slide images,
+the camera, the transition, captions and colours. The same file works in
+vexy-stax-js (the three.js renderer in the browser) and in
+[vexy-stax-py](https://vexy.dev/vexy-stax-py/), the Python package with its
+own render engines. Scene files usually end in `.scene.json`.
 
-The vexy-stax **shared scene format** is a JSON object understood by both
-`vexy-stax-js` (browser / Node) and `vexy-stax-py` (Python CLI). One file
-drives the Three.js renderer and the pygfx / Blender / Playwright backends
-identically.
+`parseScene` checks every scene strictly: unknown keys, wrong types, values
+out of range and unknown enum values are errors, not warnings. See
+[ESM API](api.md#parsesceneraw).
 
-JSON Schema: [`schema/vexy-stax-scene.schema.json`](https://github.com/vexyart/vexy-stax-js/blob/main/schema/vexy-stax-scene.schema.json)
-
----
+The JSON Schema is
+[`schema/vexy-stax-scene.schema.json`](https://github.com/vexyart/vexy-stax-js/blob/main/schema/vexy-stax-scene.schema.json)
+in the repository and in the npm package.
 
 ## Minimal example
 
@@ -30,8 +30,6 @@ JSON Schema: [`schema/vexy-stax-scene.schema.json`](https://github.com/vexyart/v
 `version` and `slides` are the only required fields. Everything else fills
 sensible defaults.
 
----
-
 ## Top-level fields
 
 | Field | Type | Default | Description |
@@ -43,16 +41,14 @@ sensible defaults.
 | `background` | `string` (hex color) | `"#ffffff"` | Canvas background color. |
 | `captions` | `boolean` | `true` | Global captions toggle. `false` removes all caption plates and lowers slide plates to the floor. |
 | `camera` | [Camera](#camera) | see below | Camera / spacing settings. |
-| `transition` | [Transition](#transition) \| `null` | `null` | Animation definition. Required for `toVideo` / `transition()` / `mode="playable"`. |
+| `transition` | [Transition](#transition) \| `null` | `null` | Animation settings. Needed by `createStax` with `mode: "playable"`, and by `transition()` and `toVideo()` when no kind is passed. |
 | `video` | [Video](#video) | see below | Video export framing settings (overrides `transition` fps, adds holds). |
 | `floor` | [Floor](#floor) | see below | Reflective floor plane. |
 | `edge` | [Edge](#edge) | `{ width: 0, color: "#f2f2f2" }` | Slide-plate border. |
 | `caption_defaults` | [CaptionStyle](#captionstyle) | inherited from edge | Default style for all captions. |
 | `caption_fade` | [CaptionFade](#captionfade) | see below | Caption fade-in timing during transitions. |
-| `juicy` | `boolean` | `false` | Python-only per-channel color match (ignored in JS). |
-| `$schema` | `string` | — | Optional: `"https://vexy.art/schema/vexy-stax-scene.schema.json"` for editor autocomplete. |
-
----
+| `juicy` | `boolean` | `false` | Per-channel colour match in the Python renderer; the browser renderer ignores it. |
+| `$schema` | `string` | — | Optional, any string. The schema's `$id` is `https://vexy.art/schema/vexy-stax-scene.schema.json`; that address is an identifier and does not serve the file, so point your editor at the schema file itself. |
 
 ## Slide
 
@@ -76,8 +72,6 @@ sensible defaults.
 | `opacity` | `number \| { expanded, compact }` | `1.0` | Slide opacity. A scalar stays constant; an object is interpolated during transitions. |
 | `caption` | [Caption](#caption) \| `null` | `null` | Optional caption plate below this slide. |
 
----
-
 ## Camera
 
 Controls spacing and the camera position for each view.
@@ -89,8 +83,6 @@ Controls spacing and the camera position for each view.
 | `angle` | `number` | `60` | Azimuth degrees (horizontal orbit) for the expanded view. `0` = head-on. |
 | `elevation` | `number` | `0` | Degrees above the horizon for the expanded view. |
 | `fov` | `number` | `39.6` | Camera vertical field of view in degrees. |
-
----
 
 ## Transition
 
@@ -112,11 +104,12 @@ Controls spacing and the camera position for each view.
 | `fps` | `integer` | `30` | Frames per second for `toVideo` (overridden by `video.fps` when set). |
 | `easing` | `string` | `"easeInOutCubic"` | Easing function: `"linear"`, `"easeInOutCubic"`, `"easeOutCubic"`, or `"easeInCubic"`. |
 
----
-
 ## Video
 
-Overrides transition fps and adds held stills to the video clip.
+Settings for video output. The browser's `toVideo()` reads `fps`,
+`first_hold` and `last_hold`; it records at the canvas size in real time, so
+it does not use `frames`, `width` or `height`; those are for the Python
+renderer.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -126,8 +119,6 @@ Overrides transition fps and adds held stills to the video clip.
 | `frames` | `integer` | `round(duration × fps)` | Transition frames per leg; omit to derive from timing. |
 | `width` | `integer` | `size.width` | Output video width in pixels. |
 | `height` | `integer` | `size.height` | Output video height in pixels. |
-
----
 
 ## Floor
 
@@ -141,8 +132,6 @@ Overrides transition fps and adds held stills to the video clip.
 | `opacity` | `number` | `0.0` | Floor visibility (0 = invisible pane, faint reflections only). |
 | `reflectivity` | `number` | `0.1` | Reflection strength [0,1]. |
 
----
-
 ## Edge
 
 The visible border drawn around each slide plate.
@@ -151,8 +140,6 @@ The visible border drawn around each slide plate.
 |-------|------|---------|-------------|
 | `width` | `number` | `0.0` | Border thickness as a fraction of plate height. `0` disables the border (and caption-plate borders). |
 | `color` | `string` | `"#f2f2f2"` | Border color. Also the default `fill_color` and `border_color` for caption plates (overridable per caption). |
-
----
 
 ## Caption
 
@@ -176,8 +163,6 @@ The visible border drawn around each slide plate.
 | `show_in` | `"expanded" \| "compact" \| "both" \| "none"` | `"expanded"` | Which view(s) display this caption plate. |
 | `style` | [CaptionStyle](#captionstyle) | from `caption_defaults` | Per-caption style overrides. |
 
----
-
 ## CaptionStyle
 
 Used in `caption.style` and `caption_defaults`.
@@ -190,8 +175,6 @@ Used in `caption.style` and `caption_defaults`.
 | `fill_color` | `string` | Caption plate fill color. Defaults to `edge.color`. |
 | `border_color` | `string` | Caption plate border color. Defaults to `edge.color`. |
 
----
-
 ## CaptionFade
 
 Controls how captions fade in during a transition (back-to-front stagger).
@@ -201,8 +184,6 @@ Controls how captions fade in during a transition (back-to-front stagger).
 | `window` | `number` | `0.9` | Fraction of the morph [0,1] (from the end) over which captions fade in. |
 | `stagger` | `number` | `0.3` | Back→front succession spread as a fraction of the fade window. |
 | `stagger_frames` | `integer` | — | Per-caption step in transition frames (overrides `stagger` when set). |
-
----
 
 ## Full example
 
